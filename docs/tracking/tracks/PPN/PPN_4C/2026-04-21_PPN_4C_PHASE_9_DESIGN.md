@@ -5939,7 +5939,7 @@ This continues the **audit-driven scope refinement** codification (from §9.3.9.
 - Phase 3A cross-arc VAG: §9.3.9
 - Original Phase 3B terse spec (superseded by this section): §9.4
 - Stage 2 audit findings (hypercube primitives implementation status): [`2026-04-21_PPN_4C_PHASE_9_AUDIT.md`](2026-04-21_PPN_4C_PHASE_9_AUDIT.md) §3.5
-- Hypercube research foundation: [`2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
+- Hypercube research foundation: [`2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
 - Hyperlattice Conjecture: [`DESIGN_PRINCIPLES.org`](../../../principles/DESIGN_PRINCIPLES.org) § Hyperlattice Conjecture + § Cell/Propagator/Scheduler Orthogonality
 - Substrate primitives: `gray-code-order` (relations.rkt:1874); `subcube-member?` (decision-cell.rkt:372); `solver-amb` (atms.rkt:304); `process-fork-on-union` (typing-propagators.rkt:1120)
 - Dialogue context (audit findings + alternate models): dailies 2026-05-17 session entries 2026-05-22 (Phase 3B mini-design)
@@ -9437,8 +9437,8 @@ Per user direction: phase-specific questions deferred to mini-design at phase st
 ### §17.2 Parent and adjacent design docs
 - [`docs/tracking/tracks/PPN/PPN_4C/2026-04-17_PPN_TRACK4C_DESIGN.md`](2026-04-17_PPN_TRACK4C_DESIGN.md) (D.3)
 - [`docs/tracking/2026-03-22_NTT_SYNTAX_DESIGN.md`](../../../2026-03-22_NTT_SYNTAX_DESIGN.md) (NTT syntax reference for §4)
-- [`docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
-- [`docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
+- [`docs/tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
+- [`docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
 - [`docs/research/2026-03-28_MODULE_THEORY_LATTICES.md`](../../../../research/2026-03-28_MODULE_THEORY_LATTICES.md)
 
 ### §17.3 Completed-track PIRs

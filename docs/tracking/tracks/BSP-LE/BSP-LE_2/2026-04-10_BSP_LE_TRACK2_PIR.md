@@ -6,11 +6,11 @@
 **Test delta**: 7609 → 7745 (+136 tests across 5 new test files)
 **Code delta**: ~2500 new/modified lines across ~25 source + test files; 1 new source module (`decision-cell.rkt`), 5 new test files
 **Suite health**: 397/397 files, 7745 tests, ~126s, all pass
-**Design docs**: `docs/tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md` (D.13, ~2000 lines, 13 design iterations)
-**Self-critique**: `docs/tracking/2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md` (17 findings)
-**External critique**: `docs/tracking/2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md` (16 findings)
-**Stage 1/2**: `docs/research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md`
-**Handoff**: `docs/tracking/standups/2026-04-09_2300_session_handoff.md`
+**Design docs**: `docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md` (D.13, ~2000 lines, 13 design iterations)
+**Self-critique**: `docs/tracking/tracks/BSP-LE/BSP-LE_2/critiques/2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md` (17 findings)
+**External critique**: `docs/tracking/tracks/BSP-LE/BSP-LE_2/critiques/2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md` (16 findings)
+**Stage 1/2**: `docs/tracking/tracks/BSP-LE/research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md`
+**Handoff**: `docs/tracking/tracks/BSP-LE/BSP-LE_2/handoffs/2026-04-09_2300_session_handoff.md`
 
 ---
 

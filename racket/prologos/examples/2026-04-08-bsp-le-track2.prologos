@@ -9,7 +9,7 @@ ns examples::bsp-le-track2
 ;;   Uncomment as phases complete.
 ;;   The track is not DONE until this file runs with 0 errors via process-file.
 ;;
-;;   Design: docs/tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md (D.3, 1157 lines)
+;;   Design: docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md (D.3, 1157 lines)
 ;;   Methodology: docs/tracking/principles/ACCEPTANCE_FILE_METHODOLOGY.org
 ;;
 ;;   Sections:

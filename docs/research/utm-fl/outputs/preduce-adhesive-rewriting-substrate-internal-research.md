@@ -733,7 +733,7 @@ Also opened **§3.S6 stub** (speculative reduction + ATMS worldview management) 
 
 **Cross-references for the engineering side**:
 
-- BSP-LE 2B PIR (`docs/tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md`) is the hypercube + ATMS substrate Track 6 inherits.
+- BSP-LE 2B PIR (`docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md`) is the hypercube + ATMS substrate Track 6 inherits.
 - Singher-Itzhaky 2023, *colored e-graphs* (referenced in TBGH §1.5) is the closest published precedent for conditional / worldview-conditional rewriting on e-graphs. Direct comparison target.
 - The PReduce Master open question Q5 (cost lattice composition) lands in S1; Q6 (retraction-bit consultation) lands in S5; the combined retraction picture is now categorically explicit via §2.C2 + §3.S6.
 

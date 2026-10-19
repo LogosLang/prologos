@@ -797,8 +797,8 @@ Per POST_IMPLEMENTATION_REVIEW.org § The PIR Lifecycle:
   - [`2026-04-26_dailies.md`](../../../standups/2026-04-26_dailies.md) — pre-fork tropical work
   - [`2026-05-13_dailies.md`](../../../standups/2026-05-13_dailies.md) — main implementation arc + Phase 1V close
 - **Top 5 cross-referenced PIRs** (per §16.3):
-  - [BSP-LE Track 2B](../../../2026-04-16_BSP_LE_TRACK2B_PIR.md)
-  - [BSP-LE Track 2](../../../2026-04-10_BSP_LE_TRACK2_PIR.md)
+  - [BSP-LE Track 2B](../../BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md)
+  - [BSP-LE Track 2](../../BSP-LE/BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md)
   - [SRE Track 2G](../../../2026-03-30_SRE_TRACK2G_PIR.md)
   - [SRE Track 2H](../../../2026-04-03_SRE_TRACK2H_PIR.md)
   - [PPN Track 4B](../PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md)

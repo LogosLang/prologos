@@ -1090,7 +1090,7 @@ skip+warn policy; these lift the skips / harden the substrate.
 ## HIGH PRIORITY: Propagator/Cell Allocation Efficiency Track
 
 ### Design Track for Efficient Prop/Cell Allocation
-- **Audit complete**: `docs/tracking/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md` (commit `f7bd03d`)
+- **Audit complete**: `docs/tracking/tracks/BSP-LE/BSP-LE_0/audits/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md` (commit `f7bd03d`)
 - **Thesis**: Any even modest gains in allocation efficiency will have disproportionate effect across the entire infrastructure — every part of the system creates cells and propagators at scale
 - **Key findings**: `struct-copy prop-network` (13-field copy) is dominant cost; 25 call sites; 6 optimization opportunities identified preserving pure data-in/data-out contract
 - **Top 3 optimizations**: (1) mutable worklist/fuel in quiescence loop, (2) field-group struct splitting (hot/warm/cold), (3) batch cell registration via existing transient CHAMP builder
@@ -1949,7 +1949,7 @@ worldview-preserving tabling (so guard generators materialize per-branch tags). 
 ### Cross-references
 
 - Landed slice: commit `6b56397d`; design [`2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md`](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §5 A.4.
-- **Track 3 seed (both issues + prototyped designs)**: [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md).
+- **Track 3 seed (both issues + prototyped designs)**: [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](tracks/BSP-LE/BSP-LE_3/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md).
 
 ## Rel T1 Aspect C, C.d — `?x:Int` runtime domain-constraint (types-as-predicates) → UCS Track 6 (captured 2026-07-21)
 
@@ -1973,7 +1973,7 @@ readers/languages. The UCS track inherits the substrate + bridges it to the exis
 - **Handoff note (the full settled design + verified coordinates + known gaps)**: [`2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md`](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md).
 - Rel T1 design: [`2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md`](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §7.5 (RESOLVED) / §7.6 (C.d) / §7.7 (deferred + non-monotone S(-1) cap).
 - Grounding-audit: `wf_ab037f07-570` (guard machinery + fix options).
-- BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](2026-03-21_BSP_LE_MASTER.md).
+- BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md).
 - **Process note**: the A.4 investigation was lengthened by a WS-syntax probe error (one-line fact rows `|| 5 3` parse as one wrong-arity row → spurious empty results, masqueraded as a tabling failure). Probes need multi-line fact rows.
 
 ## Solver term conversion drops pvec/map literals — unify with a collection literal yields `unknown` (captured 2026-07-25, surfaced by Rel T1 B3.2's mini-audit)
@@ -7165,7 +7165,7 @@ with cell 1, so the result is not a fixpoint of its own S0 propagators.
   mechanism (PAR 4 P1a row 1). O-17 placed that row in BSP-LE 3 with DEFERRED 177's fix. C2-8 already kept the
   guard's write out of P0.5, because cell 1's merge is not a join.
 - The fix shape above stands. BSP-LE 3's kickoff
-  (`docs/tracking/tracks/BSP_LE/BSP_LE_3/2026-10-19_BSP_LE_3_KICKOFF.md`, on branch `bsple3-tabling`) lists this
+  (`docs/tracking/tracks/BSP-LE/BSP-LE_3/handoffs/2026-10-19_BSP-LE_3_KICKOFF.md`, on branch `bsple3-tabling`) lists this
   entry among its inputs.
 - **Record**: PAR 4 D.3 §6.1 and §6.10 (`docs/tracking/tracks/PAR/PAR_4/2026-10-19_PAR_4_D3_DESIGN.md`, on branch
   `par4-arena-executors` until PAR 4's next checkpoint).
@@ -8144,7 +8144,7 @@ wrong answers fixed sooner.
 **Addendum 2026-10-19: owner decision O-17 (a). BSP-LE Track 3 owns the fix, as its Stage A.** This supersedes the
 **When** line above.
 - The fix runs as a concurrent track: branch `bsple3-tabling`, worktree `.claude/worktrees/bsple3-tabling`, kickoff
-  `docs/tracking/tracks/BSP_LE/BSP_LE_3/2026-10-19_BSP_LE_3_KICKOFF.md` on that branch.
+  `docs/tracking/tracks/BSP-LE/BSP-LE_3/handoffs/2026-10-19_BSP-LE_3_KICKOFF.md` on that branch.
 - **Stage A** is the six parts (a)–(f) above, plus the DFS-vs-ATMS answer-set differential with a deliberate-error
   row. It checkpoints to main before any tabling work. Track 3's tables share the label lattice (PUnify Part 3 §9.6),
   with the read rule pinned to label ⊆ W.
@@ -8313,7 +8313,7 @@ decided with O-16.
 - **The override fix shape above stands**: an override is a record update.
 - **The DFS depth abort** (this entry's headline, and DEFERRED 153) becomes a per-command outcome (O-16 part 3).
 - **Natural home**: BSP-LE Track 5, Solver Language ("make `solver-config` knobs operational", `:timeout` included;
-  `docs/tracking/2026-03-21_BSP_LE_MASTER.md:203-213`). Who implements it is not decided; O-17 asks the same question
+  `docs/tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md:203-213`). Who implements it is not decided; O-17 asks the same question
   for 177.
 - **Record**: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on main since
   PAR 4 checkpoint 3 `dba9f502`).

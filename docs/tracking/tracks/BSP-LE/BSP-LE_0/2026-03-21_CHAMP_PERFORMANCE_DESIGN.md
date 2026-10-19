@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-21
 **Status**: Draft (D.3 — self-critique + principles alignment)
-**Audit**: [CHAMP Performance Audit](2026-03-21_CHAMP_PERFORMANCE_AUDIT.md)
+**Audit**: [CHAMP Performance Audit](audits/2026-03-21_CHAMP_PERFORMANCE_AUDIT.md)
 **Prerequisite**: None — independent of all Series. Benefits all propagator-network consumers.
 **Prior work**: [BSP-LE Track 0 PIR](2026-03-21_BSP_LE_TRACK0_PIR.md) (identified CHAMP as actual bottleneck), [BSP-LE Track 0 Phase 5](2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md) (transient regression — motivation for owner-ID)
 **Principle**: CHAMP operations are 10× more expensive than struct-copy. Every cell write, cell creation, propagator registration, and lookup goes through CHAMP. Optimizing CHAMP benefits every Track in every Series.

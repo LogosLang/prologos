@@ -9,7 +9,7 @@
 **Suite health**: 7313 tests, 377 files, 236.5s, all pass
 **Design docs**: `2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md`
 **Audit**: `2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md` (commit `f7bd03d`)
-**Series**: BSP-LE ([Master Roadmap](2026-03-21_BSP_LE_MASTER.md))
+**Series**: BSP-LE ([Master Roadmap](../2026-03-21_BSP_LE_MASTER.md))
 **Prior PIRs**: Track 7 PIR (persistent cells, stratified retraction), PUnify Parts 1–2 PIR (cell-tree unification)
 
 ---

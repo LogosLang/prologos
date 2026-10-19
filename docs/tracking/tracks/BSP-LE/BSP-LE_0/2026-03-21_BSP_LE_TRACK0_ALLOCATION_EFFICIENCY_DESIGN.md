@@ -2,8 +2,8 @@
 
 **Date**: 2026-03-21
 **Status**: Draft (D.3 — self-critique + principles alignment)
-**Parent**: BSP-LE Series ([Master Roadmap](2026-03-21_BSP_LE_MASTER.md))
-**Audit**: [Cell & Propagator Allocation Audit](2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md) (commit `f7bd03d`)
+**Parent**: BSP-LE Series ([Master Roadmap](../2026-03-21_BSP_LE_MASTER.md))
+**Audit**: [Cell & Propagator Allocation Audit](audits/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md) (commit `f7bd03d`)
 **Prerequisite**: None — unblocked, first in implementation order
 **Principle**: Every subsequent Track (PM Track 8, CIU, BSP-LE Tracks 1-5) creates cells and propagators at scale. Fixing allocation efficiency first means all later benchmarks are representative.
 

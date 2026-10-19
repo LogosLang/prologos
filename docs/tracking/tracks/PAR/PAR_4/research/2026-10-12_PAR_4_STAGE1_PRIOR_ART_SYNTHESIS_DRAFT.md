@@ -48,13 +48,13 @@ cells for which the chaotic-iteration hypotheses do not obviously hold. Those ar
 | 6 | `docs/research/2026-05-02_PARALLEL_ALGORITHMS_SURVEY.md` §1, §4, §10, §11 (2026-05-02) | Valiant BSP cost model + Multi-BSP; hypercube collectives in log p rounds; Kahn principle (BSP = synchronous specialisation of KPN); Theme 4 "communication, not computation, dominates"; Theme 5 monotone fixpoint = determinism | **REUSABLE** as model/vocabulary; parameters re-measured |
 | 7 | `docs/research/2026-05-02_PARALLEL_DECOMPOSITION_AND_HASSE_ADJACENCY_FOR_PROPAGATORS.md` (2026-05-02) | Hyperlattice Conjecture graded by variety; Hasse width = parallelism budget; Garg LLP strongest precedent; Q8.1 "CALM and Hasse adjacency: same theorem?" | **OPEN** — does not yield the ownership partition (§2.6 below) |
 | 8 | `docs/research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md` §5 (2026-04-30) | Per-domain algebraic level unlocks propagator kinds; Boolean → bitmask O(1) | **REUSABLE** for the flat tier's eligibility test (Q3) |
-| 9 | `docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md` §2.1–2.4 (2026-04-08) | Gray-code branch order maximises CHAMP sharing; subcube pruning as bitmask; hypercube all-reduce for BSP barrier ("every thread has the complete merged state") | §2.2 **REUSABLE**; §2.1 **REVISED** (no CHAMP in the arena); §2.3 **SUPERSEDED** (replicated state is what ownership removes) |
+| 9 | `docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md` §2.1–2.4 (2026-04-08) | Gray-code branch order maximises CHAMP sharing; subcube pruning as bitmask; hypercube all-reduce for BSP barrier ("every thread has the complete merged state") | §2.2 **REUSABLE**; §2.1 **REVISED** (no CHAMP in the arena); §2.3 **SUPERSEDED** (replicated state is what ownership removes) |
 | 10 | `docs/research/2026-05-05_ASYNCHRONOUS_PROGRAMMING_QUANTALE_RESEARCH_PROGRAM.md` §1.1, §3.3.7–3.3.8, §8.7 (2026-05-05) | Propagator network ≅ cc(D): closure operators, quiescence = lfp, order-independent; substrate "synchronous in its round structure"; L1 = "Zig-kernel work-stealing, EBR, parallel BSP rounds" | §3.3.7 **REUSABLE**; §1.1 framing **REVISED** (S0 need not be round-synchronous) |
 | 11 | `docs/research/PROPAGATOR_NETWORKS.md` § Scheduling Strategies (undated) | Gauss-Seidel vs BSP; "Jacobi converges more slowly than Gauss-Seidel for chain topologies" | **REUSABLE**, confirmed by MEASUREMENT (15 vs 10 rounds) |
 | 12 | `docs/tracking/2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md` §1, §2, §6, Cross-cutting (2026-02-23) | LVars threshold reads/freeze; four fork strategies (ATMS labelling vs MUSE copying vs CRDT fork-join); "ATMS avoids physical copying by labelling" | **REUSABLE** for Q2 |
 | 13 | `docs/tracking/2026-03-27_PAR_MASTER.md` § Challenge 1 (2026-03-27, revised 2026-10-12) | Futures cannot mutate; threads cooperative; STM/WAL/FFI directions | **SUPERSEDED** (owner's note at :97-104) |
-| 14 | `docs/tracking/2026-04-10_BSP_LE_TRACK2B_DESIGN.md:1070-1139` (2026-04-10) | 8 µs OS wakeup is the fundamental bottleneck; spin-wait ineffective; crossover N≈256 | **REVISED BY STAGE 1** (§3 below) |
-| 15 | `docs/tracking/handoffs/2026-04-16_BSP_LE_2B_HANDOFF.md:109-112, :118-119` (2026-04-16) | "No Racket-level mechanism beats the OS wakeup cost" (accepted); "scope sharing > bridges" | :109-112 **SUPERSEDED**; :118-119 **REUSABLE** (Q2) |
+| 14 | `docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-10_BSP_LE_TRACK2B_DESIGN.md:1070-1139` (2026-04-10) | 8 µs OS wakeup is the fundamental bottleneck; spin-wait ineffective; crossover N≈256 | **REVISED BY STAGE 1** (§3 below) |
+| 15 | `docs/tracking/tracks/BSP-LE/BSP-LE_2B/handoffs/2026-04-16_BSP_LE_2B_HANDOFF.md:109-112, :118-119` (2026-04-16) | "No Racket-level mechanism beats the OS wakeup cost" (accepted); "scope sharing > bridges" | :109-112 **SUPERSEDED**; :118-119 **REUSABLE** (Q2) |
 | 16 | `.claude/rules/stratification.md`, `on-network.md`, `propagator-design.md`, `structural-thinking.md` | Barrier = stratum boundary; cell/propagator/scheduler orthogonality ("behaviour must not depend on sync vs async"); between-round atomicity for narrowing; Realization B (tagging over bridges) | **REUSABLE** — these are the acceptance criteria for Q1 |
 | 17 | `lhc/docs/research/initial/stage1/2026-08-16_STAGE1_B4_SCHEDULER.md` §1.1, §1.10, §1.12, §2.2–2.5 (2026-08-16, *outside brief*) | Cousot Prop. 28/29; Bertsekas–Tsitsiklis asynchronism + Assumption 2(c); Üresin–Dubois necessity on finite spaces; quiescence/freeze/frontier/`fix` are one mechanism; Dijkstra–Scholten termination detection; Astrée/PIKOS abandoned async iteration for reproducibility under widening; Soufflé 59× structure → 1.9× fixpoint | **REUSABLE, hand to frontier survey** (already verified in-house) |
 
@@ -300,15 +300,15 @@ S0 needs, and its cost is the measured 0.8 µs once per stratum transition, not 
 - `docs/tracking/tracks/PAR/PAR_4/2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md` (§0–§5)
 - `docs/tracking/tracks/PAR/PAR_4/PAR_4_LOG.md`
 - `docs/tracking/2026-03-27_PAR_MASTER.md` (:3-30, :36-43, :95-117, :149-151)
-- `docs/tracking/2026-04-10_BSP_LE_TRACK2B_DESIGN.md` (:1070-1139)
-- `docs/tracking/handoffs/2026-04-16_BSP_LE_2B_HANDOFF.md` (:105-134)
+- `docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-10_BSP_LE_TRACK2B_DESIGN.md` (:1070-1139)
+- `docs/tracking/tracks/BSP-LE/BSP-LE_2B/handoffs/2026-04-16_BSP_LE_2B_HANDOFF.md` (:105-134)
 - `docs/tracking/2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md` (:8-61, :63-130, :441-547, :549-587)
 - `docs/research/RESEARCH_PARALLEL.md` (:529-565, :677-757, :874-900, :904-916, :1010-1035)
 - `docs/research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md` (:15-83, :125-200)
 - `docs/research/2026-03-28_PARALLEL_PROPAGATOR_SCHEDULING.md` (:24-53, :57-87, :90-121, :125-157, :160-192, :248-276)
 - `docs/tracking/tracks/PPN/research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md` (:283-325, :374-517)
 - `docs/research/2026-03-28_MODULE_THEORY_LATTICES.md` (:247-268, :333-338, :395-407, :411-421)
-- `docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md` (:10-32, :38-89, :178-187)
+- `docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md` (:10-32, :38-89, :178-187)
 - `docs/research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md` (:243-302)
 - `docs/research/2026-05-02_PARALLEL_ALGORITHMS_SURVEY.md` (:27-79, :195-253, :538-590, :593-650)
 - `docs/research/2026-05-02_PARALLEL_DECOMPOSITION_AND_HASSE_ADJACENCY_FOR_PROPAGATORS.md` (:21-90, :174-241, :244-302, :483-542)

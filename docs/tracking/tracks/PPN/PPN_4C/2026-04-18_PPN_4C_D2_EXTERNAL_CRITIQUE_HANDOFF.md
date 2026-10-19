@@ -97,7 +97,7 @@ These are the primary design artifacts. The external critic must see the full de
 
 21. [`docs/tracking/tracks/PPN/PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md`](../PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md) — Track 4B PIR. §12 notes zonk retirement still deferred; §1 reframes "side effects ARE attributes."
 
-22. [`docs/tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md`](../../../2026-04-16_BSP_LE_TRACK2B_PIR.md) — BSP-LE 2B PIR. §16.4 Module Theory Resolution B; §16.5 skip-the-mechanism lesson; §16.8 per-variable split entries lesson.
+22. [`docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md`](../../BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md) — BSP-LE 2B PIR. §16.4 Module Theory Resolution B; §16.5 skip-the-mechanism lesson; §16.8 per-variable split entries lesson.
 
 ### §2.5 Session-Specific — research docs that shaped D.2
 
@@ -115,9 +115,9 @@ These are the research foundations. D.2's architectural choices cite them direct
 
 28. [`docs/tracking/2026-03-22_NTT_SYNTAX_DESIGN.md`](../../../2026-03-22_NTT_SYNTAX_DESIGN.md) — **NTT guiderails.** §3.1-3.2 lattice/type declarations match Tier 1; §4 propagator form; §6 bridges; §7 stratification; §7.6 `:trace` modes (provenance infrastructure for Phase 11b); §5 interface (egress convention).
 
-29. [`docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — worldview lattice as Q_n hypercube; Gray-code traversal, subcube pruning, hypercube all-reduce.
+29. [`docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — worldview lattice as Q_n hypercube; Gray-code traversal, subcube pruning, hypercube all-reduce.
 
-30. [`docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — BSP-LE 1.5 design note; 4C Phase 9 substrate for Phase 10 union types.
+30. [`docs/tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — BSP-LE 1.5 design note; 4C Phase 9 substrate for Phase 10 union types.
 
 31. [`docs/research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md`](../../../../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md) — the `grammar` form + `that` vision. 4C provides the infrastructure; Track 7 lifts this to user surface.
 
@@ -131,7 +131,7 @@ These are the research foundations. D.2's architectural choices cite them direct
 
 ### §2.7 BSP-LE Master (for Track 6 forward reference)
 
-35. [`docs/tracking/2026-03-21_BSP_LE_MASTER.md`](../../../2026-03-21_BSP_LE_MASTER.md) — contains Track 6-future "General Residual Solver" entry added during D.2 dialogue.
+35. [`docs/tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md`](../../BSP-LE/2026-03-21_BSP_LE_MASTER.md) — contains Track 6-future "General Residual Solver" entry added during D.2 dialogue.
 
 ---
 

@@ -1,6 +1,6 @@
 # BSP-LE Track 3 — On-Network Tabling / Guard Seed (from Rel T1 Aspect-A)
 
-**Date**: 2026-07-20 · **Series**: [BSP-LE](2026-03-21_BSP_LE_MASTER.md) · **Status**:
+**Date**: 2026-07-20 · **Series**: [BSP-LE](../2026-03-21_BSP_LE_MASTER.md) · **Status**:
 SEED (pre-design) for **BSP-LE Track 3 (Tabling / SLG memoization)**. NOT a design.
 Captures two concrete on-network seams that Rel Track 1 (Aspect-A NAF/guard
 correctness) hit and worked around with **interim DFS-routing scaffolding**, plus the
@@ -13,8 +13,8 @@ delete that scaffolding. This is the "partial seed" for Track 3's design+impleme
 > a usability track, Rel T1 routed the affected shapes to DFS (which is correct) and
 > captured the on-network work here. Two scaffolding checks (`reachable-has-body-local-rule?`
 > and `reachable-has-guard?` in `stratified-eval.rkt` `use-propagator?`) are Track 3's
-> **retirement obligation** — see the [BSP-LE Master § Track 3](2026-03-21_BSP_LE_MASTER.md)
-> and [DEFERRED.md](DEFERRED.md).
+> **retirement obligation** — see the [BSP-LE Master § Track 3](../2026-03-21_BSP_LE_MASTER.md)
+> and [DEFERRED.md](../../../DEFERRED.md).
 
 ---
 
@@ -52,8 +52,8 @@ question and makes "diverge, tag the derived output" defensible.
 (a) on-network body-local-var threading (reuse `collect-clause-vars`), (b) SLG completion
 detection, (c) worldview-preserving table answers (§9.6 support-set or a divergent
 per-answer tag). Then **delete Check 3** and the join/recursion generators flow back
-on-network. Full detail: [DEFERRED.md](DEFERRED.md) § "Rel T1 A.2b DFS-routing scaffolding",
-[Rel T1 design §5 A.2b](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md).
+on-network. Full detail: [DEFERRED.md](../../../DEFERRED.md) § "Rel T1 A.2b DFS-routing scaffolding",
+[Rel T1 design §5 A.2b](../../../2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md).
 
 ---
 
@@ -133,8 +133,8 @@ Check 4**.
 
 - Grounding-audit `wf_c2f8bfa3-db2` (A.2b tabling) + `wf_ab037f07-570` (A.4 guard) — HEAD-pinned facet syntheses (the four co-change sites, the belief-vs-existence layer, the S0-vs-between-round stratum finding).
 - Options-panel `wf_9c6eb408-522` (A.2b mechanism families: Family F consumer-fresh-bit vs Family P §9.6 support-set).
-- [Rel T1 design](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §5 A.2b + §5 A.4.
-- [DEFERRED.md](DEFERRED.md) § "Rel T1 A.2b DFS-routing scaffolding".
+- [Rel T1 design](../../../2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §5 A.2b + §5 A.4.
+- [DEFERRED.md](../../../DEFERRED.md) § "Rel T1 A.2b DFS-routing scaffolding".
 - Retirement checks to delete: `stratified-eval.rkt` `reachable-has-body-local-rule?` (Check 3) + `reachable-has-guard?` (Check 4).
 
 **Process note (worth carrying)**: the A.4 investigation was lengthened by a WS-syntax

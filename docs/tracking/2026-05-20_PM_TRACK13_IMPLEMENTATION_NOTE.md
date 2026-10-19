@@ -184,7 +184,7 @@ The pattern: scheduler-state migrates piecemeal. PM 13 adds the handler registry
 
 ### §8.4 Related research
 - [Categorical Foundations of Typed Propagator Networks (2026-03-22)](../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md)
-- [Hypercube BSP-LE Design Addendum (2026-04-08)](../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
+- [Hypercube BSP-LE Design Addendum (2026-04-08)](tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
 - [Self-Hosting Path + Bootstrap Stages (2026-04-30)](../research/2026-04-30_SELF_HOSTING_PATH_AND_BOOTSTRAP.md)
 - [Propagator Network as Super-Optimizing Compiler (2026-04-30)](../research/2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md)
 

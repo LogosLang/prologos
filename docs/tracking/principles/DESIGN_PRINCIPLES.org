@@ -1044,7 +1044,7 @@ PReduce, OE, and SH Series tracks.
 
 - [[../../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md][PAR Series: Parallel Propagator Scheduling]]
 - [[../2026-03-27_PAR_MASTER.md][PAR Master]] — CALM-compliant scheduling
-- [[../2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][BSP-LE Track 0]] — cell-level hot/cold split (storage strategy at cell layer)
+- [[../tracks/BSP-LE/BSP-LE_0/2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][BSP-LE Track 0]] — cell-level hot/cold split (storage strategy at cell layer)
 - [[../../.claude/rules/propagator-design.md][propagator-design.md]] — propagator-level optimization patterns (fire-once, broadcast, set-latch)
 - [[../../.claude/rules/on-network.md][on-network.md]] — the on-network mandate (which this principle extends with the orthogonality requirement)
 

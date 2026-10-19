@@ -112,7 +112,7 @@ I agree we should capture this data in the document.
 I wonder if there's something in the Threads approach that can be optimized, to bring that speed-up point to a lower N?
 
 
-*** [[../tracking/2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md][Self Critique]]
+*** [[../tracking/tracks/BSP-LE/BSP-LE_2B/critiques/2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md][Self Critique]]
 
 P2/R2 - Expand scope to fire-once (self-cleaning) propagator, keeping single clause queries on the fast path.
 
@@ -122,7 +122,7 @@ R4 - let's verify
 
 The critique points: M1, P1, P5, P6, M4 -- all raise issues with state that is not on-network, that are dismissed. How does this affect our Self-Hosting Compiler, if these values are not on-network? I think I share the critique concerns more than the dismissal.
 
-*** [[../tracking/2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md][External Critique]]
+*** [[../tracking/tracks/BSP-LE/BSP-LE_2B/critiques/2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md][External Critique]]
 
 P1/R1
 The point of this is to develop BSP solver--and to make it as efficient as possible. We want to explore the potential of parallel search and resolution of logic programming. This is what we're here for, and making it as optimal and competitive as we can.

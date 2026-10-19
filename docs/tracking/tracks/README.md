@@ -14,6 +14,12 @@ into [`PPN/`](PPN/), 1 840 citations rewritten in 129 files, verified by
 file is still found by its old name. The procedure, the decisions and what it found:
 [`PPN/README.md`](PPN/README.md) and [`PPN/PPN_4C/LOG.md`](PPN/PPN_4C/LOG.md) § *The PPN series
 moves into `tracks/PPN/`*.
+**BSP-LE** (2026-10-19, `18b94286`; research symlinks `5674e875`) — 25 documents into [`BSP-LE/`](BSP-LE/), plus
+the BSP-LE 3 track files; 348 citations rewritten in 87 files; links before = after = 3 964, broken 121 before and
+after, 0 new. Basenames were kept. By owner decision the series uses its prose spelling: directories `BSP-LE_<N>/`,
+the track log `LOG_BSP-LE_<N>.md` (BSP-LE only), new files `YYYY-MM-DD_BSP-LE_<N>_<KIND>.md`. Details:
+[`BSP-LE/README.md`](BSP-LE/README.md) and [`BSP-LE/BSP-LE_3/LOG_BSP-LE_3.md`](BSP-LE/BSP-LE_3/LOG_BSP-LE_3.md) §
+*The BSP-LE series moves into `tracks/BSP-LE/`*.
 
 **Moving the next series** — what the PPN move measured:
 - Census before moving: every md/org link whose target resolves to a moved file, every
@@ -71,3 +77,7 @@ LOG from 2026-10-13 on and any new artifacts.
 `tracks/PPN/PPN_4C/` — PPN Track 4C, Elaboration completely on-network: resumed 2026-10-13 on
 branch `ppn4c-elaboration-on-network` after four months parked (addendum Phase 4B.5.b next). Its
 whole record moved here with the series; the LOG starts with where the earlier history lives.
+`tracks/BSP-LE/BSP-LE_3/` — BSP-LE Track 3, Tabling, opening with Stage A, the ATMS label semantics (DEFERRED 177's
+fix), placed there by owner decision on 2026-10-19 (PAR 4 O-17 (a)). Opened on branch `bsple3-tabling`; Stage 1 next.
+The whole series moved with it (2026-10-19); the master is `tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md`, indexed in
+`tracks/BSP-LE/README.md`. Its directories and new files use the prose spelling `BSP-LE` (owner decision).

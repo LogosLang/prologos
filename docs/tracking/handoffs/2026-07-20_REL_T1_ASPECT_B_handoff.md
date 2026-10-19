@@ -72,7 +72,7 @@ stratification.md, testing.md, workflow.md).
    unbound reps + the **F1b.6 escape-boundary tightening** / D23 display posture).
 5. `docs/tracking/standups/2026-07-19_dailies.md` — STATE head (current) + the LOG
    (the full Aspect-A arc, newest at bottom).
-6. `docs/tracking/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md` — where the A.2b + A.4
+6. `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md` — where the A.2b + A.4
    scaffolding retires (context, not resume work).
 7. `git log --oneline -14` — the commit chain.
 

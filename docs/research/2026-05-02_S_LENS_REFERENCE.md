@@ -185,7 +185,7 @@ This supplement is designed for **active use** during:
 - [`LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE`](2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md) — element-level theory; FL_V(X)
 - [`LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS`](2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md) — per-variety operational catalog
 - [`MODULE_THEORY_LATTICES`](2026-03-28_MODULE_THEORY_LATTICES.md) — module-theoretic backbone (Krull-Schmidt; quantale modules)
-- [`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM`](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Boolean variety design consumer
+- [`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM`](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Boolean variety design consumer
 
 ### This batch
 - [`PARALLEL_DECOMPOSITION_AND_HASSE_ADJACENCY_FOR_PROPAGATORS`](2026-05-02_PARALLEL_DECOMPOSITION_AND_HASSE_ADJACENCY_FOR_PROPAGATORS.md) — foundational synthesis; theory grounding for this supplement

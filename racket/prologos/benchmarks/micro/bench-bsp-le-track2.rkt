@@ -22,8 +22,8 @@
 ;;;   - Modern solver-context API (atms.rkt:solver-* operations) replaces
 ;;;     deprecated atms-* internal API.
 ;;;   - BSP-LE Track 2 + 2B PIRs preserve the architectural conclusions:
-;;;       docs/tracking/2026-04-10_BSP_LE_TRACK2_PIR.md
-;;;       docs/tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md
+;;;       docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md
+;;;       docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md
 ;;;
 ;;; RATIONALE (per §7.7 β1): "Retire BOTH bench files with ε2-style
 ;;; annotations — measured legacy ATMS internal patterns from pre-
@@ -45,5 +45,5 @@
 (displayln "")
 (displayln "Modern equivalents: solver-context API in atms.rkt (Phase 5.6).")
 (displayln "Architectural conclusions preserved in:")
-(displayln "  docs/tracking/2026-04-10_BSP_LE_TRACK2_PIR.md")
-(displayln "  docs/tracking/2026-04-16_BSP_LE_TRACK2B_PIR.md")
+(displayln "  docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md")
+(displayln "  docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md")

@@ -17,7 +17,7 @@
 - [Categorical Foundations of Typed Propagator Networks](../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) §10 — Lafont interaction nets + Girard GoI grounded against propagator semantics; the GoI execution formula IS the propagator network fixpoint, structural identity, not metaphor.
 - [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md) §6 — e-graphs as quotient modules; backward chaining as residuation.
 - [Lattice Variety and Canonical Form for SRE](../research/2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md) (2026-04-30) — per-domain canonical form; tightens the optimality story for cost-guided extraction.
-- [Hypercube BSP-LE Design Addendum](../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n hypercube worldview, Gray-code traversal, bitmask subcube pruning; the speculative-search infrastructure PReduce consumes.
+- [Hypercube BSP-LE Design Addendum](tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n hypercube worldview, Gray-code traversal, bitmask subcube pruning; the speculative-search infrastructure PReduce consumes.
 - [Kan Extensions, ATMS, GFP Parsing](../research/2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) — 4-level optimization strategy (ATMS branching + Left Kan partial-info + Right Kan demand + tropical cost); the cost-bounded speculative-exploration pattern.
 - [SH Master](2026-04-30_SH_MASTER.md) — self-hosting series; PReduce is its critical cross-series dependency.
 - [Propagator Network as Super-Optimizing Compiler](../research/2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md) (2026-04-30) — the architectural-distinctiveness argument; PReduce is the linchpin §5.
@@ -28,7 +28,7 @@
 
 **Cross-series connections**:
 - **PPN 4C Phase 1B** ([Tropical Quantale Addendum](tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)) is the hard substrate prerequisite (CLOSED 2026-05-17; gates Track 1 *implementation*, not Track 0.x design closure) — ships the tropical-fuel substrate: quantale algebra + SRE quantale-property declarations (`tropical-fuel-primitives.rkt` re-exported via `tropical-fuel.rkt`), specialized-cell factory + live fuel/budget cells (`propagator.rkt` + `specialized-cells.rkt`). Wording corrected per 2026-06-10 grounding audit: (i) the planned threshold *propagator* was REPLACED in D.4 by an on-write predicate (no separate propagator); (ii) `tropical-left-residual` is a pure read-time function with zero production consumers today — PReduce inherits the ALGEBRA without recreating it, but the on-network residuation wrapping Track 4 needs is greenfield work, not inheritance; (iii) the monotone-counter fast path is gated to not-under-speculation, so Track 6 (speculative reduction) gets the slow path — Phase 1V ns/cycle numbers do not port.
-- **BSP-LE Track 2B** ([PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md)) provides the speculative-search infrastructure: Q_n hypercube worldview, bitmask subcube pruning, Gray-code branch ordering, ATMS nogoods, retraction stratum S(-1). PReduce's cost-bounded speculative reduction consumes this directly.
+- **BSP-LE Track 2B** ([PIR](tracks/BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md)) provides the speculative-search infrastructure: Q_n hypercube worldview, bitmask subcube pruning, Gray-code branch ordering, ATMS nogoods, retraction stratum S(-1). PReduce's cost-bounded speculative reduction consumes this directly.
 - **SRE Track 2D** delivered 13 concrete DPO rewrite rules; PReduce extends the rule registry to term reduction, generalizing the SRE form-registry pattern. The Track 2D *adhesive guarantees* (in the strict-adhesive presheaf category) transfer to PReduce's e-class subsystem through *shared semilattice enrichment* per the substrate-research note (C2.f, 2026-05-09), not through shared adhesivity — a unified categorical home rather than a per-theorem audit.
 - **PRN Master** is the theory home; PReduce findings contribute back to PRN's Universal Primitives and Confirmed Findings tables. PRN §2 conjectures β/δ/ι-reduction-as-DPO-rules — PReduce Track 2 (first rule kind, β) is the predicted confirmation, consistent with the Track 2 tracker row (Track 1 is the e-class substrate; rule-kind confirmations land in Tracks 2-3). (Locus inconsistency fixed 2026-06-10.)
 - **SH Master** is the consumer — PReduce delivers the algorithmic perf foundation that makes self-hosted Prologos competitive at runtime; SH Track 4 (production LLVM substrate) gates on PReduce delivery for the super-optimization claim.
@@ -221,7 +221,7 @@ Tracks beyond 1 emerge from Track 0 findings — exact partition decided at Trac
 - [PRN Master](2026-03-26_PRN_MASTER.md) — theory series; PReduce is one of its application series
 - [SH Master](2026-04-30_SH_MASTER.md) — self-hosting series; PReduce is its critical cross-series dependency
 - [PPN Master](tracks/PPN/2026-03-26_PPN_MASTER.md) — propagator-parsing series; provides the parser/elaborator substrate PReduce reduces over
-- [BSP-LE Master](2026-03-21_BSP_LE_MASTER.md) — speculative-search infrastructure (Track 2B PIR consumed)
+- [BSP-LE Master](tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md) — speculative-search infrastructure (Track 2B PIR consumed)
 - [SRE Master](2026-03-22_SRE_MASTER.md) — form registry (generalized into PReduce's unified rule registry); structural-decomposition rules (one rule property tag in PReduce's taxonomy)
 - [PPN 4C Tropical Quantale Addendum Design D.2](tracks/PPN/PPN_4C/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — substrate prerequisite
 
@@ -241,7 +241,7 @@ Tracks beyond 1 emerge from Track 0 findings — exact partition decided at Trac
 - [Kan Extensions, ATMS, GFP Parsing](../research/2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) — 4-level optimization strategy
 - [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md) §6 — e-graphs as quotient modules; backward chaining as residuation
 - [Adhesive Categories and Parse Trees](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) — adhesive-DPO formal foundations
-- [Hypercube BSP-LE Design Addendum](../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n hypercube + Gray code + bitmask subcube
+- [Hypercube BSP-LE Design Addendum](tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n hypercube + Gray code + bitmask subcube
 - [Tropical Quantale Research](../research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md) — deep formal grounding for cost algebra
 - [Lattice Variety and Canonical Form for SRE](../research/2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md) — per-domain canonical form
 - [Propagator Network as Super-Optimizing Compiler](../research/2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md) — architectural-distinctiveness argument

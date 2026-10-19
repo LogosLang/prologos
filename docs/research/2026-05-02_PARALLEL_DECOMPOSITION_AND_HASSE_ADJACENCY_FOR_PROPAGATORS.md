@@ -12,7 +12,7 @@
 - [Lattice Variety and Canonical Form for SRE](2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md) (element-level theory; FL_V(X))
 - [Lattice Hierarchy and Distributivity for Propagators](2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md) (per-variety operational catalog)
 - [Module Theory on Lattices](2026-03-28_MODULE_THEORY_LATTICES.md) (module-theoretic backbone)
-- [Hypercube BSP-LE Design Addendum](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) (the design consumer)
+- [Hypercube BSP-LE Design Addendum](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) (the design consumer)
 
 **Operational supplement**: [S-Lens Reference](2026-05-02_S_LENS_REFERENCE.md) — distillation for active design-review use.
 
@@ -22,7 +22,7 @@
 
 Two threads in our existing work converge on a gap.
 
-**Thread A — Hyperlattice Conjecture, asserted but ungraded.** [`structural-thinking.md`](../../.claude/rules/structural-thinking.md) §1 states: *"the Hasse diagram of the lattice IS the optimal parallel decomposition of that computation."* Today the evidence rests on **one** worked example — the ATMS worldview space being Q_n with the hypercube as its Hasse diagram, exploited in [`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM`](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md). Boolean is the *easy* case: the Hasse diagram of B_n IS the n-cube as a graph, and hypercube algorithms (Akl 1989; Leighton 1991) are the canonical parallel-computing toolkit for that topology. The conjecture asserts something across **all** varieties.
+**Thread A — Hyperlattice Conjecture, asserted but ungraded.** [`structural-thinking.md`](../../.claude/rules/structural-thinking.md) §1 states: *"the Hasse diagram of the lattice IS the optimal parallel decomposition of that computation."* Today the evidence rests on **one** worked example — the ATMS worldview space being Q_n with the hypercube as its Hasse diagram, exploited in [`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM`](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md). Boolean is the *easy* case: the Hasse diagram of B_n IS the n-cube as a graph, and hypercube algorithms (Akl 1989; Leighton 1991) are the canonical parallel-computing toolkit for that topology. The conjecture asserts something across **all** varieties.
 
 **Thread B — Two-mind-space tension, named but not formalized.** *"Information flow on a network is a different design mind-space than algorithmic thinking; and so our adoption of this research helps frame how we structure our network."* (Project conversation, 2026-05-02.) The framing distinguishes:
 
@@ -142,7 +142,7 @@ For Boolean lattices, the Hyperlattice Conjecture's claim is therefore textbook-
 
 **Blelloch 1990** "Vector Models for Data-Parallel Computing": work-efficient parallel prefix-scan in O(log n) depth via up-sweep + down-sweep on a balanced binary tree, equivalent to butterfly network at the topology level. The butterfly network is **embeddable in the hypercube** with optimal dilation.
 
-For Prologos: broadcast propagators (per [`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM`](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) and [`PROPAGATOR_TAXONOMY`](2026-03-28_PROPAGATOR_TAXONOMY.md)) are the parallel-prefix-scan pattern made network-native. The 75.6× speedup at N=100 (BSP-LE Track 2 measurement) is the empirical confirmation that this pattern is the right algorithmic anchor — broadcast propagator IS Blelloch prefix-scan IS butterfly IS embedded hypercube.
+For Prologos: broadcast propagators (per [`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM`](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) and [`PROPAGATOR_TAXONOMY`](2026-03-28_PROPAGATOR_TAXONOMY.md)) are the parallel-prefix-scan pattern made network-native. The 75.6× speedup at N=100 (BSP-LE Track 2 measurement) is the empirical confirmation that this pattern is the right algorithmic anchor — broadcast propagator IS Blelloch prefix-scan IS butterfly IS embedded hypercube.
 
 ### 2.5 Dataflow networks and monotone-fixpoint computation
 
@@ -314,7 +314,7 @@ The S-Lens of lattice design integrates four lenses on a propagator network. Eac
 | **Element lens** | What is a cell value? What is its canonical form? When are two values equal? | [`LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE`](2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md); Whitman; Reading-Speyer-Thomas; Birkhoff |
 | **Variety lens** | What algebraic identities hold? What variety does this lattice live in? What does that unlock? | [`LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS`](2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md); Birkhoff 1935 HSP |
 | **Module lens** | How does this cell interact with others? What's the action of propagators on cells? When does Krull-Schmidt apply? | [`MODULE_THEORY_LATTICES`](2026-03-28_MODULE_THEORY_LATTICES.md); Calugareanu |
-| **Adjacency lens** | What's the Hasse diagram? What's its graph structure? What parallel algorithm does it parametrize? | This note + [`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM`](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md); Akl, Leighton, Garg |
+| **Adjacency lens** | What's the Hasse diagram? What's its graph structure? What parallel algorithm does it parametrize? | This note + [`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM`](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md); Akl, Leighton, Garg |
 
 ### 5.2 How the lenses compose
 
@@ -577,7 +577,7 @@ For the deep reference lists per topic, see the three companion surveys.
 - [`structural-thinking.md`](../../.claude/rules/structural-thinking.md) — design mantra + SRE lattice lens
 - [`on-network.md`](../../.claude/rules/on-network.md) — design mantra + on-network principle
 - [`stratification.md`](../../.claude/rules/stratification.md) — strata as fixpoint composition
-- [`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Boolean variety design consumer
+- [`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Boolean variety design consumer
 - [`LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md`](2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md) — element-level theory
 - [`LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md`](2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md) — per-variety operational catalog
 - [`MODULE_THEORY_LATTICES.md`](2026-03-28_MODULE_THEORY_LATTICES.md) — module-theoretic backbone

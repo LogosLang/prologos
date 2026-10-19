@@ -42,7 +42,7 @@ Paths below are relative to the worktree root.
   ceilings), `…/2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md`.
 - The principles: `docs/tracking/principles/DESIGN_PRINCIPLES.org` and `docs/tracking/principles/CRITIQUE_METHODOLOGY.org`.
 - The rules: `.claude/rules/on-network.md`, `propagator-design.md`, `stratification.md`, `structural-thinking.md`.
-- The neighbouring tracks: `docs/tracking/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md` (BSP-LE 3, on-network search). For
+- The neighbouring tracks: `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md` (BSP-LE 3, on-network search). For
   PPN 4C (elaboration on the network), read its branch with `git show
   ppn4c-elaboration-on-network:docs/tracking/tracks/PPN/PPN_4C/PPN4C_LOG.md` (read-only).
 - The code: `racket/prologos/propagator.rkt` (the scheduler; `run-to-quiescence-bsp` at :3401, the BSP inner loop at

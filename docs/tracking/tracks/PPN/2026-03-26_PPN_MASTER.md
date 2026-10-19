@@ -413,7 +413,7 @@ PPN consumes from PRN:
 
 ## 4. Cross-Cutting Lessons from BSP-LE Track 2B (for Track 4C Design)
 
-Captured 2026-04-16 during BSP-LE 2B A2 scoping discussion. These are architectural insights from BSP-LE Track 2B ([PIR](../../2026-04-16_BSP_LE_TRACK2B_PIR.md)) that should inform the PPN Track 4C design. Track 4C (elaboration on-network — retire all imperative bridges) is the natural vehicle for applying them.
+Captured 2026-04-16 during BSP-LE 2B A2 scoping discussion. These are architectural insights from BSP-LE Track 2B ([PIR](../BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md)) that should inform the PPN Track 4C design. Track 4C (elaboration on-network — retire all imperative bridges) is the natural vehicle for applying them.
 
 ### 4.1 Module Theory scope sharing dissolves bridges
 

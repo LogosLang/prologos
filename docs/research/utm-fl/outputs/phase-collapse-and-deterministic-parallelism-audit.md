@@ -79,7 +79,7 @@ The .pnet round-tripping isn't aspirational; it shipped, deleted code, and produ
 > — `docs/tracking/2026-03-24_PM_TRACK10_PIR.md`, status table
 
 > "A branch PU is a `fork-prop-network` of the parent (existing infrastructure, line 437 in propagator.rkt). CHAMP structural sharing means the branch starts as a reference to the same cells/propagators. Branch-local cell writes and propagator registrations create new CHAMP paths in the branch only — the parent is structurally unmodified."
-> — `docs/tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md`
+> — `docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md`
 
 This is what makes "the network is the IR" *practically* affordable: forking is structural-sharing-O(1), not deep-copy-O(n).
 
@@ -167,7 +167,7 @@ This is the strong-form claim: the entire compiler runs the same network under e
 > "Execution order emerges from DATAFLOW: if goal A writes to cell `?x` and goal B reads `?x`, B fires after A — but this is a cell dependency discovered by the propagator network, not an ordering imposed by installation"
 > "Independent goals (no shared variables) fire concurrently in the same BSP superstep"
 > "This IS the true-parallel order-independent search: the clause-body ordering is irrelevant; the dataflow graph determines the execution schedule"
-> — `docs/tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md`
+> — `docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md`
 
 This is the cleanest statement of the order-independence property in the corpus. It's stated about logic-engine clause bodies but the principle is general — it follows from the lattice-valued-cells + monotone-propagator architecture.
 

@@ -21,7 +21,7 @@
 - `docs/tracking/2026-04-30_SH_MASTER.md` — `.pnet` as deployment-artifact format + Track 1 scope.
 - `docs/tracking/2026-03-24_PM_TRACK10_PIR.md` — `.pnet` cache delivery, status table, 17 registries serialized.
 - `docs/tracking/MASTER_ROADMAP.org` — Track 10 wall-time delta (240→134s).
-- `docs/tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md` — clause-body order-independence; CHAMP fork.
+- `docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md` — clause-body order-independence; CHAMP fork.
 - `docs/tracking/2026-05-02_PREDUCE_MASTER.md` — reduction-on-network thesis.
 - `racket/prologos/propagator.rkt` — Gauss-Seidel + BSP/Jacobi schedulers, `current-use-bsp-scheduler?` global override, `run-to-quiescence` / `run-to-quiescence-bsp` / `run-to-quiescence-widen`.
 - `racket/prologos/benchmarks/bench-scheduler-ab.rkt` — A/B benchmark infrastructure header + override scope.

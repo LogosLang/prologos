@@ -3,14 +3,14 @@
 **Date**: 2026-04-08
 **From session**: BSP-LE Track 2 Phases 1-3 implementation + design critique cycle + hypercube research
 **To session**: Hypercube design addendum + remaining Phase 4-11 implementation
-**Protocol**: [HANDOFF_PROTOCOL.org](../principles/HANDOFF_PROTOCOL.org)
+**Protocol**: [HANDOFF_PROTOCOL.org](../../../../principles/HANDOFF_PROTOCOL.org)
 
 ---
 
 ## §1: Current Work State
 
 **Track**: BSP-LE Track 2 — ATMS Solver + Cell-Based TMS
-**Design document**: `docs/tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md` (D.6, 1445 lines)
+**Design document**: `docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md` (D.6, 1445 lines)
 **Last commit**: `fd82dac7` — Phase 2 CORRECTION (parameter → on-network cell read)
 
 ### Progress Tracker (from design doc)
@@ -59,9 +59,9 @@
 | # | Document | Lines | Why |
 |---|---|---|---|
 | 8 | **Track 2 Design (D.6)** | 1445 | THE design. Every phase, every NTT construct, every critique resolution. Read ALL of it. |
-| 9 | Self-critique | ~230 | `docs/tracking/2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md` — 17 findings, resolutions |
-| 10 | External critique + response | ~120 | `docs/tracking/2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md` — 16 findings |
-| 11 | Stage 1/2 audit | ~400 | `docs/research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md` — research synthesis + codebase audit |
+| 9 | Self-critique | ~230 | `docs/tracking/tracks/BSP-LE/BSP-LE_2/critiques/2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md` — 17 findings, resolutions |
+| 10 | External critique + response | ~120 | `docs/tracking/tracks/BSP-LE/BSP-LE_2/critiques/2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md` — 16 findings |
+| 11 | Stage 1/2 audit | ~400 | `docs/tracking/tracks/BSP-LE/research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md` — research synthesis + codebase audit |
 | 12 | **Hypercube conversation** | ~550 | `docs/standups/standup-2026-04-08.org` § "Hypercube Conversation" — the research that triggers the addendum |
 | 13 | Parallel propagator scheduling research | ~200 | `docs/research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md` |
 | 14 | Propagator taxonomy | ~215 | `docs/research/2026-03-28_PROPAGATOR_TAXONOMY.md` — broadcast, scatter, gather kinds |
