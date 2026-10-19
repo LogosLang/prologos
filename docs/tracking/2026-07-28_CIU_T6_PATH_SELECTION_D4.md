@@ -3880,8 +3880,9 @@ items of the hold-point, ruled before P4a opened:
   - **DC-7** (P5, non-blocking) — the normal form between `x{N.{X} M.{X}}` and `x{N M}:{X}` (DC-3), and
     L★'s side condition at an ordinal head (DC-2, DEFERRED 115).
 
-- <a id="q-u63"></a>**Q_U63 — DOES RAVEL `.*` ADD EXPRESSIVITY, OR ONLY NOTATION? [⏳ PENDING — opened
-  2026-10-19 at the owner's request: "On 2. I want to open up whether this syntax/spelling offers any true
+- <a id="q-u63"></a>**Q_U63 — DOES RAVEL `.*` ADD EXPRESSIVITY, OR ONLY NOTATION? [⏳ OWNER LEAN J
+  (2026-10-19 — "I'm liking J. It reads well to me."), joint with mine; under critique ([JC-n](#q-u63-jc)),
+  sub-decisions [JD-n](#q-u63-jc) posed. Opened 2026-10-19 at the owner's request: "On 2. I want to open up whether this syntax/spelling offers any true
   increase in expressivity?"]** P4e-2's premise is [Q_U26](#q-u26) (decided 2026-08-08): "`values.*` →
   `@[1 2 3 4 5 6 7 8 9]`; APL's `,`. Whole-container join, the sibling of Q_U23's per-step `*`." This
   question asks whether that operator lets a program say something it cannot say today. Probes:
@@ -4032,6 +4033,71 @@ items of the hold-point, ruled before P4a opened:
   - *What would settle it:* whether first-class selectors are expected to be rank-polymorphic. If yes,
     A earns a place beside J (as a library selector, not as the join). Also, whether keeping Q_U26's
     spelling outweighs K's two hazards.
+
+  <a id="q-u63-jc"></a>**Critique of the joint lean J (JC-n), and the sub-decisions inside it (JD-n), 2026-10-19.**
+  Probe research/P4e-2/probe-p4e2-d (16 lines at `21ac833a`; `d:N` = its line N).
+  - **JC-1 — for (ergonomics, the owner's reason).** `values:*` reads "each, joined": the reading of
+    `rows:tags*` without the field, and of spec §3.5's normative `build.modules:diags*:msg`.
+  - **JC-2 — for (composition; measured substrate).** J's meaning on every container is the broadcast's
+    meaning followed by the existing join, so J needs no per-container rule:
+    - over a Map the broadcast layer is KEYED (`mh:x` → `{:a 1, :b 2}`, d:7), so `m:*` joins values
+      exactly as `m{a b}*` does (c:16, c:18);
+    - over a tuple it works per position (`hv:x` → `@[1 "a"]`, d:9);
+    - after an ordinal step it works (`groups.1:name` → `@["b" "c"]`, d:10), which is the `t3.0:*` route;
+    - the existing refusals carry over unchanged: a PVec of one record type collides by construction
+      (`star-omega-nominal`), and leaves have no join.
+
+    A claim to pin once built, not a theorem yet: the identity broadcast must be the identity at BOTH
+    twins.
+  - **JC-3 — against (the broadcast's extent rule).** [Q_U7](#q-u7) made extent structural: `:`
+    broadcasts exactly the next step. J adds the one place no step is written. In the IR it is still one
+    step, `(@bcast ε)`, so the invariant holds. In the SURFACE it is an elision: one grammar production,
+    `:` immediately followed by a star lexeme. A bare `x:` stays a refusal.
+  - **JC-4 — against (discoverability).** Every near-miss is a bare "Unbound variable" today: `values*`,
+    `values.*`, `values: *`, `values:**`, `values:.*` (d:11–15). J ships with guided refusals naming
+    `x:*`, each remedy run (JD-4). `values*` cannot be taken: `*`-suffixed identifiers are a convention
+    ([Q_U26](#q-u26)'s 148 `int*` uses).
+  - **JC-5 — against (block position).** `x{a:*}` sits on the in-block broadcast, which does not apply
+    its step until DEFERRED 167 is fixed (c:26 vs c:28). Without a waypoint, users would get 167's
+    misleading "Map-valued contents" message (JD-3).
+  - **JC-6 — precision (one level).** J is one join. Full ravel is `x:*:*`, written per rank, and a typed
+    program knows its ranks statically. A rank-polymorphic "flatten everything" exists only as A. It
+    matters only for first-class selectors applied at several ranks (§7.5).
+  - **JC-7 — the record.** J supersedes [Q_U26](#q-u26)'s spelling (`.*` is not reclaimed); its
+    MEANING (whole-container join) stands. The P4e tracker row, P4e-2's scope and spec §2.1's `.*` row
+    change with it. P4e-2's reader work moves from `.*`'s grouping fix to recognizing `:*`.
+  - **JC-8 — monotone migration.** Every spelling J uses is unbound today (d:6), so adopting it breaks
+    nothing. Reversing it after programs use it would. With the owner's "liking" and my medium-high,
+    the question is decide-now versus decide-at-P4e-2's-audit. The audit only sizes the reader work;
+    it cannot change the meaning.
+
+  **Laws J makes checkable** (to pin as generated laws, as [Q_U60](#q-u60) did):
+  - bind = join ∘ fmap: `x:k*` ≡ `x:k:*`;
+  - known-length ravel: `x:*` ≡ `x{0 … n−1}*` (c:9);
+  - a Map's values: `m:*` ≡ `m{k₁ … kₙ}*` and `m:*_` ≡ `m{k₁ … kₙ}*_` (c:16–18);
+  - naturality of join: `x:*:k` ≡ `x{0 … n−1}*:k` (c:21);
+  - the functor identity `x:ε ≡ x`, in the IR.
+
+  **Sub-decisions inside J (JD-n), each with a lean. PENDING, posed one at a time at P4e-2 unless the
+  owner takes them now:**
+  - **JD-1 — what `x.*` becomes.** Lean: a guided refusal naming `x:*` (and `x:name` for `.*name`, as
+    P4c-5 planned). Not kept as sugar: two spellings of one operator is the shape Q_U23 retired `.*`
+    for.
+  - **JD-2 — `x:*-` and `x:*-_`.** Nothing lies between the identity broadcast and the star, so nothing
+    can collapse. Lean: accept them as `x:*` and `x:*_`, per [Q_U59](#q-u59) ("where nothing can
+    collapse, `*-` ≡ `*`"). Alternative: refuse them as redundant.
+  - **JD-3 — block position before DEFERRED 167.** Lean: a guided waypoint refusal for `x{a:*}`, naming
+    the path form `x.a:*` (and a record literal for the key), in the shape of VF-1's waypoint. It
+    widens to the meaning when 167 lands.
+  - **JD-4 — the near-misses.** Lean: guided refusals for `x.*`, `x: *`, `x:**` (→ `x:*:*`), `x:.*` and
+    a bare `x:`, each naming the spelling that runs. For an unbound `x*` with `x` bound, a hint, if it
+    is cheap.
+  - **JD-5 — full ravel.** Lean: no operator, `x:*:*` per rank. A as a library selector is deferred to
+    §7.5 / PF, non-blocking.
+  - **JD-6 — ε in PF's `data Step`.** The identity becomes a seventh step kind in [Q_U17](#q-u17)'s
+    closed union. PF owns it; non-blocking.
+  - **JD-7 — `selection` declarations.** Lean: untouched. Their `.*` / `.**` mean "unrestricted"
+    (RV-3), a different form; P4e-2 does not rewrite it.
 
   **RV-4.** `tw{teams:m*}` is refused with a message about "Map-valued contents" (c:26), while the path
   `tw.teams:m*` → `@[1 2 3]` (c:28). In a block the broadcast does not apply its step (DEFERRED 167's

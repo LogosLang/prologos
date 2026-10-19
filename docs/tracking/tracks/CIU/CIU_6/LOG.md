@@ -571,3 +571,23 @@ are in [`../README.md`](../README.md).
   - RV-4: `tw{teams:m*}` is refused in a block where the path form works; that is DEFERRED 167's class
     (addendum on main).
 - **Next**: the owner's decision on Q_U63; 1b-vi close item 2 (the grammar) proceeds meanwhile.
+
+### Q_U63: OWNER LEAN J ("I'm liking J. It reads well to me."); the joint lean critiqued (JC-1…8), seven sub-decisions surfaced (JD-1…7) — docs commit on the branch (2026-10-19)
+- **Why**: the owner's answer is a lean ("liking"), so it is ledgered as a lean under critique, joint with mine.
+- **What**: [Q_U63 critique](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63-jc), probe
+  `research/P4e-2/probe-p4e2-d` (16 lines).
+  - J's substrate is measured:
+    - a broadcast over a Map comes back KEYED (`mh:x` → `{:a 1, :b 2}`), so `m:*` joins exactly as
+      `m{a b}*` does;
+    - a broadcast over a tuple works per position;
+    - an ordinal step followed by a broadcast works;
+    - `:*` is no keyword, and every near-miss is a bare "Unbound variable", so J breaks nothing.
+  - Against J:
+    - it elides the broadcast's step in the surface (the IR keeps `(@bcast ε)`);
+    - it needs guided refusals for five near-misses;
+    - block position waits on DEFERRED 167;
+    - it supersedes Q_U26's spelling, though not its meaning.
+  - Laws to pin are listed.
+  - JD-1…7 (what `.*` becomes; `x:*-`; the block waypoint; near-miss messages; full ravel; ε in PF; the
+    `selection` form) are ledgered with leans.
+- **Next**: the owner decides J (and takes or defers the JDs). 1b-vi close item 2 (the grammar) proceeds.

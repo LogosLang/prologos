@@ -1,0 +1,23 @@
+ns probe-p4e2-d
+;; Q_U63 = J under critique — the substrate J would stand on. Output line N = the Nth top-level form.
+def values := @[@[1 2 3] @[4 5 6] @[7 8 9]]
+def groups := @[@[{:name "a"}] @[{:name "b"} {:name "c"}]]
+def mh := {:a {:x 1} :b {:x 2}}
+def mv := {:a @[1 2] :b @[3]}
+def hv := @[{:x 1} {:x "a"}]
+;; 1 — how `:*` reads today: as a keyword? in a Map literal?
+{:* 1}
+values:*
+;; 2 — a broadcast over a Map: what shape comes back?
+mh:x
+mv:0
+;; 3 — a broadcast over a TUPLE subject (heterogeneous literal)
+hv:x
+;; 4 — an ordinal STEP, then a broadcast (J's `t3.0:*` substrate)
+groups.1:name
+;; 5 — the misspellings J's messages must catch, as they read today
+values*
+values.*
+values: *
+values:**
+values:.*
