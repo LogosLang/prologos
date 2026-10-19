@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 185**
+> ### **NEXT FREE: 186**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5874,6 +5874,19 @@ symptom a **guided error**; this entry is the LAW's repair, which belongs with
 normalizer, not after: a normalizer that silently changes a program's legality
 is the worst shape this class can take.
 
+> **ADDENDUM (2026-10-19, CIU 6 [Q_U62](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) = B, critique DC-2; probe
+> `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-ah` lines 17–24, branch `ciu6-path-selection` @ `93f36b3a`.
+> The probe reaches main with the next checkpoint merge.)** A second star side condition, this time on Q_U45's
+> L★ (`x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*` for Map contents). Under Q_U62 = B ("braces scope a landing"), L★ holds at key
+> heads (`t5{a.b.c.{m* n*}}` ≡ `t5{a.b.c.{m n}*}`, kept and dissolved) and at an ordinal head with a kept key. It
+> FAILS across an ordinal head's braces when every ancestor between them dissolves:
+> `ot{0.a^.b^.c^.{m* n*}}` → `@[{:y 2, :x 1}]` (line 23) vs `ot{0.a^.b^.c^.{m n}*}` → `{:y 2, :x 1}` (line 24).
+> This is by design: under B the star's position relative to the braces is how the one-component reading and
+> the spliced reading are told apart. So a P5 rewrite that moves stars across braces (L★ as a normal form, or a
+> message printing a factored spelling) must not apply L★ at an ordinal head whose chain to the braces names no
+> key. Both side conditions, this entry's L2 one and this L★ one, belong to P5 and should be written before
+> P5's normalizer.
+
 ### 116. ⬜ THE BRACKET ORDINAL `m[0]` IS REDUNDANT WITH `m.0` — but ONLY for a LITERAL index; `m[i]` is dynamic indexing with no dot-band spelling
 
 Raised by the owner 2026-08-12 during the D4.P4e-1b-iii-C co-design ("deprecate
@@ -8352,3 +8365,29 @@ the library.
 2026-10-19). The typing half goes with PPN 4C, or a sweep. First, the census of `TYPING-FUEL-LIMIT` trips.
 
 **Record**: PAR 4 D.3 synthesis §5.6; PAR 4 D.2 §15 O-16, facts 1 and 4, and part 3.
+
+### 185. ⬜ ON A PATH MADE ONLY OF ORDINALS, SELECTION REFUSALS GIVE KEY- AND POSTFIX-SHAPED ADVICE THAT CANNOT BE SPELLED — `vhm{0.{0}* 0.{0}}`'s L4 offers "keep a key before each star" and a `^` that does not parse; `vhm{0.{0*}}` says "`*` is postfix"
+
+**Found by** CIU 6: finding SB-3 when [Q_U62](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) was opened (2026-10-18;
+probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-ae` line 66), and SB-4 at 1b-vi-F (2026-10-19;
+probe `…/probe-1bvi-ai` lines 19, 31, 32; branch `ciu6-path-selection` @ `3fcb720a`, reaching main with the next
+checkpoint merge). Subject: `vhm := @[@[{:x 1}] @[{:y 2}]]`.
+- **SB-4, measured.** `vhm{0.{0}* 0.{0}}` is an L4 refusal (correct) whose all-ordinal arm offers two remedies.
+  Neither can be spelled on this path:
+  - "keep a key before each star (`x{0.a.b* 1.a.b*}`, a tuple of records)": the path has no key;
+  - "end the branch with `^` instead of its star": `vhm{0.{0}^ 0.{0}}` is a parse error ("a `^` operates on the
+    segment to its LEFT …", line 32).
+
+  The remedy that works is to drop the star: `vhm{0.{0} 0.{0}}` → `@[@[{:x 1}] @[{:x 1}]]` (line 19). The own-block
+  route ("Selecting the flatten in its own block") is also offered and stands. The arm is VF-3's
+  (`typing-errors.rkt`, `star-l4-mixed`, the `'all-head` case). It is on main since `83fe4fb4`.
+- **SB-3, measured.** `vhm{0.{0*}}` reports "`*` — `*` is postfix; it attaches to the END of a segment" (ae line 66),
+  although the star does end segment `0`. [Q_U46](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u46)'s gap 1 made a star
+  after an ordinal a guided error that names the reason (an ordinal makes no layer); this spelling misses that route.
+  It predates 1b-vi.
+
+**Impact**: misleading advice only. No wrong value, and every refusal is correct. **Fix shape**: choose each remedy by
+whether the user's own branch can spell it. The arm has the branch: on a path with no key, offer dropping the star,
+and send `{N*}` to Q_U46's ordinal-star message. The class-level cure (1b-vi-F's VAG (b)) is a remedy generator that
+renders its suggestion on the user's branch and runs it, as the battery's remedy rows already do by hand.
+**When**: the 1b-vi close, or the next edit of the level arms, whichever comes first.
