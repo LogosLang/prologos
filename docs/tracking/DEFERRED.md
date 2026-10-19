@@ -8061,6 +8061,26 @@ follow is now decided (PAR 4 D.1 §14 O-3, `1e1684e2`, on main since PAR 4 check
 
 The entry stays open until the fixes land.
 
+**Addendum (2026-10-19, owner decision O-11 = (c), "observation needs no request")**: the fix shape changes in
+form, not in coverage (PAR 4 D.3 §7 and §15 O-11, `docs/tracking/tracks/PAR/PAR_4/2026-10-19_PAR_4_D3_DESIGN.md`,
+commit `7fd5ff22`, on branch `par4-arena-executors` until PAR 4's next checkpoint).
+- **(b)**: every quiescence of every network **always** writes an epoch record keyed (network, epoch) and retains
+  the epoch's start state x⁰ₑ. No parameter, cell or callback requests it. Under PAR 4 P2 there is no Tier 1, so no
+  S0 run is silent (item 4's first half).
+- **(a)**: round records (cell, old value, held value, writers, round) are produced **on query, by replaying** from
+  x⁰ₑ under BSP's inner loop. They replace items 1–2's records rather than patching the observer block. The
+  **boundary step**, i.e. the stratum handlers' writes, is the difference between the replayed end state and the
+  next epoch's start (item 4's second half). ATMS events happen at that step (item 5).
+- **Item 3 dissolves**: records are keyed per network and epoch, and x⁰₀ is the true initial state. That replaces
+  `lsp/server.rkt:586`'s initial = final.
+- **(c)** (the LSP and editor side) now means: query instead of installing one accumulator around `process-file`
+  (`lsp/server.rkt:519`, `:547`; also `prop-observatory.rkt:179`, `:204-205`). PAR 4 P6 deletes the callback form
+  (`current-bsp-observer` `propagator.rkt:576`, `make-trace-accumulator` `:594`) once the consumers have moved.
+  (c) and (d) remain outside PAR 4 and still need a roadmap home.
+- **New condition**: a query-time replay must reproduce the run it describes. PAR 4 P2 gates on it (FID-1, with a
+  poisoned-parameter power row). Until then, query-time rounds of epochs whose fires read ambient state are
+  classified, not shown as the run.
+
 ### 177. ⬜ ⭐ THE ATMS SOLVER RETURNS ANSWERS THAT DFS REJECTS — `(= x 1) (= x 2)` in one clause gives `{:x 2}`; `(= x 1) (= y 2) (= x y)` gives `{:x 1, :y 2}`; a caller's `x = 1` is invisible inside a branch, which then answers `{:x 2}` as well
 
 **Found by** PAR 4's D.3 adversarial critique round. Critic C9 (red team) found it; C4 independently measured the
