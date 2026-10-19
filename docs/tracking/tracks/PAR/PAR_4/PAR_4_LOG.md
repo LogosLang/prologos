@@ -873,3 +873,29 @@ binder merges with unsolved metas.
     and `PAR_4B_LOG.md`.
   - The owner starts its session from the sidebar, with the start prompt given in this session's reply.
 - **Next (this session)**: O-16 (budgets and the surface contract; re-opens O-2), then O-17, then D.3.
+
+### O-16 posed (lean (a): a budget contract in logical time; re-opens O-2) — docs + probe commit on the branch (2026-10-19)
+- **Why / decision**: synthesis §7 queued O-16: what `:fuel` and `:timeout` count, the dead strategy keys, override
+  semantics, and O-2 re-opened. It is posed in D.2 §15 with lean (a).
+  - Semantic budgets count Kleene steps. BSP counts the rounds that changed state; DIRECT counts a depth label per
+    cell, and BSP replays at the boundary.
+  - Resource guards (a fire guard, and `:timeout` as wall clock) are separate, and a guard's trip is never an answer.
+  - Every exhaustion is a value on one channel, per command.
+  - Overrides are record updates, and reserved keys are rejected.
+  - The alternatives are (b) D.2 as written (change-counted fuel at Σ heights) and (c) today's units with only the
+    defects fixed.
+- **Evidence**: `racket/prologos/benchmarks/par4/o16/` (probe, `.out`, README), plus the O-3 census for scale. The
+  probe runs seven fixtures under BSP and the drain, in both install orders.
+  - BSP's counts are install-order independent, and its depth equals the Kleene depth.
+  - The drain's fires, changes and B-min depend on install order: B-min on the union cycle is 12 / 10 against BSP's 13.
+  - The partial state at exhaustion differs by schedule.
+  - The depth-label bound (THEOREM in O-16) shows 0 violations in 12 runs, and its mutant is caught.
+- **Surprise / correction**: O-2 and P0 §5 both missed that production S0 *today* (BSP) already gives a budget verdict
+  that depends only on the program, for join cells. P2 as D.2 writes it (DIRECT plus change-counted fuel) would demote
+  that verdict to a function of install order. P0 §5's Σ-heights guarantee is one-sided: it says nothing below the
+  bound, which is where users who set budgets live.
+  - The census of budgets: eight budgets, six units. Of the six trips traced, none reaches the user as a distinct
+    outcome. Two of them abort the whole file (DEFERRED 172, 153); in the solver, a trip inside a branch becomes a
+    nogood, i.e. silently fewer answers.
+- **Next**: the owner decides O-16; then O-17 (who owns 177's fix, which O-16's part 3 now meets: an exhaustion inside
+  an ATMS branch), then D.3.
