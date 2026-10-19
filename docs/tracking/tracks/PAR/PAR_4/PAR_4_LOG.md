@@ -838,3 +838,17 @@ binder merges with unsolved metas.
   a path-only fix in `MASTER_ROADMAP.org` for the log rename. The roadmap's PAR status line ("D.2 next") is stale,
   and its text stays a proposal to the owner.
 - **Next**: checkpoint 2 to main, then the PAR 4B worktree, scaffold and kickoff.
+
+### Correction: the wave-2 evidence file held 2 of the 10 returns; rebuilt with all ten — docs commit on the branch (2026-10-18)
+- **Surprise / correction**: `racket/prologos/benchmarks/par4/d3-wave2/raw/wave2-returns.json`, committed in
+  `23247a57` and landed on main at checkpoint 2 `8a11ee1a`, held only W2-1 and W2-2.
+  - The other eight returns failed to parse out of the batch message (a control character at offset 18 000 in each).
+    I read them from their summary files for the synthesis, but never merged them into the committed file.
+  - The synthesis's header, the evidence README and the LOG all said "all ten returns, verbatim". That was false for
+    the committed file, though true of what the synthesis was written from.
+  - Found while writing PAR 4B's kickoff, which points at W2-8's return.
+- **Fix**: the file is rebuilt from the two batch-parsed returns plus the eight summary files, keyed `W2-1`…`W2-10`.
+  It holds 10 returns and 37 findings, matching the synthesis's Appendix A (37 wave-2 findings). No judgement in the
+  synthesis changes: every response was made from the full returns.
+- **Next**: a correction merge carries this to main before PAR 4B's first commit, so that PAR 4B branches with the
+  complete file.
