@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 183**
+> ### **NEXT FREE: 185**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7828,6 +7828,11 @@ not determined.
 
 **When**: independent of 4B.5.b; the next sweep, or with POL work.
 
+**Addendum 2026-10-19 (PAR 4 O-16 DECIDED (a), part 3).** Every budget exhaustion becomes a classified outcome of
+the command that ran out, on one channel, and never a whole-file abort. The fix shape above already has that form.
+Record: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on branch
+`par4-arena-executors` until PAR 4's next checkpoint).
+
 **Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-5 (on branch
 `ppn4c-elaboration-on-network` until its next checkpoint merge); probes `…/PPN_4C/research/4B5b/p23-*`–`p26-*`.
 
@@ -8258,3 +8263,79 @@ decision (O-16 in the synthesis; it re-opens O-2).
 decided with O-16.
 
 **Record**: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §1, §5.6 (on main since PAR 4 checkpoint 2 `8a11ee1a`).
+
+**Addendum 2026-10-19: the surface questions are decided (PAR 4 O-16 DECIDED (a), a budget contract in logical time).**
+- **(a) `:timeout` becomes the wall-clock deadline its documentation describes.** It is a resource guard: when it
+  trips, the command gets a classified "not decided within the deadline" outcome, never an answer set.
+- **The logical budget gets its own key**, counting Kleene steps, so its verdict is a function of the program. The key
+  names are proposed in PAR 4's D.3.
+- **(b) A key that is validated but never read** (`:parallelism`, `:fairness`, `:scheduler-io`) is rejected at the
+  definition as reserved and not implemented, or removed. The acceptance file's lines 161-168 change with the fix.
+- **The override fix shape above stands**: an override is a record update.
+- **The DFS depth abort** (this entry's headline, and DEFERRED 153) becomes a per-command outcome (O-16 part 3).
+- **Natural home**: BSP-LE Track 5, Solver Language ("make `solver-config` knobs operational", `:timeout` included;
+  `docs/tracking/2026-03-21_BSP_LE_MASTER.md:203-213`). Who implements it is not decided; O-17 asks the same question
+  for 177.
+- **Record**: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on branch
+  `par4-arena-executors` until PAR 4's next checkpoint).
+
+---
+
+### 183. ⬜ A SESSION PROCESS THAT RUNS OUT OF `strategy :fuel` IS REPORTED AS A "PROTOCOL VIOLATION" — a correct `defproc` under `:fuel 1` prints `ERROR: sender process execution failed: protocol violation ([!Nat . end])`
+
+**Found by** PAR 4's D.3 round, wave 2 (gap critic W2-10, finding W2-10-2(a)). Reproduced by hand on 2026-10-19 with
+`tools/scratch-run.sh racket/prologos/benchmarks/par4/d3-wave2/W2-10/u9-spawn-fuel.prologos` (on main since PAR 4
+checkpoint 2 `8a11ee1a`):
+- the same `defproc sender : S` under `strategy roomy` prints `Protocol completed`;
+- under `strategy tiny :fuel 1` it prints the protocol-violation error.
+
+**Mechanism** (W2-10, read in code): `rt-execute-process` maps any contradiction to `'contradiction`
+(`session-runtime.rkt:1077-1079`), and `driver.rkt:1340-1344` renders that as a protocol violation. A budget trip is
+therefore reported as a type-level error in a well-typed program.
+
+**Test gap**: the only test, `test-session-runtime-04.rkt:104-112`, accepts `'ok` or `'contradiction`, so it pins
+nothing.
+
+**Fix shape** (PAR 4 O-16 DECIDED (a), parts 2 and 3): distinguish the budget's reason from a protocol contradiction.
+A trip becomes a classified outcome of the command, naming the budget, its value and the key that raises it. Also
+decide which O-16 tier `:fuel` belongs to: a logical budget (process steps) or a resource guard.
+
+**When**: independent and small, with the session runtime's next work or a sweep.
+
+**Record**: PAR 4 D.3 synthesis §5.6 (`docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md`);
+PAR 4 D.2 §15 O-16, fact 1.
+
+---
+
+### 184. ⬜ ⭐ A NETWORK BUDGET THAT TRIPS IS NEVER READ BY THE SOLVER OR BY TYPING — at top level the full answer set comes back silently (`:timeout 0`); inside a branch the trip becomes a nogood, i.e. silently fewer answers; in typing a ⊤ root falls back to the imperative checker
+
+**Found by** PAR 4's D.3 round, wave 2 (gap critic W2-10, finding W2-10-2(b), (c)). Code is main `a01f3fc7`.
+- **Measured** (W2-10, `u3` and `u4`; on main since checkpoint 2, `racket/prologos/benchmarks/par4/d3-wave2/W2-10/`):
+  `solver atms-t0 :strategy atms :timeout 0` gives fuel 0 (`relations.rkt:3115-3116`).
+  - The BSP observer recorded exactly one contradicted run per fuel-0 query: 2/2 in `u3` and 3/3 in `u4`. The
+    `atms-s` control queries recorded 0.
+  - Every fuel-0 query returned its full answer set, with no message.
+  - Reproduced by hand on 2026-10-19 with `tools/scratch-run.sh …/u4-fuel-silent.prologos`: the fuel-0 queries print
+    the same answer sets as the controls.
+- **Read in code** (W2-10, re-checked 2026-10-19):
+  - `dissolve-solver-pu` (`relations.rkt:2869-`) never reads the contradiction. Inside a branch, a contradiction
+    becomes a nogood, so a budget trip prunes a world that may be consistent.
+  - `infer-on-network/full` and `/err` (`typing-propagators.rkt:3009-3082`, `:3154-3236`) never read it: the file
+    has 0 occurrences of `net-contradiction?` or `prop-network-contradiction`. The same grep finds
+    `relations.rkt:461` and `elaborator-network.rkt:254`, so the check has power. A ⊤ root falls back to the
+    imperative checker (`:3198-3200`).
+
+**Not measured**: how often `TYPING-FUEL-LIMIT` (200 fires, `typing-propagators.rkt:2978`) trips on the corpus and
+the library.
+
+**Fix shape** (PAR 4 O-16 DECIDED (a), part 3):
+- Each consumer reads the contradiction cell and classifies its reason. A budget reason (`'tropical-fuel-exhausted`)
+  becomes the command's "not decided within the budget" outcome. It is never an answer set, never a nogood inside a
+  branch, and never a silent fallback.
+- Inside an ATMS branch this meets DEFERRED 177's fix: ⊤ under ev_W is a nogood only for a *logical* contradiction.
+- The typing half is elaboration on the network (PPN 4C's ground).
+
+**When**: the solver half goes with whoever owns 177's fix (PAR 4 O-17); the typing half with PPN 4C, or a sweep.
+First, the census of `TYPING-FUEL-LIMIT` trips.
+
+**Record**: PAR 4 D.3 synthesis §5.6; PAR 4 D.2 §15 O-16, facts 1 and 4, and part 3.
