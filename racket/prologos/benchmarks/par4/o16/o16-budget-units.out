@@ -1,0 +1,26 @@
+# O-16 budget-unit probe  (Racket 9.3; propagator.rkt of the par4-arena-executors worktree)
+# columns per schedule: fires / changes / B-min ; BSP adds depth (rounds that changed state); DRAIN adds label (max)
+
+| fixture | Kleene depth | bsp-fwd fires/chg/B-min/depth | bsp-rev fires/chg/B-min/depth | drain-fwd fires/chg/B-min/label | drain-rev fires/chg/B-min/label |
+|---|---|---|---|---|---
+| chain-8 | 8 | 15 / 8 / 16 / 8 | 15 / 8 / 16 / 8 | 15 / 8 / 16 / 8 | 15 / 8 / 16 / 8 |
+| fan-in-asc-16 (S-6) | 1 | 16 / 1 / 17 / 1 | 16 / 1 / 17 / 1 | 16 / 1 / 17 / 1 | 16 / 16 / 17 / 1 |
+| diamond | 2 | 4 / 3 / 5 / 2 | 4 / 3 / 5 / 2 | 5 / 4 / 6 / 2 | 5 / 4 / 6 / 2 |
+| x3-cycle | 4 | 12 / 9 / 13 / 4 | 12 / 9 / 13 / 4 | 11 / 8 / 12 / 6 | 9 / 5 / 10 / 4 |
+| climb-8 | 8 | 18 / 16 / 19 / 8 | 18 / 16 / 19 / 8 | 11 / 9 / 12 / 9 | 11 / 9 / 12 / 9 |
+| wide-64 | 1 | 64 / 64 / 65 / 1 | 64 / 64 / 65 / 1 | 64 / 64 / 65 / 1 | 64 / 64 / 65 / 1 |
+| divergent | — | exhausted at 4096 (charged 4096) | exhausted at 4096 (charged 4096) | exhausted at 4096 (charged 4096) | exhausted at 4096 (charged 4096) |
+
+## Theorem check: DRAIN label >= Kleene depth on every converging fixture
+violations: 0 ; label > depth (conservative, inconclusive under a depth budget at B in [depth, label)): ((x3-cycle fwd 6 4) (climb-8 fwd 9 8) (climb-8 rev 9 8))
+
+## Partial state at exhaustion (divergent fixture, F = 41)
+bsp-fwd: exhausted=yes charged=42 final=((a . 21) (b . 21))
+bsp-rev: exhausted=yes charged=42 final=((a . 21) (b . 21))
+drain-fwd: exhausted=yes charged=41 final=((a . 41) (b . 40))
+drain-rev: exhausted=yes charged=41 final=((a . 40) (b . 41))
+
+## Power rows
+P1 mutant label (no +1) on chain-8, drain-fwd: label=0 vs Kleene depth 8 -> VIOLATION DETECTED (the check has power)
+P2 divergent exhausts at F=4096 under every schedule: #t ; chain-8 at F=1 (bsp, drain): yes yes
+P3 S-6 fan-in changes: bsp=1 drain-fwd=1 drain-rev=16 (P0 §5 measured 1 vs up to 16)

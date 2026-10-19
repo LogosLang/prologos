@@ -852,3 +852,87 @@ binder merges with unsolved metas.
   synthesis changes: every response was made from the full returns.
 - **Next**: a correction merge carries this to main before PAR 4B's first commit, so that PAR 4B branches with the
   complete file.
+
+### Checkpoint 2 merged to main `8a11ee1a`, with its evidence correction `a01f3fc7`; PAR 4B opened from main (`d179ae46` on `par4b-parallelism-portfolio`) — (2026-10-18)
+- **Checkpoint 2** (`8a11ee1a`, O-18): a throwaway detached worktree at main, `git merge --no-ff`. The merge's tree
+  equals the gated branch tip's tree (`cb7c27b0`; tip `5ce40c67`). Main was fast-forwarded; it had no overlap with
+  the owner's dirty and untracked files. The branch was fast-forwarded, and the throwaway worktree removed.
+  - Follow-up on main (`3a007832`): every DEFERRED citation of PAR 4 material "on the branch" now cites the
+    checkpoint (the 157 addendum, 176, 177 and its addendum, 178 and its addendum, 181, 182, and the 148 note's log
+    path), plus the dailies STATE.
+- **Correction merge** (`a01f3fc7`): the evidence fix `19566691` (all ten wave-2 returns), by the same procedure;
+  the trees are equal (`d1264289`).
+  - *Deviation*: the merge message's gate line shows an empty "()" where it named the command
+    `git diff --name-only main a01f3fc7`. An unquoted heredoc ran the backticked text as a command substitution.
+    Main had already moved to the merge, so the message stays as it is and the deviation is recorded here.
+- **PAR 4B opened**:
+  - Worktree `.claude/worktrees/par4b-parallelism-portfolio`, branched from main `a01f3fc7`.
+  - Built with the limit: `reduction`, `driver` and `propagator` `.zo` identical to main's checkout. `timings.jsonl`
+    copied.
+  - Its kickoff and log are committed as `d179ae46` on its branch: `tracks/PAR/PAR_4B/2026-10-18_PAR_4B_KICKOFF.md`
+    and `PAR_4B_LOG.md`.
+  - The owner starts its session from the sidebar, with the start prompt given in this session's reply.
+- **Next (this session)**: O-16 (budgets and the surface contract; re-opens O-2), then O-17, then D.3.
+
+### O-16 posed (lean (a): a budget contract in logical time; re-opens O-2) — docs + probe commit on the branch (2026-10-19)
+- **Why / decision**: synthesis §7 queued O-16: what `:fuel` and `:timeout` count, the dead strategy keys, override
+  semantics, and O-2 re-opened. It is posed in D.2 §15 with lean (a).
+  - Semantic budgets count Kleene steps. BSP counts the rounds that changed state; DIRECT counts a depth label per
+    cell, and BSP replays at the boundary.
+  - Resource guards (a fire guard, and `:timeout` as wall clock) are separate, and a guard's trip is never an answer.
+  - Every exhaustion is a value on one channel, per command.
+  - Overrides are record updates, and reserved keys are rejected.
+  - The alternatives are (b) D.2 as written (change-counted fuel at Σ heights) and (c) today's units with only the
+    defects fixed.
+- **Evidence**: `racket/prologos/benchmarks/par4/o16/` (probe, `.out`, README), plus the O-3 census for scale. The
+  probe runs seven fixtures under BSP and the drain, in both install orders.
+  - BSP's counts are install-order independent, and its depth equals the Kleene depth.
+  - The drain's fires, changes and B-min depend on install order: B-min on the union cycle is 12 / 10 against BSP's 13.
+  - The partial state at exhaustion differs by schedule.
+  - The depth-label bound (THEOREM in O-16) shows 0 violations in 12 runs, and its mutant is caught.
+- **Surprise / correction**: O-2 and P0 §5 both missed that production S0 *today* (BSP) already gives a budget verdict
+  that depends only on the program, for join cells. P2 as D.2 writes it (DIRECT plus change-counted fuel) would demote
+  that verdict to a function of install order. P0 §5's Σ-heights guarantee is one-sided: it says nothing below the
+  bound, which is where users who set budgets live.
+  - The census of budgets: eight budgets, six units. Of the six trips traced, none reaches the user as a distinct
+    outcome. Two of them abort the whole file (DEFERRED 172, 153); in the solver, a trip inside a branch becomes a
+    nogood, i.e. silently fewer answers.
+- **Next**: the owner decides O-16; then O-17 (who owns 177's fix, which O-16's part 3 now meets: an exhaustion inside
+  an ATMS branch), then D.3.
+
+### O-16 DECIDED (a), with the labels' cost conditioned; O-17 posed (who owns 177's fix; lean: BSP-LE Track 3's Stage A, as a concurrent track) — docs commit on the branch; main `ab41836c` (2026-10-19)
+- **Why / decision**:
+  - The owner chose (a): *"I like the idea of logical time for (a) — I'd want to make sure that measurement doesn't
+    add anything beyond noise (or then at least can be toggled as extra debug information?)."* The condition costs no
+    semantics. Production certifies with the change counter (depth ≤ L ≤ changes), at the cost of today's fuel
+    decrement, and falls back to an exact BSP replay when the counter passes B. The depth labels ship on only if
+    P2's A/B, powered with an injected cost of the noise's size, puts them within noise; otherwise they are a debug
+    toggle. The verdict is a function of the program either way.
+  - On main (`ab41836c`): 182's surface questions are marked decided, with BSP-LE Track 5 as their natural home; a
+    172 addendum; DEFERRED **183** (a session `:fuel` trip is reported as a protocol violation) and **184** (a
+    network budget trip is never read by the solver or typing), each reproduced by hand or re-checked with a powered
+    grep. NEXT FREE is 185.
+  - The owner also asked to find the track that owns the ATMS fix ("I believe it's in the BSP-LE series") and to
+    start it concurrently, as PAR 4B was. No BSP-LE track holds it. 177 says "with PAR 4 P1a", and its addendum
+    left O-17 open. So O-17 is posed in D.2 §15 with lean (a): BSP-LE Track 3 owns it as its Stage A, with the label
+    semantics plus the DFS-vs-ATMS differential, checkpointed before tabling. The alternatives are (b) a 2B addendum
+    and (c) P1a.
+- **Surprise / correction**:
+  - Track 3's tables (PUnify Part 3 §9.6) and 177's fix are one lattice. But §9.6 reads answers "consistent with W",
+    which is weaker than ⊆ W. Read that way, a branch's binding leaks into a sibling branch, which is 177's leak
+    shape. The read rule must be pinned to ⊆ once, for both.
+  - The concurrency map is clean: no active worktree touches the fix's files. The one real coupling is W2-6-3. BSP's
+    Tier-1 predicate reads the worldview cell (`propagator.rkt:3410-3430`), so PAR 4 would land a seam for it in
+    P0.5, or the order stays "row 1 after P2".
+- **Next**: the owner decides O-17. If (a) or (b): a docs-only checkpoint of PAR 4, then the worktree, build, kickoff
+  and start prompt, as for PAR 4B. Then D.3.
+
+### O-17 DECIDED (a): BSP-LE Track 3 owns DEFERRED 177's fix as its Stage A, as a concurrent track; P1a gives up rows 1–3 — docs commit on the branch (2026-10-19)
+- **Why / decision**: the owner chose: *"Ok, with BSP-LE 3 (a). Good to generate the kickoff."* The consequences are
+  written by phase in D.2 §15 O-17.
+  - PAR 4 P1a keeps row 4 and row 8.
+  - PAR 4 owes BSP-LE 3 the Tier-1 predicate seam in P0.5 (W2-6-3), plus the projection and tag-gate sites on request.
+  - PPN 4C gets a note before the premise set reaches `meta-universe.rkt`.
+  - The BSP-LE master and roadmap rows are proposals.
+- **Next**: a docs-only checkpoint of PAR 4 to main, so BSP-LE 3's kickoff cites main. Then its worktree
+  (`bsple3-tabling`), a build, the kickoff and log, and the start prompt.
