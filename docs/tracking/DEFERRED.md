@@ -7157,6 +7157,19 @@ with cell 1, so the result is not a fixpoint of its own S0 propagators.
 - **Evidence** (on main since PAR 4 checkpoint 2 `8a11ee1a`): `racket/prologos/benchmarks/par4/d3-wave2/W2-4/` (`q3-cell1.rkt`,
   `q3-tier1-sweep.rkt`). W2-4-2 adds the `truths` rows to (a)'s parity set. Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §6.
 
+**Addendum 2026-10-19: the parts are split between two tracks** (PAR 4 O-17 (a) and PAR 4 D.3).
+- **(a) stays in PAR 4's P0.5**: undeclared writes go through the merge, but only where the merge is a join (C2-8).
+  Includes W2-4-2's `truths` parity rows.
+- **(b), the guard retracting through cell 1's replacement merge (`relations.rkt:2353`), and the S1 NAF handler's
+  AND-NOT on cell 1 (PD-10, the addendum above) go to BSP-LE Track 3, Stage A.** Both are the worldview row's
+  mechanism (PAR 4 P1a row 1). O-17 placed that row in BSP-LE 3 with DEFERRED 177's fix. C2-8 already kept the
+  guard's write out of P0.5, because cell 1's merge is not a join.
+- The fix shape above stands. BSP-LE 3's kickoff
+  (`docs/tracking/tracks/BSP_LE/BSP_LE_3/2026-10-19_BSP_LE_3_KICKOFF.md`, on branch `bsple3-tabling`) lists this
+  entry among its inputs.
+- **Record**: PAR 4 D.3 §6.1 and §6.10 (`docs/tracking/tracks/PAR/PAR_4/2026-10-19_PAR_4_D3_DESIGN.md`, on branch
+  `par4-arena-executors` until PAR 4's next checkpoint).
+
 ### 158. ⬜ PROPAGATORS INSTALLED INSIDE A FIRE LOSE THEIR FLAGS — the BSP scheduler re-installs them from `(inputs outputs fire-fn)` only, dropping `PROP-FIRE-ONCE`, `#:assumption`, `#:component-paths` and srcloc; a fire-once propagator installed in a fire fires on every input change
 
 [`propagator.rkt:3060-3066`](../../racket/prologos/propagator.rkt) `collect-deferred-propagators`
