@@ -756,3 +756,56 @@ binder merges with unsolved metas.
   with PAR 4 building K = 1 plus the shared substrate, and a separate PAR track, which the owner numbers, running
   the portfolio from now on, profile first.
 - **Next**: the owner's decision on O-15; then O-16 and O-17; then D.3.
+
+### O-15 DECIDED (a): the portfolio becomes its own track, PAR 4B (owner's name), in its own worktree and session; the organisation proposed; O-18 posed (checkpoint 2 first, so PAR 4B branches from main) — docs commit on the branch (2026-10-18)
+- **Why / decision**: the owner chose (a), with the second track named PAR 4B, and asked whether a new session can
+  be forked from this conversation, with its own worktree, to run the portfolio profile first.
+- **Answer on mechanism**: a fork is possible in the desktop, but it is the wrong tool here.
+  - A branched chat copies only the visible text after the latest compaction. This conversation has been
+    compacted several times, so the fork would carry a summary plus PAR 4's whole decision queue (O-16, O-17,
+    D.3), which is the wrong context for PAR 4B.
+  - The project's mechanism is a kickoff document in the new track's directory, committed on its branch so it
+    travels with it, plus a fresh session that the owner starts from the sidebar. That session binds itself to the
+    worktree (`desktop_project action=switch`), runs the kickoff's §0 checks, reads, summarises back, and waits
+    for confirmation (`HANDOFF_PROTOCOL.org`; skill `logos-project-tracking`, branch-worktree workflow §3).
+- **Proposed organisation** (not applied; the owner confirms):
+  1. **Checkpoint 2 of PAR 4 first** (O-18): docs, probes and evidence only. There are no files changed on both
+     sides, and main's code gate carries over: 10 426 / 502, run at `9d0dea51` = `83fe4fb4`'s code, with no code
+     moves on main since.
+  2. **The PAR 4B worktree** branches from main: `.claude/worktrees/par4b-parallelism-portfolio`, branch
+     `par4b-parallelism-portfolio` (the topic part is renameable until something cites it). Build with the limit
+     and copy `timings.jsonl`.
+  3. **The scaffold on PAR 4B's branch**: `docs/tracking/tracks/PAR/PAR_4B/` with `PAR_4B_LOG.md` and
+     `YYYY-MM-DD_PAR_4B_KICKOFF.md`. The kickoff holds:
+     - the charter, quoting G-4 and O-15;
+     - the portfolio, citing synthesis §8 rather than copying it;
+     - the contract with PAR 4;
+     - Stage 1 as the first move: the hierarchical parallelism profile plus a prior-art synthesis (our
+       `docs/research/RESEARCH_PARALLEL.md`, mempalace, Kremlin, Cilkview, Naiad / timely, differential dataflow,
+       *Build Systems à la Carte*, Hydro, OR-parallel Prolog);
+     - the rules, a ledger prefix (candidate `PB-n`, 0 prior uses in `docs/`), and a read order.
+  4. **The contract between the tracks**:
+     - PAR 4 owns production scheduler edits (`propagator.rkt`, `driver.rkt`). PAR 4B's prototypes live in their
+       own modules behind `current-parallel-executor`, and behind new seams that PAR 4B asks PAR 4 for through a
+       note in PAR 4's track directory.
+     - Every variant is judged against PAR 4's oracle and differentials, and against the best sequential build
+       (B-P05″, later P2), never against a slowed baseline.
+     - Results flow between the tracks only through main or notes; there are no cross-branch merges.
+  5. **Machine and registers**:
+     - Timing only under the suite lock, in both sessions. Trace-based profiling needs no lock.
+     - DEFERRED is allocated from main's register at filing time.
+     - The dailies keep one STATE bullet per thread. Each track has its own LOG and ledger.
+  6. **Methodology for exploration** (an adaptation, for the owner to confirm):
+     - Stage 1 = the profile plus the survey.
+     - Each variant then runs as a bounded spike: a one-page note (theory, entry and kill criteria), a prototype
+       behind the seam, a measurement against the oracle and the best sequential build, and a written verdict. A
+       refuted variant is a result.
+     - Only a variant that clears its entry condition and shows a measured win graduates to a full Stage-3
+       design.
+  7. **Workloads for the Gustafson test**: the standard library (`lib/prologos/`, real multi-module code) comes
+     first. Generated programs come second, with their dependency shapes calibrated against the library's measured
+     ones, so the scaling is not rigged.
+  8. **Cadence**: PAR 4B poses decisions at stage boundaries, so two sessions do not double the owner's load.
+- **Posed**: O-18 in D.2 §15 (lean (a): checkpoint first).
+- **Next**: on the owner's go, the checkpoint, then the PAR 4B worktree, scaffold and kickoff, then a one-line
+  start prompt for the new session. This session continues PAR 4: O-16, O-17, then D.3.
