@@ -8638,6 +8638,20 @@ the owner places it there. The differential then gains a fast-path leg against t
 
 **Owner**: BSP-LE 3 (the solver files, under the contract in the kickoff's §3).
 
+**Addendum 2026-10-19 (BSP-LE 3, BL-2).** `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § BL-2 (branch `bsple3-tabling`, `e07ab6d7`); probe `research/decisions/bl2/bl2-fixtures.prologos`, under dfs, atms and auto.
+- **A further shape**: a repeat beside a ground argument. `solve (e3 1 ?b ?b)` over `(1, 2, 1)` and `(1, 2, 3)`
+  prints `@[{:b 1, :b 1} {:b 3, :b 3}]`, where it should print `@[]`.
+- **The general path is right under DFS.** The same goals through the strategy dispatch (wrapped in `rel`) give DFS's
+  correct answers, e.g. `solve (rel [?a] (e2 ?a ?a))` → `@[]`, and `:auto` routes them to DFS. So the defect lives only
+  in the fast path's fold. That fold is a second implementation of matching a goal against a fact, the ninth unify
+  variant in BSP-LE 3's Stage-2 census.
+- **Options posed in BL-2**:
+  - patch the fold;
+  - narrow the fast path to linear goals, declining a repeated variable;
+  - retire the dispatch-level fast path.
+
+  92 of 336 in-repo `:auto` routes take the fast path.
+
 ### 188. ⬜ A REPEATED QUERY VARIABLE PRINTS TWICE IN EVERY ANSWER — `solve-with dfs-s (q ?a ?a)` prints `@[{:a 2, :a 2}]`, on the direct-fact fast path, DFS and ATMS alike
 
 **Found by** the controls for 187 (`dupkey-control.prologos`, `w2/dupkey-control.auto.out` in `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage1/`, `0b303034`, on
@@ -8660,6 +8674,20 @@ that, measure `champ-insert` on two equal fresh keys.
 **When**: with 187.
 
 **Owner**: BSP-LE 3 for the query-variable list. Whoever owns `champ.rkt`, if the insert is at fault.
+
+**Addendum 2026-10-19 (BSP-LE 3, BL-2): the mechanism above is wrong, as measured.** The row CHAMP holds **one** `:a`.
+`research/decisions/bl2/bl2-champ.rkt` → `.out` runs the production `answers->champ-list` with query variables
+`(a b a)`, and the result has size 2 and prints `{:a 1, :b 2}`. `champ-insert` compares keys with `equal?`
+(`racket/prologos/champ.rkt:74-77`), so two fresh `:a` keys insert to size 1 (power row: `:a` and `:b` give 2).
+- The duplicate is **display only**, in the REPL echo. `solve-echo-ordered-vars` builds its key order from the goal's
+  free arguments with repeats kept (`racket/prologos/driver.rkt:604`), and `pp-row-ordered` (`:619-631`) prints each
+  name's entry, so a repeated name prints twice.
+- Echoing the value without the ordered echo (`def rows := solve-with dfs-s (q ?a ?a)` then `rows`) prints
+  `@[{:a 2}]`.
+- **Fix site**: the shared definition `row-query-vars` (`racket/prologos/reduction.rkt:282`), which should drop repeats
+  keeping the first occurrence. It serves the row builder and the echo, so `driver.rkt` (PAR 4's file) stays untouched.
+  `extract-query-info` is not the fix site, and `champ.rkt` has no defect.
+- Placement and timing: decision BL-2, `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § BL-2 (branch `bsple3-tabling`, `e07ab6d7`); probe `research/decisions/bl2/bl2-fixtures.prologos`.
 
 ### 189. ⬜ A PRELUDE MODULE THAT FAILS TO LOAD IS DROPPED IN SILENCE — a user file then elaborates without it, and the only symptom is a later `Unbound variable` or `No instance`
 
@@ -8763,3 +8791,13 @@ expression in `normalize-solver-value`. Then add a test row with a `false` fact 
 differential) is 187/188.
 
 **Owner**: BSP-LE 3 (the solver files) or whoever next touches `reduction.rkt`'s answer printing.
+
+**Addendum 2026-10-19 (BSP-LE 3, BL-2).**
+- **Line correction**: `false` → `#f` is `racket/prologos/relations.rkt:406`. `:405`, cited above, is the `true` arm.
+- **191 is fast-path-only for `solve`**. Through the strategy dispatch, `solve (rel [?b] (flag ?b))` prints
+  `@[{:b true} {:b false}]` under DFS. Only the fast path normalizes the answer value; the dispatch keeps the term.
+- The VALUE is wrong, not only its display: `def flags := solve (flag ?b)` then `flags` prints
+  `@[{:b true} {:b none}]`.
+- Form and placement are decision BL-2. Its lean is to bind the fact's own term in the fast path and normalize only to
+  compare, which removes the `#f` at its source. `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § BL-2 (branch `bsple3-tabling`, `e07ab6d7`); probe `research/decisions/bl2/bl2-fixtures.prologos`.
+
