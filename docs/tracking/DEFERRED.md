@@ -8379,7 +8379,7 @@ the library.
 
 **Record**: PAR 4 D.3 synthesis §5.6; PAR 4 D.2 §15 O-16, facts 1 and 4, and part 3.
 
-### 185. ⬜ ON A PATH MADE ONLY OF ORDINALS, SELECTION REFUSALS GIVE KEY- AND POSTFIX-SHAPED ADVICE THAT CANNOT BE SPELLED — `vhm{0.{0}* 0.{0}}`'s L4 offers "keep a key before each star" and a `^` that does not parse; `vhm{0.{0*}}` says "`*` is postfix"
+### 185. 🟡 PARTLY FIXED (CIU 6 1b-vi close, `a9788c0a`) — OPEN: the reader seats (→ P4e-2) · ON A PATH MADE ONLY OF ORDINALS, SELECTION REFUSALS GIVE KEY- AND POSTFIX-SHAPED ADVICE THAT CANNOT BE SPELLED — `vhm{0.{0}* 0.{0}}`'s L4 offers "keep a key before each star" and a `^` that does not parse; `vhm{0.{0*}}` says "`*` is postfix"
 
 **Found by** CIU 6: finding SB-3 when [Q_U62](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) was opened (2026-10-18;
 probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-ae` line 66), and SB-4 at 1b-vi-F (2026-10-19;
@@ -8404,6 +8404,31 @@ whether the user's own branch can spell it. The arm has the branch: on a path wi
 and send `{N*}` to Q_U46's ordinal-star message. The class-level cure (1b-vi-F's VAG (b)) is a remedy generator that
 renders its suggestion on the user's branch and runs it, as the battery's remedy rows already do by hand.
 **When**: the 1b-vi close, or the next edit of the level arms, whichever comes first.
+
+> **ADDENDUM (2026-10-19, CIU 6 1b-vi close, branch `ciu6-path-selection` @ `a9788c0a`; reaches main with the
+> 1b-vi checkpoint merge).**
+> - **Re-measured before fixing: wider than filed, and one claim above is wrong.** "Q_U46's gap 1 made a star after
+>   an ordinal a guided error" held for ONE spelling, the bracket `y{a[0]*}`. The rest missed it:
+>   - `vhm{0*}` / `vhm{0.{0*}}` → "`*` is postfix";
+>   - `y{a.0*}` → "stray `.`";
+>   - `vhm.0*`, `vv:0*`, `y.a.0*` → a bare "Unbound variable".
+>
+>   SB-4 is wider too: "keep a key before each star" is unspellable on `ot2{0.a* 1.a}` (no dissolved key).
+> - **Fixed:**
+>   - SB-4: each all-ordinal L4 remedy is gated on flags saying every passing head can spell it; with neither,
+>     "drop each `*`", which runs.
+>   - SB-3, block band: the parser gives Q_U46's refusal, from one definition shared with typing
+>     (`select-ordinal-star-message`).
+>
+>   Red steps were run against the old code; mutations each turned their own rows red.
+> - **OPEN:**
+>   - The READER seats (the path band and the dotted mid-branch), which need the recognizer. **When**: CIU 6
+>     P4e-2, which opens that recognizer for `.*`. Q_U27's rule applies: a reader mint lands alone, with a
+>     corpus A/B.
+>   - The refusal's remedy text ("star a named step instead, or select the element first and flatten
+>     separately") is unspellable on vector-only paths. What "flatten element N" should be is CIU 6 Q_U63
+>     (opened 2026-10-19), so that text waits for it.
+>   - The class-level cure stands as written above.
 
 ### 186. ⬜ ⭐ A MODULE ALREADY IN THE REGISTRY BRINGS NONE OF ITS REGISTRY STATE TO A LATER IMPORTER — the second `process-file` of a file in one process loses imported instances and constructors (`e1 : Bool defined.` → `No instance of Eq for Int`); `core::csv` elaborated after its closure was imported directly fails E2001
 
