@@ -8651,6 +8651,9 @@ the owner places it there. The differential then gains a fast-path leg against t
   - retire the dispatch-level fast path.
 
   92 of 336 in-repo `:auto` routes take the fast path.
+- **Decision BL-2 (owner, 2026-10-19): narrow, now; retirement is a design item after Stage A** (`7e3163ee`,
+  ledger BL-2 §8). The fix lands at BSP-LE 3 checkpoint 2, behind a named read-surface seam that owner guidance G-5
+  (one lookup mechanism for facts, tables and schema'd records; Rel Track 2's seed) later replaces.
 
 ### 188. ⬜ A REPEATED QUERY VARIABLE PRINTS TWICE IN EVERY ANSWER — `solve-with dfs-s (q ?a ?a)` prints `@[{:a 2, :a 2}]`, on the direct-fact fast path, DFS and ATMS alike
 
@@ -8688,6 +8691,9 @@ that, measure `champ-insert` on two equal fresh keys.
   keeping the first occurrence. It serves the row builder and the echo, so `driver.rkt` (PAR 4's file) stays untouched.
   `extract-query-info` is not the fix site, and `champ.rkt` has no defect.
 - Placement and timing: decision BL-2, `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § BL-2 (branch `bsple3-tabling`, `e07ab6d7`); probe `research/decisions/bl2/bl2-fixtures.prologos`.
+- **Decision BL-2 (owner, 2026-10-19): narrow, now; retirement is a design item after Stage A** (`7e3163ee`,
+  ledger BL-2 §8). The fix lands at BSP-LE 3 checkpoint 2, behind a named read-surface seam that owner guidance G-5
+  (one lookup mechanism for facts, tables and schema'd records; Rel Track 2's seed) later replaces.
 
 ### 189. ⬜ A PRELUDE MODULE THAT FAILS TO LOAD IS DROPPED IN SILENCE — a user file then elaborates without it, and the only symptom is a later `Unbound variable` or `No instance`
 
@@ -8800,4 +8806,9 @@ differential) is 187/188.
   `@[{:b true} {:b none}]`.
 - Form and placement are decision BL-2. Its lean is to bind the fact's own term in the fast path and normalize only to
   compare, which removes the `#f` at its source. `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § BL-2 (branch `bsple3-tabling`, `e07ab6d7`); probe `research/decisions/bl2/bl2-fixtures.prologos`.
+- **Decision BL-2 (owner, 2026-10-19): narrow, now; retirement is a design item after Stage A** (`7e3163ee`,
+  ledger BL-2 §8). The fix lands at BSP-LE 3 checkpoint 2, behind a named read-surface seam that owner guidance G-5
+  (one lookup mechanism for facts, tables and schema'd records; Rel Track 2's seed) later replaces.
+  191 is latent in the corpus: `racket/prologos/lib/examples/foray.prologos:505-507` (`defr movies : VHS`) holds three
+  `false` fact rows. The only query grounds that column (`:1247`), but `solve (movies r title year)` would print `none`.
 
