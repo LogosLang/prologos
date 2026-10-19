@@ -71,3 +71,7 @@ LOG from 2026-10-13 on and any new artifacts.
 `tracks/PPN/PPN_4C/` — PPN Track 4C, Elaboration completely on-network: resumed 2026-10-13 on
 branch `ppn4c-elaboration-on-network` after four months parked (addendum Phase 4B.5.b next). Its
 whole record moved here with the series; the LOG starts with where the earlier history lives.
+`tracks/BSP_LE/BSP_LE_3/` — BSP-LE Track 3, Tabling, opening with Stage A, the ATMS label semantics (DEFERRED 177's
+fix), placed there by owner decision on 2026-10-19 (PAR 4 O-17 (a)). Opened on branch `bsple3-tabling`; Stage 1 next.
+The series master stays flat and is indexed in `tracks/BSP_LE/README.md`; the directory name follows the corpus's
+`BSP_LE` filenames.
