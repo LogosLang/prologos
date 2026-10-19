@@ -1,0 +1,11 @@
+HUB-APPLIED-META 7781 #f)) #(struct:expr-meta meta17782 #f)) . #hasheq((:type . #(struct:classify-inhabit-value #(struct:expr-Pi mw #(struct:expr-Pi m0 #(struct:expr-Type #(struct:lzero)) #(struct:expr-Pi mw #(struct:expr-app #(struct:expr-meta meta17782 #f) #(struct:expr-bvar 0)) #(struct:expr-app #(struct:expr-fvar prologos::data::lseq::LSeq) #(struct:expr-bvar 1)))) #(struct:expr-Pi mw #(struct:expr-app #(struc
+ROLE-A-WRITE round 42 cell #(struct:cell-id 44) value #(struct:expr-Int)
+ROLE-A-WRITE round 42 cell #(struct:cell-id 42) value #(struct:expr-fvar prologos::data::list::List)
+ROLE-A-WRITE round 61 cell #(struct:cell-id 43) value #(struct:expr-fvar prologos::data::list::List)
+W27-MERGE-CENSUS test-punify-integration.rkt
+  BSP rounds observed: 98
+  HUB attribute-map (:type facet = Role B): cells 3, S0 writes 84, writes holding an applied meta 11
+  other meta-solution-merge: cells 1, S0 writes 9, writes holding an applied meta 0
+  ROLE-A type-lattice-merge: cells 3, S0 writes 3, writes holding an applied meta 0
+  other resolution-stratum-merge: cells 1, S0 writes 1, writes holding an applied meta 0
+  other merge-set-union: cells 1, S0 writes 1, writes holding an applied meta 0

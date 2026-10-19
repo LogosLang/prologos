@@ -1,0 +1,30 @@
+PERF-COUNTERS:{"cell_allocs":985,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"inert_dependent_skips":0,"infer_steps":59,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":90,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":13,"zonk_steps":134}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":8,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":2,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: 18 : Int
+1: twice-sum : Int Int -> Int defined.
+2: 18 : Int
+3: a : Int defined.
+4: 100 : Int
+5: 5 : Int
+6: ERROR: Unbound variable
+7: 7 : Int
+8: 5 : Int
+9: 5 : Int
+10: 5 : Int
+11: 1 : Int
+12: 2 : Int
+13: 3 : Int
+14: ERROR: Could not infer type
+15: before : Int defined.
+16: ERROR: let block binding must be `name value`, `name := value`, or `name : T := value`, got ((+ 1 2) 5)
+17: after : Int defined.
+18: 3 : Int
+19: 1 : Int
+20: 18 : Int
+21: nested-noop : Int defined.
+22: 7 : Int
+
+--- 3 errors ---
+W24 {"exec":"prod","exec_fires":213,"exec_rounds":49,"exec_wide_rounds":9,"file":"2026-07-31-let-toplevel.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":0,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"strat":"auto","wall_ms":175.0}

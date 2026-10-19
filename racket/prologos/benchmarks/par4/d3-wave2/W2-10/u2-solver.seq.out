@@ -1,0 +1,15 @@
+0: atms-s : Solver defined.
+1: atms-seq : Solver defined.
+2: edge : _ defined.
+3: path : _ defined.
+4: pick : _ defined.
+5: two : _ defined.
+6: @[{:dest "b"}] : [PVec {:dest String}]
+7: @[{:dest "b"}] : [PVec {:dest String}]
+8: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"} {:dest "f"} {:dest "g"} {:dest "h"}] : [PVec {:dest String}]
+9: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"} {:dest "f"} {:dest "g"} {:dest "h"}] : [PVec {:dest String}]
+10: @[{:x 2}] : [PVec {:x Int}]
+11: @[{:x 2}] : [PVec {:x Int}]
+12: @[{:x 2} {:x 1}] : [PVec {:x Int}]
+13: @[{:x 2} {:x 1}] : [PVec {:x Int}]
+-- leg seq: 14 results, 177.0 ms | observer: 17 BSP rounds in 14 runs, 25 diffs, 0 runs ending contradicted

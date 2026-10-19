@@ -1,0 +1,3 @@
+W27-MERGE-CENSUS test-sre-core.rkt
+  BSP rounds observed: 10
+  other test-merge: cells 3, S0 writes 6, writes holding an applied meta 0

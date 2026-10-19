@@ -1,0 +1,90 @@
+propagator.rkt:333               (struct specialized-cell-meta (tier storage fires-on on-write-check on-read-check merge-fn)
+propagator.rkt:368               (struct propagator (inputs outputs fire-fn broadcast-profile flags srcloc) #:transparent)
+propagator.rkt:377               (define (fire-propagator prop net)
+propagator.rkt:576               (define current-bsp-observer (make-parameter #f))
+propagator.rkt:623               (define worldview-cache-cell-id (cell-id 1))
+propagator.rkt:701               (define fuel-cell-id (cell-id 11))
+propagator.rkt:809                 ;; carry intent (e.g., trait-dispatch before usage-finalization).
+propagator.rkt:1235              (define (fork-prop-network net [fuel 1000000])
+propagator.rkt:1326                (define ns (current-cell-id-namespace))
+propagator.rkt:1371                (define ns (current-cell-id-namespace))
+propagator.rkt:1452                (define ns (current-cell-id-namespace))
+propagator.rkt:1498                (define ns (current-cell-id-namespace))
+propagator.rkt:1885              (define (net-cell-write net cid new-val)
+propagator.rkt:2231              (define current-tree-reduce-threshold (make-parameter 256))
+propagator.rkt:2343                   [hot (if (current-bsp-fire-round?)
+propagator.rkt:2517                   [hot (if (current-bsp-fire-round?)
+propagator.rkt:2876              (define (fire-and-collect-writes snapshot-net pid [namespace-idx 0])
+propagator.rkt:2884                  (parameterize ([current-bsp-fire-round? #t]
+propagator.rkt:2990              (define (bulk-merge-writes net all-results)
+propagator.rkt:3084              ;; ---- PAR 4 O-9 evidence: merge-order census (2026-10-14) ----
+propagator.rkt:3202              (define (collect-deferred-propagators all-results)
+propagator.rkt:3220              (define (merge-fire-results a b)
+propagator.rkt:3295              (define (sequential-fire-all snapshot-net pids)
+propagator.rkt:3401              (define (run-to-quiescence-bsp net #:executor [executor (or (current-parallel-executor)
+propagator.rkt:3431                   ;; TIER 1: single-pass flush. All propagators are fire-once with empty inputs.
+propagator.rkt:3446              
+propagator.rkt:3452                    (let outer-loop ([net net] [outer-round 0])
+propagator.rkt:3465                          (let inner-loop ([net net] [round-number 0])
+propagator.rkt:3505                                   [tree-threshold (current-tree-reduce-threshold)]
+propagator.rkt:3516                                   [deferred-props (collect-deferred-propagators all-writes)]
+propagator.rkt:3530                                                                  (prop-id-hash pid) pid))
+propagator.rkt:3543                                        [else n]))]
+propagator.rkt:3557                              ;; Observer notification
+propagator.rkt:3585                        (define (process-tier net tier-predicate)
+propagator.rkt:3675              (define current-parallel-executor (make-parameter #f))
+propagator.rkt:3767              (define (make-worker-pool [k (processor-count)])
+propagator.rkt:3899              (define (make-pool-executor pool [min-parallel 8])
+decision-cell.rkt:526            (define (make-tagged-merge domain-merge)
+decision-cell.rkt:938            (define (scope-cell-merge old new)
+relations.rkt:1990               (define (logic-var-merge old new)
+relations.rkt:2132                         (net-add-propagator net input-cids output-cids (maybe-wrap-worldview unify-fire)
+relations.rkt:2353                            (net-add-fire-once-propagator net2 input-cids '()
+relations.rkt:2824                   (net-add-propagator net (list table-cid) '() consumer-fire))
+relations.rkt:2859                                   (net-add-propagator net input-cids (list table-cid) producer-fire)])
+metavar-store.rkt:504                                   (tagged-cell-read tcv (or (current-worldview-bitmask) 0))]
+metavar-store.rkt:692                    (elab-add-propagator (unbox tc-net-box) input-cids (list dict-cell-id)
+metavar-store.rkt:850                      (elab-add-propagator (unbox hm-net-box) input-cids (list hm-cell-id)
+metavar-store.rkt:1063                 (elab-add-propagator (unbox cstore-net-box) dep-cids-retry dep-cids-retry
+bilattice.rkt:167                  (net-add-propagator net
+atms.rkt:631                                 ;; this site's lambda (`old new → new`) is path (3) ACCEPT-AS-
+atms.rkt:641                                 ;; IS the structural correctness here.
+atms.rkt:644                                                                                  (make-tagged-merge
+typing-propagators.rkt:447       (define (attribute-map-merge-fn old new)
+typing-propagators.rkt:622       (define (maybe-emit-fork-on-union-request net tm-cid position type-val)
+typing-propagators.rkt:634         (maybe-emit-fork-on-union-request net1 tm-cid position type-val))
+typing-propagators.rkt:1299                     (net-add-propagator n4
+typing-propagators.rkt:1699             (define effective-m (if (or (eq? m 'm0) (eq? m 'm1) (eq? m 'mw)) m 'mw))
+typing-propagators.rkt:1768             (net-add-fire-once-propagator net (list tm-cid) (list tm-cid)
+typing-propagators.rkt:1778             (net-add-fire-once-propagator net (list tm-cid) (list tm-cid)
+typing-propagators.rkt:1789             (net-add-propagator net (list tm-cid) (list tm-cid)
+typing-propagators.rkt:2546                   (let-values ([(n _) (net-add-fire-once-propagator net-u (list tm-cid) (list output-cid)
+typing-propagators.rkt:2586                  (net-add-fire-once-propagator net-r (list tm-cid) (list tm-cid)
+typing-propagators.rkt:2605                  (net-add-fire-once-propagator net2 (list tm-cid) (list tm-cid)
+typing-propagators.rkt:2642             (define-values (net4 _u) (net-add-propagator net3 (list tm-cid) (list tm-cid)
+typing-propagators.rkt:2665             (define-values (net5 _u) (net-add-fire-once-propagator net4 (list tm-cid) (list tm-cid)
+typing-propagators.rkt:2686             (define-values (net4 _u) (net-add-fire-once-propagator net3 (list tm-cid) (list tm-cid)
+typing-propagators.rkt:2781                    (net-add-fire-once-propagator n2 (list tm-cid) (list tm-cid)
+typing-propagators.rkt:2854                          (net-add-fire-once-propagator body-net (list tm-cid) (list tm-cid)
+typing-propagators.rkt:2882               (net-add-fire-once-propagator net2 (list tm-cid) (list tm-cid)
+typing-propagators.rkt:2913                                      (net-add-fire-once-propagator net2
+qtt.rkt:60                       (define (add-usage u1 u2)
+qtt.rkt:93                       (define (join-usage u1 u2)
+type-lattice.rkt:156             (define (type-lattice-merge v1 v2)
+type-lattice.rkt:172                    [(or (has-unsolved-meta? v1) (has-unsolved-meta? v2))
+type-lattice.rkt:173                     (if (has-unsolved-meta? v1) v2 v1)]
+type-lattice.rkt:203             (define (type-unify-or-top v1 v2)
+type-lattice.rkt:217                    [(or (has-unsolved-meta? v1) (has-unsolved-meta? v2))
+type-lattice.rkt:218                     (if (has-unsolved-meta? v1) v2 v1)]
+resolution.rkt:371               (define (make-constraint-retry-bridge-fire-fn)
+resolution.rkt:387                         (elab-network-prop-net enet*)])])))
+session-runtime.rkt:517              (rt-add-propagator rnet
+sre-core.rkt:2469                     (if (current-bsp-fire-round?)
+sre-core.rkt:2689                        (if (current-bsp-fire-round?)
+sre-core.rkt:2712                           (if (current-bsp-fire-round?)
+sre-core.rkt:2804                        (if (current-bsp-fire-round?)
+sre-core.rkt:2817                        (if (current-bsp-fire-round?)
+narrowing.rkt:296                             (if (current-bsp-fire-round?)
+narrowing.rkt:348                        (if (current-bsp-fire-round?)
+elaborator-network.rkt:897            (if (current-bsp-fire-round?)
+constraint-propagators.rkt:288            (if (current-bsp-fire-round?)

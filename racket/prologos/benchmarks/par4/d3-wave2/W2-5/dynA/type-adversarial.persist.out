@@ -1,0 +1,189 @@
+RESULT 0.0: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+RESULT 0.1: const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+RESULT 0.2: flip : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [x y -> z] y x -> z]]] defined.
+RESULT 0.3: 42 : Int
+RESULT 0.4: "hello" : String
+RESULT 0.5: true : Bool
+RESULT 0.6: 42 : Int
+RESULT 0.7: "kept" : String
+RESULT 0.8: 42 : Int
+RESULT 0.9: 1 : Int
+RESULT 0.10: apply : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] x -> y]] defined.
+RESULT 0.11: compose : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y -> z] [x -> y] x -> z]]] defined.
+RESULT 0.12: 6 : Int
+RESULT 0.13: 26 : Int
+RESULT 0.14: 3 : Int
+RESULT 0.15: 12 : Int
+RESULT 0.16: 5 : Int
+RESULT 0.17: true : Bool
+RESULT 0.18: true : Bool
+RESULT 0.19: 19 : Int
+RESULT 0.20: 21 : Int
+RESULT 0.21: xs : [prologos::data::list::List Int] defined.
+RESULT 0.22: '[2 3 4 5 6] : [prologos::data::list::List Int]
+RESULT 0.23: '[1 2 3 4 5] : [prologos::data::list::List Int]
+RESULT 0.24: 5N : Nat
+RESULT 0.25: '[4 6 8 10 12] : [prologos::data::list::List Int]
+RESULT 0.26: opt : [prologos::data::option::Option Int] defined.
+RESULT 0.27: ERROR: Unbound variable
+RESULT 0.28: r : [prologos::data::result::Result Int _] defined.
+RESULT 0.29: p : [Sigma Int String] defined.
+RESULT 0.30: 1 : Int
+RESULT 0.31: "hello" : String
+RESULT 0.32: np : [Sigma [Sigma Int Int] [Sigma Int Int]] defined.
+RESULT 0.33: 1 : Int
+RESULT 0.34: 4 : Int
+RESULT 0.35: ERROR: Unbound variable
+RESULT 0.36: ERROR: Unbound variable
+RESULT 0.37: ERROR: Unbound variable
+RESULT 0.38: ERROR: defn: expected 'name <type>' in parameter list, got (int+ x 1)
+RESULT 0.39: ERROR: defn: expected 'name <type>' in parameter list, got (map (#<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:120:40 fn> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:120:44 (x : Int)> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:120:54 (int+ x 10)>) xs)
+RESULT 0.40: nat-to-int defined (arities: 1, 2).
+RESULT 0.41: 0 : Int
+RESULT 0.42: ??__match-fail : Int
+RESULT 0.43: ??__match-fail : Int
+RESULT 0.44: v01 : Int defined.
+RESULT 0.45: v02 : Int defined.
+RESULT 0.46: v03 : Int defined.
+RESULT 0.47: v04 : Int defined.
+RESULT 0.48: v05 : Int defined.
+RESULT 0.49: v06 : Int defined.
+RESULT 0.50: v07 : Int defined.
+RESULT 0.51: v08 : Int defined.
+RESULT 0.52: v09 : Int defined.
+RESULT 0.53: v10 : Int defined.
+RESULT 0.54: v11 : String defined.
+RESULT 0.55: v12 : String defined.
+RESULT 0.56: v13 : String defined.
+RESULT 0.57: v14 : String defined.
+RESULT 0.58: v15 : String defined.
+RESULT 0.59: v16 : Bool defined.
+RESULT 0.60: v17 : Bool defined.
+RESULT 0.61: v18 : [prologos::data::list::List Int] defined.
+RESULT 0.62: v19 : [prologos::data::option::Option Int] defined.
+RESULT 0.63: v20 : [prologos::data::option::Option _] defined.
+RESULT 0.64: ERROR: Unbound variable
+RESULT 0.65: ERROR: Unbound variable
+RESULT 0.66: 12 : Int
+RESULT 0.67: true : Bool
+RESULT 0.68: wrap-int : Int -> [prologos::data::option::Option Int] defined.
+RESULT 0.69: unwrap-or : [prologos::data::option::Option Int] Int -> Int defined.
+RESULT 0.70: 42 : Int
+RESULT 0.71: 99 : Int
+RESULT 0.72: 30 : Int
+RESULT 0.73: triple : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] x y z -> [Sigma x [Sigma x x]]]]] defined.
+RESULT 0.74: [pair 1 [pair "hello" true]] : [Sigma Int [Sigma String Bool]]
+RESULT 0.75: [pair [prologos::data::option::some Int 1] [pair '[1 2] false]] : [Sigma [prologos::data::option::Option Int] [Sigma [prologos::data::list::List Int] Bool]]
+RESULT 0.76: ERROR: Unbound variable
+RESULT 0.77: ??__match-fail : Int
+RESULT 0.78: 0 : Int
+RESULT 0.79: ??__match-fail : Int
+RESULT 0.80: ERROR: Unbound variable
+RESULT 0.81: ERROR: Unbound variable
+RESULT 0.82: ERROR: Unbound variable
+RESULT 0.83: ERROR: Unbound variable
+RESULT 0.84: ERROR: No instance of Eq for [Sigma Int Int]\n  Available instances: Eq Rat, Eq String, Eq Int, Eq Posit8, Eq Ordering, Eq Nat, Eq Posit64, Eq Float64, Eq Posit16, Eq Float32, Eq Posit32, Eq Bool, Eq Char\n  Hint: Define 'impl Eq [Sigma Int Int]' with method 'eq?'.
+RESULT 0.85: ERROR: No instance of Eq for Option-Int\n  Available instances: Eq Rat, Eq String, Eq Int, Eq Posit8, Eq Ordering, Eq Nat, Eq Posit64, Eq Float64, Eq Posit16, Eq Float32, Eq Posit32, Eq Bool, Eq Char\n  Hint: Define 'impl Eq Option-Int' with method 'eq?'.
+RESULT 0.86: [?meta2897 [prologos::data::option::none ?meta2902] [prologos::data::option::none ?meta2902]] : Bool
+RESULT 0.87: ERROR: defn: expected 'name <type>' in parameter list, got (filter (#<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:223:34 fn> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:223:38 (x : Int)> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:223:48 (int-lt 20 x)>) xs)
+RESULT 0.88: ERROR: Unbound variable
+RESULT 0.89: ERROR: Unbound variable
+RESULT 0.90: ERROR: Unbound variable
+RESULT 0.91: ERROR: Unbound variable
+STATS leg=persist files=1 params=219 rounds=182 wide-rounds(>=8)=32 fires=1112 reentrant=0 ms=3269.0
+PARAM current-attribute-map-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 49) executor=#f
+PARAM current-bundle-registry stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((BoundedLattice . #(struct:bundle-entry BoundedLattice (A) ((L… executor=#hasheq()
+PARAM current-bundle-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 32) executor=#f
+PARAM current-capability-constraint-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 24) executor=#f
+PARAM current-capability-registry stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((AppendCap . #(struct:capability-meta prologos::core::capabili… executor=#hasheq()
+PARAM current-capability-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 25) executor=#f
+PARAM current-capability-warnings-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 46) executor=#f
+PARAM current-coercion-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 24) executor=#f
+PARAM current-coercion-warnings-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 44) executor=#f
+PARAM current-command-atms stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#&#(struct:solver-state #(struct:solver-context #(struct:cell-id 20) #… executor=#f
+PARAM current-constraint-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 20) executor=#f
+PARAM current-constraint-status-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 28) executor=#f
+PARAM current-context-assumptions stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#&() executor=#f
+PARAM current-ctor-registry stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((check-failed . #(struct:ctor-meta Reason () (String) (#f) 1))… executor=#hasheq((false . #(struct:ctor-meta Bool () () () 1)) (suc . #(struct:…
+PARAM current-ctor-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 21) executor=#f
+PARAM current-definition-locations stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((benchmarks::comparative::type-adversarial::const . #(struct:s… executor=#hasheq()
+PARAM current-defn-param-names stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((* . (A $Mul-A x y)) (+ . (A $Add-A x y)) (- . (A $Sub-A x y))… executor=#hasheq()
+PARAM current-deprecation-warnings-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 45) executor=#f
+PARAM current-error-descriptor-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 30) executor=#f
+PARAM current-file-module-network-ref stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:module-network-ref #(struct:prop-network #(struct:prop-net-ho… executor=#f
+PARAM current-form-cell-map stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((0 . #(struct:cell-id 37)) (28 . #(struct:cell-id 38)) (29 . #… executor=#hasheq()
+PARAM current-functor-store stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((AppResult . #(struct:functor-entry AppResult ((A Type 0)) (Ei… executor=#hasheq()
+PARAM current-functor-store-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 27) executor=#f
+PARAM current-general-completions stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq() executor=#f
+PARAM current-general-residue stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#&() executor=#f
+PARAM current-hasmethod-cell-map-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 29) executor=#f
+PARAM current-hasmethod-constraint-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 23) executor=#f
+PARAM current-hasmethod-wakeup-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 27) executor=#f
+PARAM current-impl-registry stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((Bool--Eq . #(struct:impl-entry Eq (Bool) Bool--Eq--dict)) (Bo… executor=#hasheq()
+PARAM current-impl-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 30) executor=#f
+PARAM current-level-meta-universe-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 34) executor=#f
+PARAM current-macro-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 43) executor=#f
+PARAM current-meta-solution-output-cell-id stale-eq=157 stale-equal=157 assigned-in-fire=0 submitter=#(struct:cell-id 50) executor=#f
+PARAM current-module-registry stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((prologos::core . #(struct:module-info prologos::core (id cons… executor=#hasheq()
+PARAM current-module-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 37) executor=#f
+PARAM current-mult-meta-universe-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 33) executor=#f
+PARAM current-multi-defn-registry stale-eq=69 stale-equal=69 assigned-in-fire=0 submitter=#hasheq((benchmarks::comparative::type-adversarial::nat-to-int . #(str… executor=#hasheq()
+PARAM current-narrow-constraints-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 47) executor=#f
+PARAM current-narrow-var-constraints-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 48) executor=#f
+PARAM current-nat-value-cache stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq() executor=#f
+PARAM current-nf-cache stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq() executor=#f
+PARAM current-ns-context stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:ns-context benchmarks::comparative::type-adversarial #hasheq(… executor=#f
+PARAM current-ns-context-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 38) executor=#f
+PARAM current-ns-prop-net-box stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#&#(struct:elab-network #(struct:prop-network #(struct:prop-net-hot ()… executor=#f
+PARAM current-parallel-executor stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#<procedure:...h/d3w2/W2-5/dyn.rkt:151:5> executor=#<procedure:...ogos/propagator.rkt:3693:2>
+PARAM current-param-impl-registry stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((HasTop . (#(struct:param-impl-entry HasTop ((FlatVal A)) (A) … executor=#hasheq()
+PARAM current-param-impl-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 31) executor=#f
+PARAM current-perf-counters stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:perf-counters 34 50 66 24 0 1 0 0 0 0 0 66 0 0 191 0 0 0 0) executor=#f
+PARAM current-persistent-registry-net-box stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#&#(struct:prop-network #(struct:prop-net-hot ()) #(struct:prop-net-wa… executor=#f
+PARAM current-phase-timings stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:phase-timings 2.1140000000000327 0.09999999999990905 0.110000… executor=#f
+PARAM current-preparse-registry stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq(($compose . expand-compose-sexp) ($list-literal . expand-list-… executor=#hasheq(($compose . expand-compose-sexp) ($list-literal . expand-list-…
+PARAM current-preparse-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 36) executor=#f
+PARAM current-process-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 40) executor=#f
+PARAM current-processing-surf stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:surf-app #(struct:surf-var id #(struct:srcloc "/Users/avanti/… executor=#f
+PARAM current-prop-meta-info-box stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#&#(struct:champ-root #(struct:champ-node 0 0 #() #f) 0) executor=#f
+PARAM current-prop-net-box stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#&#(struct:elab-network #(struct:prop-network #(struct:prop-net-hot ()… executor=#f
+PARAM current-propagated-specs stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#<seteq: compare take-while PVec--Buildable--dict all? interval-inters… executor=#<seteq:>
+PARAM current-propagated-specs-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 38) executor=#f
+PARAM current-property-store stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((commutative-add-laws . #(struct:property-entry commutative-ad… executor=#hasheq()
+PARAM current-property-store-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 26) executor=#f
+PARAM current-provenance-counters stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:provenance-counters 0 3 0 0 0 0 0 0) executor=#f
+PARAM current-quiescence-stats stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:quiescence-stats #&0 #&0 #&0 #&0 #&0 #(#&0 #&0 #&0 #&0 #&0 #&… executor=#f
+PARAM current-reduction-fuel stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#&1000000 executor=#f
+PARAM current-residuation-enabled? stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#t executor=#f
+PARAM current-schema-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 20) executor=#f
+PARAM current-selection-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 34) executor=#f
+PARAM current-session-meta-universe-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 35) executor=#f
+PARAM current-session-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 35) executor=#f
+PARAM current-source-loc stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:srcloc "/Users/avanti/dev/projects/logos/prologos/.claude/wor… executor=#f
+PARAM current-spec-cell-map stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((apply . #(struct:cell-id 145)) (classify . #(struct:cell-id 1… executor=#hasheq()
+PARAM current-spec-store stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((* . #(struct:spec-entry (((Mul A) -> A A -> A)) #f #f #(struc… executor=#hasheq()
+PARAM current-spec-store-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 37) executor=#f
+PARAM current-specialization-registry stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hash(((new-lattice-cell . Interval) . #(struct:specialization-entry n… executor=#hash()
+PARAM current-specialization-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 33) executor=#f
+PARAM current-speculation-failures stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#&() executor=#f
+PARAM current-strategy-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 39) executor=#f
+PARAM current-subtype-registry stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hash(((prologos::core::capabilities::StatCap . IOCap) . #t) ((StdioCa… executor=#hash(((NonZeroRat . Rat) . #t) ((PosRat . NonZeroRat) . #t) ((NegInt …
+PARAM current-subtype-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 23) executor=#f
+PARAM current-trait-cell-map-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 22) executor=#f
+PARAM current-trait-constraint-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 21) executor=#f
+PARAM current-trait-laws stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((Abs . ((- :name "non-negative" (:forall ($brace-params x : A)… executor=#hasheq()
+PARAM current-trait-laws-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 29) executor=#f
+PARAM current-trait-registry stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((Abs . #(struct:trait-meta Abs ((A Type 0)) (#(struct:trait-me… executor=#hasheq()
+PARAM current-trait-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 28) executor=#f
+PARAM current-trait-wakeup-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 26) executor=#f
+PARAM current-tycon-arity-extension stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((Abs . 1) (Add . 1) (AdditiveIdentity . 1) (Buildable . 1) (Di… executor=#hasheq()
+PARAM current-type-meta stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq((Bool . (true false)) (Datum . (datum-sym datum-kw datum-nat d… executor=#hasheq((Bool . (true false)) (Nat . (zero suc)) (Unit . (unit)))
+PARAM current-type-meta-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 22) executor=#f
+PARAM current-type-meta-universe-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 32) executor=#f
+PARAM current-unify-depth stale-eq=2 stale-equal=2 assigned-in-fire=0 submitter=2 executor=0
+PARAM current-unsolved-metas-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 31) executor=#f
+PARAM current-user-operators-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 42) executor=#f
+PARAM current-user-precedence-groups-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 41) executor=#f
+PARAM current-wakeup-registry-cell-id stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:cell-id 25) executor=#f
+PARAM current-whnf-cache stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#hasheq() executor=#f
+PARAM current-worldview-hasse-registry-handle stale-eq=182 stale-equal=182 assigned-in-fire=0 submitter=#(struct:hasse-registry-handle #(struct:cell-id 36) worldview #<proced… executor=#f

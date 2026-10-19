@@ -1,0 +1,9 @@
+== E: two independent contradictions in one S0 run — reported cell and held state, by schedule
+  (bsp (0 1 2 3 4 5) reported X X top Y top Z2 1)
+  (bsp (2 3 0 1 4 5) reported Y X top Y top Z2 1)
+  (bsp (4 5 0 2 1 3) reported X X top Y top Z2 1)
+  (bsp (5 4 3 2 1 0) reported Y X top Y top Z2 1)
+  (drain (0 1 2 3 4 5) reported Y X bot Y top Z2 2)
+  (drain (2 3 0 1 4 5) reported X X top Y bot Z2 2)
+  (drain (4 5 0 2 1 3) reported Y X x2 Y top Z2 0)
+  (drain (5 4 3 2 1 0) reported X X top Y bot Z2 0)

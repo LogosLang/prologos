@@ -1,0 +1,101 @@
+PERF-COUNTERS:{"cell_allocs":4189,"constraint_count":0,"constraint_retries":0,"elaborate_steps":557,"inert_dependent_skips":0,"infer_steps":1404,"meta_created":104,"meta_solved":36,"prop_allocs":0,"prop_firings":0,"reduce_steps":3391,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":42,"solver_row_scans":27,"solver_unifies":0,"trait_resolve_steps":10,"unify_steps":143,"zonk_steps":1356}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":3,"qtt_ms":2,"reduce_ms":5,"trait_resolve_ms":0,"type_check_ms":37,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":46,"atms_nogood_count":9,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":39,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: now : String defined.
+1: env : _ -> String defined.
+2: app-config : {:admins [PVec {:name String :role Keyword}] :database {:pool-size Int :url String} :date String :features [PVec Keyword] :name String :server {:host String :port Int :ssl {:cert-path String :enabled Bool}} :version String} defined.
+3: true : Bool
+4: 10 : Int
+5: {:ssl {:cert-path "/etc/ssl/cert.pem", :enabled true}, :host "localhost", :port 8080} : {:host String :port Int :ssl {:cert-path String :enabled Bool}}
+6: {:database {:url "localhost/guild-db", :pool-size 10}} : {:database {:pool-size Int :url String}}
+7: {:server {:host "localhost", :port 8080}} : {:server {:host String :port Int}}
+8: {:server {:ssl {:enabled true}}} : {:server {:ssl {:enabled Bool}}}
+9: {:ssl true, :pool-size 10, :port 8080, :version "1.0.0"} : {:pool-size Int :port Int :ssl Bool :version String}
+10: {:url "localhost/guild-db", :pool-size 10} : {:pool-size Int :url String}
+11: {:database {:database-url "localhost/guild-db"}, :server {:server-host "localhost"}} : {:database {:database-url String} :server {:server-host String}}
+12: {:database-url "localhost/guild-db", :server-host "localhost"} : {:database-url String :server-host String}
+13: {:host "localhost"} : {:host String}
+14: {:server {:ssl true}} : {:server {:ssl Bool}}
+15: @["localhost" "localhost/guild-db"] : ⟨String String⟩
+16: @["1.0.0"] : ⟨String⟩
+17: sub : {:server {:host String}} defined.
+18: "localhost" : String
+19: {:admins @[{:name "Alice"} {:name "Bob"}]} : {:admins [PVec {:name String}]}
+20: {:admins @[{:name "Alice", :role :super} {:name "Bob", :role :regular}]} : {:admins [PVec {:name String :role Keyword}]}
+21: party : [PVec {:class Keyword :hp Int :level Int :name String}] defined.
+22: @["Frodo" "Gandalf" "Gimli"] : [PVec String]
+23: @[{:hp 38, :name "Frodo"} {:hp 92, :name "Gandalf"} {:hp 77, :name "Gimli"}] : [PVec {:hp Int :name String}]
+24: @[@["Frodo" 9] @["Gandalf" 20] @["Gimli" 12]] : [PVec ⟨String Int⟩]
+25: @["Alice" "Bob"] : [PVec String]
+26: "Frodo" : String
+27: "Frodo" : String
+28: @["Frodo" "Gandalf" "Gimli"] : [PVec String]
+29: @[{:who "Frodo", :ready false} {:who "Gandalf", :ready true} {:who "Gimli", :ready true}] : [PVec {:ready Bool :who String}]
+30: '[6 7 8] : [prologos::data::list::List Int]
+31: @["Frodo" "Gandalf" "Gimli"] : [PVec String]
+32: @[38 92 77] : [PVec Int]
+33: add5 : Int -> Int defined.
+34: 42 : Int
+35: Member : [Type 0] defined.
+36: veteran? : path-selection-acceptance::Member -> Bool defined.
+37: members : [prologos::data::list::List path-selection-acceptance::Member] defined.
+38: '[false true] : [prologos::data::list::List Bool]
+39: quest : _ defined.
+40: quests : [PVec {:g String :r Int :t String}] defined.
+41: @[{:g "Alice", :t "Rescue the cat", :r 50} {:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [PVec {:g String :r Int :t String}]
+42: @[50 200 9000] : [PVec Int]
+43: @["Rescue the cat" "Map the catacombs" "Debug the compiler"] : [PVec String]
+44: @[{:t "Rescue the cat", :r 50} {:t "Map the catacombs", :r 200} {:t "Debug the compiler", :r 9000}] : [PVec {:r Int :t String}]
+45: alice-quests : [PVec {:r Int :t String}] defined.
+46: @["Rescue the cat" "Debug the compiler"] : [PVec String]
+47: ssl-config : {:cert-path String :enabled Bool} defined.
+48: true : Bool
+49: mixed : ⟨Int String Keyword⟩ defined.
+50: "seven" : String
+51: ServerCfg : [Type 0] defined.
+52: sc : path-selection-acceptance::ServerCfg defined.
+53: [prologos::data::result::ok {:host "localhost", :port 8080}] : [prologos::data::result::Result path-selection-acceptance::ServerCfg [Map Keyword prologos::data::reason::Reason]]
+54: users : [PVec [PVec {:age Int :userName String}]] defined.
+55: build : {:modules [PVec {:diags [PVec {:line Int :msg String :sev Keyword}] :name String}]} defined.
+56: regions : {:ap {:host String :port Int} :eu {:host String :port Int} :us {:host String :port Int}} defined.
+57: strings : {:de {:about String :home String} :en {:about String :home String}} defined.
+58: m : [PVec [PVec Int]] defined.
+59: events : ⟨{:t Keyword :x Int :y Int} {:code String :t Keyword} {:t Keyword :x Int :y Int}⟩ defined.
+60: tree : {:entries ⟨{:name String :size Int} {:entries [PVec {:name String :size Int}] :name String}⟩ :name String} defined.
+61: @[{:userName "Lisa", :age 30} {:userName "John", :age 25} {:userName "Mike", :age 35}] : [PVec {:age Int :userName String}]
+62: @["Lisa" "John" "Mike"] : [PVec String]
+63: @[{:userName "Lisa"} {:userName "John"} {:userName "Mike"}] : [PVec {:userName String}]
+64: @[@["Lisa"] @["John"] @["Mike"]] : [PVec ⟨String⟩]
+65: @["Lisa" "John" "Mike"] : [PVec String]
+66: @["Lisa"] : ⟨String⟩
+67: {:ap "ap.example.com", :eu "eu.example.com", :us "us.example.com"} : {:ap String :eu String :us String}
+68: {:eu {:host "eu.example.com", :port 443}, :us {:host "us.example.com", :port 443}} : {:eu {:host String :port Int} :us {:host String :port Int}}
+69: @[1 4] : [PVec Int]
+70: {:de "Start", :en "Home"} : {:de String :en String}
+71: @[:click :key :click] : ⟨Keyword Keyword Keyword⟩
+72: shipments : ⟨{:fragile Bool :id Int :weight Int} {:bulk Int :id Int :weight Int}⟩ defined.
+73: lo : Nat defined.
+74: widened : [PVec {:bulk Int :id Int :weight Int} | {:fragile Bool :id Int :weight Int}] defined.
+75: @[1 2] : [PVec Int]
+76: @["lib.pl" "core"] : ⟨String String⟩
+77: @[1 2 3] : [PVec Int]
+78: 6 : Int
+79: scores : [PVec Int] defined.
+80: 22 : Int
+81: "seven" : String
+82: "Alice" : String
+83: pantry : _ defined.
+84: @[{:c "red"} {:c "green"}] : [PVec {:c String}]
+85: @["red" "green"] : [PVec String]
+86: @["red" "green"] : [PVec String]
+87: {:c "red"} : {:c String}
+88: apple-colors : [PVec String] defined.
+89: @["red" "green"] : [PVec String]
+90: {:database-pool-size 10, :database-url "localhost/guild-db"} : {:database-pool-size Int :database-url String}
+91: {:database-pool-size 10, :database-url "localhost/guild-db"} : {:database-pool-size Int :database-url String}
+92: {:us-host "us.example.com", :ap-port 8443, :ap-host "ap.example.com", :eu-port 443, :us-port 443, :eu-host "eu.example.com"} : {:ap-host String :ap-port Int :eu-host String :eu-port Int :us-host String :us-port Int}
+93: {:url "localhost/guild-db", :pool-size 10} : {:pool-size Int :url String}
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":405,"exec_rounds":69,"exec_wide_rounds":7,"file":"2026-07-26-ciu-t6-path-selection.prologos","handler_calls":6,"outer_hist":{"0":25},"outer_max":0,"outer_runs":25,"strat":"auto","wall_ms":226.0}

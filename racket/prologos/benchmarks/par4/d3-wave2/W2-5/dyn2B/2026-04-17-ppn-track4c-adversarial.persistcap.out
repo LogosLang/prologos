@@ -1,0 +1,9 @@
+RESULT 0: ERROR: Could not infer type
+RESULT 1: a1-fold-sum : Int defined.
+RESULT 2: a5-id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+RESULT 3: a5-call : Nat defined.
+RESULT 4: a3-lam : Nat -> Nat defined.
+RESULT 5: a3-app : Nat defined.
+RESULT 6: a3-pair : [prologos::data::list::List Nat] defined.
+STATS2 leg=persistcap rounds=21 fires=99 control-divergent=0 thread-divergent=1 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=1 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta1875 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Seqable (List) List--Seqable--dict) #(struct:constraint-candidate Seqable (LSeq) LSeq--Seqable--dic… executor=constraint-top

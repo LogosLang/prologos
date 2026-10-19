@@ -1,0 +1,13 @@
+ns probes::w2u5
+
+;; W2-10 u5: a type-level computation that exhausts reduction fuel (reduction.rkt:2861 raises
+;; `error 'reduction "fuel exhausted ..."`). Does the raise happen inside an S0 fire (type merge whnf,
+;; type-lattice.rkt:300/403), and if so, does the user see the error under every executor?
+
+spec spin Nat -> Type
+defn spin [n] [spin n]
+
+def a : [spin 0N] := 0N
+def b : Nat := 1N
+[the [spin 1N] 2N]
+def c : Nat := 3N

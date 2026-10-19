@@ -1,0 +1,155 @@
+=== make-parallel-fire-all : PRODUCTION
+./propagator.rkt:159: make-parallel-fire-all
+./propagator.rkt:3656:(define (make-parallel-fire-all [threshold 4])
+=== make-parallel-fire-all : NON-PRODUCTION (tests/tools/benchmarks)
+./tests/test-propagator-bsp.rkt:315:    (run-to-quiescence-bsp base #:executor (make-parallel-fire-all 1)))
+./tests/test-propagator-bsp.rkt:331:                           #:executor (make-parallel-fire-all 100)))
+./tests/test-propagator-bsp.rkt:348:                           #:executor (make-parallel-fire-all 1)))
+./tests/test-infra-cell-parallel-01.rkt:65:  (define parallel-exec (make-parallel-fire-all 2))
+./tests/test-infra-cell-parallel-01.rkt:143:  (define net-par (run-to-quiescence-bsp net6 #:executor (make-parallel-fire-all 1)))
+./tests/test-infra-cell-parallel-01.rkt:187:  (define parallel-exec (make-parallel-fire-all 4))
+./benchmarks/micro/bench-parallel-scaling.rkt:76:(define fut-exec (make-parallel-fire-all))
+=== make-parallel-thread-fire-all : PRODUCTION
+./driver.rkt:567:(current-parallel-executor (make-parallel-thread-fire-all))
+./propagator.rkt:219: make-parallel-thread-fire-all
+./propagator.rkt:3691:(define (make-parallel-thread-fire-all [min-parallel 8])
+=== make-parallel-thread-fire-all : NON-PRODUCTION (tests/tools/benchmarks)
+./benchmarks/micro/bench-parallel-stress.rkt:40:    (parameterize ([current-parallel-executor (make-parallel-thread-fire-all 2)])
+./benchmarks/micro/bench-parallel-stress.rkt:271:        (let-values ([(_ t) (time-quiescence net4 (make-parallel-thread-fire-all 2))]) t)))
+./benchmarks/micro/bench-parallel-stress.rkt:278:    (define-values (par-net __) (time-quiescence net4 (make-parallel-thread-fire-all 2)))
+./benchmarks/micro/bench-parallel-scaling.rkt:77:(define thr-exec (make-parallel-thread-fire-all))
+./benchmarks/micro/bench-parallel-demos.rkt:261:    (define par-time (median-time net (make-parallel-thread-fire-all 4) RUNS))
+./benchmarks/micro/bench-parallel-demos.rkt:266:    (define-values (par-net __) (timed-quiescence net (make-parallel-thread-fire-all 4)))
+=== current-parallel-executor : PRODUCTION
+./driver.rkt:567:(current-parallel-executor (make-parallel-thread-fire-all))
+./propagator.rkt:220: current-parallel-executor
+./propagator.rkt:3401:(define (run-to-quiescence-bsp net #:executor [executor (or (current-parallel-executor)
+./propagator.rkt:3675:(define current-parallel-executor (make-parameter #f))
+=== current-parallel-executor : NON-PRODUCTION (tests/tools/benchmarks)
+./benchmarks/micro/bench-parallel-stress.rkt:36:    (parameterize ([current-parallel-executor #f])
+./benchmarks/micro/bench-parallel-stress.rkt:40:    (parameterize ([current-parallel-executor (make-parallel-thread-fire-all 2)])
+./benchmarks/micro/bench-parallel-stress.rkt:71:    (parameterize ([current-parallel-executor executor-param])
+./benchmarks/micro/bench-parallel-scaling.rkt:67:  (parameterize ([current-parallel-executor executor-val]
+./benchmarks/micro/bench-parallel-demos.rkt:34:    (parameterize ([current-parallel-executor executor-param])
+=== current-worker-pool : PRODUCTION
+./propagator.rkt:250: current-worker-pool
+./propagator.rkt:3402:                                                             (let ([pool (current-worker-pool)])
+./propagator.rkt:3744:(define current-worker-pool (make-parameter #f))
+=== current-worker-pool : NON-PRODUCTION (tests/tools/benchmarks)
+=== make-worker-pool : PRODUCTION
+./propagator.rkt:251: make-worker-pool
+./propagator.rkt:3767:(define (make-worker-pool [k (processor-count)])
+=== make-worker-pool : NON-PRODUCTION (tests/tools/benchmarks)
+./benchmarks/micro/bench-tree-reduce.rkt:109:(define pool (make-worker-pool))
+=== make-pool-executor : PRODUCTION
+./propagator.rkt:256: make-pool-executor
+./propagator.rkt:3403:                                                               (and pool (make-pool-executor pool)))
+./propagator.rkt:3899:(define (make-pool-executor pool [min-parallel 8])
+=== make-pool-executor : NON-PRODUCTION (tests/tools/benchmarks)
+./benchmarks/micro/bench-tree-reduce.rkt:110:(define pool-exec (make-pool-executor pool 4))
+=== make-streaming-executor : PRODUCTION
+./propagator.rkt:257: make-streaming-executor
+./propagator.rkt:3935:(define (make-streaming-executor pool [min-parallel 8])
+=== make-streaming-executor : NON-PRODUCTION (tests/tools/benchmarks)
+=== worker-pool-shutdown! : PRODUCTION
+./propagator.rkt:258: worker-pool-shutdown!
+./propagator.rkt:3979:(define (worker-pool-shutdown! pool)
+=== worker-pool-shutdown! : NON-PRODUCTION (tests/tools/benchmarks)
+./benchmarks/micro/bench-tree-reduce.rkt:157:(worker-pool-shutdown! pool)
+=== sequential-fire-all : PRODUCTION
+./propagator.rkt:157: sequential-fire-all
+./propagator.rkt:3295:(define (sequential-fire-all snapshot-net pids)
+./propagator.rkt:3404:                                                             sequential-fire-all)])
+./propagator.rkt:3660:        (sequential-fire-all snapshot-net pids)
+./propagator.rkt:3697:        (sequential-fire-all snapshot-net pids)
+./propagator.rkt:3905:        (sequential-fire-all snapshot-net pids)
+./propagator.rkt:3941:        (sequential-fire-all snapshot-net pids)
+=== sequential-fire-all : NON-PRODUCTION (tests/tools/benchmarks)
+./benchmarks/micro/bench-tree-reduce.rkt:141:    (define results (sequential-fire-all snapshot pids))
+=== run-to-quiescence-inner : PRODUCTION
+./propagator.rkt:2628:            (run-to-quiescence-inner net)
+./propagator.rkt:2720:(define (run-to-quiescence-inner net)
+=== run-to-quiescence-inner : NON-PRODUCTION (tests/tools/benchmarks)
+=== run-to-quiescence-inner/traced : PRODUCTION
+./propagator.rkt:2631:                   [result (run-to-quiescence-inner/traced net)]
+./propagator.rkt:2788:(define (run-to-quiescence-inner/traced net)
+=== run-to-quiescence-inner/traced : NON-PRODUCTION (tests/tools/benchmarks)
+=== run-to-quiescence-drain : PRODUCTION
+./propagator.rkt:2728:    [else (run-to-quiescence-drain net)]))
+./propagator.rkt:2731:(define (run-to-quiescence-drain net)
+=== run-to-quiescence-drain : NON-PRODUCTION (tests/tools/benchmarks)
+=== current-use-bsp-scheduler? : PRODUCTION
+./propagator.rkt:200: current-use-bsp-scheduler?
+./propagator.rkt:2193:(define current-use-bsp-scheduler? (make-parameter #t))  ;; PAR Track 1 Phase 5: BSP is the default
+./propagator.rkt:2623:  (if (current-use-bsp-scheduler?)
+./stratified-eval.rkt:24:         "propagator.rkt"  ;; Phase 10a: current-use-bsp-scheduler?
+./stratified-eval.rkt:301:         (parameterize ([current-use-bsp-scheduler?
+=== current-use-bsp-scheduler? : NON-PRODUCTION (tests/tools/benchmarks)
+./tests/test-readiness-propagator.rkt:201:  (parameterize ([current-use-bsp-scheduler? #f])
+./tests/test-propagator-descending-01.rkt:176:  (parameterize ([current-use-bsp-scheduler? #f])
+./tests/test-arena-parity.rkt:29:(define (run-bsp net) (parameterize ([current-use-bsp-scheduler? #t]) (run-to-quiescence net)))
+./tests/test-arena-parity.rkt:30:(define (run-seq net) (parameterize ([current-use-bsp-scheduler? #f]) (run-to-quiescence net)))
+./tests/test-structural-decomp.rkt:818:(parameterize ([current-use-bsp-scheduler? #f])
+./benchmarks/micro/bench-bsp-overhead.rkt:90:    (parameterize ([current-use-bsp-scheduler? #f])
+./benchmarks/micro/bench-bsp-overhead.rkt:96:    (parameterize ([current-use-bsp-scheduler? #t])
+./benchmarks/micro/bench-bsp-overhead.rkt:117:    (parameterize ([current-use-bsp-scheduler? #f])
+./benchmarks/micro/bench-bsp-overhead.rkt:123:    (parameterize ([current-use-bsp-scheduler? #t])
+./benchmarks/micro/bench-bsp-overhead.rkt:136:    (parameterize ([current-use-bsp-scheduler? #f])
+./benchmarks/micro/bench-bsp-overhead.rkt:142:    (parameterize ([current-use-bsp-scheduler? #t])
+./benchmarks/micro/bench-bsp-overhead.rkt:155:    (parameterize ([current-use-bsp-scheduler? #f])
+./benchmarks/micro/bench-bsp-overhead.rkt:161:    (parameterize ([current-use-bsp-scheduler? #t])
+./benchmarks/micro/bench-parallel-scaling.rkt:68:                 [current-use-bsp-scheduler? #t])
+./benchmarks/micro/bench-track2b-solver.rkt:168:    (parameterize ([current-use-bsp-scheduler? #f])
+./benchmarks/micro/bench-track2b-solver.rkt:173:    (parameterize ([current-use-bsp-scheduler? #t])
+./benchmarks/bench-scheduler-ab.rkt:53:      (parameterize ([current-use-bsp-scheduler? use-bsp?])
+./benchmarks/par4/p0-profile.rkt:38:                  current-use-bsp-scheduler? par4-enable-counters! par4-fork-count)
+./benchmarks/par4/p0-profile.rkt:50:(define (scheduler-name) (if (current-use-bsp-scheduler?) "bsp" "seq"))
+./benchmarks/par4/o9-merge-order-power.rkt:28:(define (run net) (parameterize ([current-use-bsp-scheduler? #t]) (run-to-quiescence net)))
+./benchmarks/par4/q1-mechanisms.rkt:16:  (parameterize ([current-use-bsp-scheduler? bsp?]) (run-to-quiescence net)))
+./benchmarks/par4/o3-observer-fixtures.rkt:59:    (parameterize ([current-use-bsp-scheduler? (eq? sched 'bsp)]
+=== current-bsp-observer : PRODUCTION
+./lsp/server.rkt:547:                   [current-bsp-observer bsp-observe]
+./propagator.rkt:276: current-bsp-observer
+./propagator.rkt:576:(define current-bsp-observer (make-parameter #f))
+./propagator.rkt:2625:      (let ([observer (current-bsp-observer)])
+./propagator.rkt:3405:  (define observer (current-bsp-observer))
+./prop-observatory.rkt:204:             (parameterize ([current-bsp-observer
+./prop-observatory.rkt:205:                             (or observer-fn (current-bsp-observer))])
+=== current-bsp-observer : NON-PRODUCTION (tests/tools/benchmarks)
+./tools/measure-production-n.rkt:37:                  current-bsp-observer
+./tools/measure-production-n.rkt:56:(displayln "Setting current-bsp-observer to accumulate fires per BSP round...")
+./tools/measure-production-n.rkt:59:(parameterize ([current-bsp-observer observer])
+./tests/test-trace-data.rkt:129:  (check-false (current-bsp-observer)))
+./tests/test-trace-data.rkt:148:    (parameterize ([current-bsp-observer observe])
+./tests/test-trace-data.rkt:198:    (parameterize ([current-bsp-observer observe])
+./tests/test-trace-serialize.rkt:180:    (parameterize ([current-bsp-observer observe])
+./benchmarks/par4/p0-profile.rkt:32:                  current-bsp-round-stats current-bsp-observer
+./benchmarks/par4/p0-profile.rkt:229:  (parameterize ([current-bsp-observer observe]) (run-file!))
+./benchmarks/par4/o3-observer-census.rkt:26:                  current-bsp-observer bsp-round-round-number bsp-round-network-snapshot
+./benchmarks/par4/o3-observer-census.rkt:41:(parameterize ([current-bsp-observer (λ (r) (set! records (cons r records)))]) (run-file* file))
+./benchmarks/par4/o3-observer-census.rkt:81:  (parameterize ([current-bsp-observer (and observed? (λ (r) (set! acc (cons r acc))))]) (run-file* file))
+./benchmarks/par4/o3-observer-fixtures.rkt:60:                   [current-bsp-observer (λ (r) (set! recs (cons r recs)))])
+=== current-bsp-round-stats : PRODUCTION
+./propagator.rkt:216: current-bsp-round-stats
+./propagator.rkt:582:(define current-bsp-round-stats (make-parameter #f))
+./propagator.rkt:3545:                     [_ (let ([stats-box (current-bsp-round-stats)])
+=== current-bsp-round-stats : NON-PRODUCTION (tests/tools/benchmarks)
+./benchmarks/micro/bench-bsp-round-stats.rkt:30:    (parameterize ([current-bsp-round-stats stats-box])
+./benchmarks/par4/p0-profile.rkt:32:                  current-bsp-round-stats current-bsp-observer
+./benchmarks/par4/p0-profile.rkt:108:  (parameterize ([current-bsp-round-stats rounds]
+=== run-to-quiescence-widen : PRODUCTION
+./propagator.rkt:172: run-to-quiescence-widen
+./propagator.rkt:4295:(define (run-to-quiescence-widen net #:max-rounds [max-rounds 100])
+=== run-to-quiescence-widen : NON-PRODUCTION (tests/tools/benchmarks)
+./tests/test-abstract-interpretation-e2e.rkt:52:  (define result (run-to-quiescence-widen net4))
+./tests/test-abstract-interpretation-e2e.rkt:79:  (define result (run-to-quiescence-widen net5))
+./tests/test-widening-fixpoint.rkt:127:  (define result (run-to-quiescence-widen net4))
+./tests/test-widening-fixpoint.rkt:158:  (define result (run-to-quiescence-widen net3))
+./tests/test-widening-fixpoint.rkt:181:  (define result (run-to-quiescence-widen net3 #:max-rounds 5))
+./tests/test-widening-fixpoint.rkt:188:(test-case "run-to-quiescence-widen works with no widening points"
+./tests/test-widening-fixpoint.rkt:199:  (define result (run-to-quiescence-widen net4))
+./tests/test-tropical-fuel.rkt:38:                  run-to-quiescence-widen   ;; 1C-ii-b tests (exercises #4 + #5)
+./tests/test-tropical-fuel.rkt:519:(test-case "1C-ii-b (1) cell-field-lockstep at sequential phase exit (run-to-quiescence-widen)"
+./tests/test-tropical-fuel.rkt:538:  (define result (run-to-quiescence-widen net4))
+./tests/test-tropical-fuel.rkt:590:  (define result (run-to-quiescence-widen net6))
+./tests/test-cross-domain-propagator.rkt:185:  (define result (run-to-quiescence-widen net4))

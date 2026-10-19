@@ -26,6 +26,18 @@ CORRECTION.
 > where most surprises were — and two of them were defects in the *instruments*, which had to be
 > fixed in method before any number could be trusted (§1.2).
 
+> ⚠ **CORRECTED 2026-10-15 (PAR 4 D.3 wave 1; [triage](critiques/2026-10-15_PAR_4_D3_WAVE1_TRIAGE.md)
+> SC-11, SC-13).**
+> 1. **Every per-file timing here was taken with production's thread-per-round executor on.** `driver.rkt:567`
+>    installs `make-parallel-thread-fire-all` globally, and `p0-profile.rkt` never overrides it.
+>    - On constraints-adversarial and type-adversarial it makes the BSP fire phase 2.5–3× slower than sequential
+>      firing, and the run 1.4–1.6× slower (replicated by three critics).
+>    - So the per-fire µs and bytes, and the H-S and K models (§2.2, §10.2), include the cost of creating threads.
+>    - The models are to be re-derived from sequential fire times (CL-2).
+> 2. **Q4's "foreign writes ≤ 10 %" measures locality, not load balance.** A fire with a single output can never
+>    count as foreign. Under the first-output home rule, 85–89 % of the heavy files' fires land on one executor,
+>    because they all write the one attribute-map cell (CL-1).
+
 ## 0. Result
 
 The theory held everywhere it was tested; the workload does not yet need most of the design;

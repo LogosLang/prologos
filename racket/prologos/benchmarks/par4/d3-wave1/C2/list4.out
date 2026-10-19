@@ -1,0 +1,71 @@
+=== current-worldview-bitmask : PRODUCTION
+./relations.rkt:2083:  (define bm (current-worldview-bitmask))
+./relations.rkt:2087:        (parameterize ([current-worldview-bitmask bm])
+./relations.rkt:2141:        (if (zero? (current-worldview-bitmask))
+./relations.rkt:2154:        (if (zero? (current-worldview-bitmask))
+./relations.rkt:2176:           (if (zero? (current-worldview-bitmask))
+./relations.rkt:2362:                       [guard-bm (bitwise-ior (current-worldview-bitmask)
+./relations.rkt:2364:                   (parameterize ([current-worldview-bitmask guard-bm])
+./relations.rkt:2431:  (define outer-bm (current-worldview-bitmask))
+./relations.rkt:2439:          (parameterize ([current-worldview-bitmask combined-bm])
+./relations.rkt:2463:          (parameterize ([current-worldview-bitmask combined-bm])
+./relations.rkt:2506:  (define bitmask (bitwise-ior (current-worldview-bitmask) clause-bit))
+./relations.rkt:2517:  (parameterize ([current-worldview-bitmask bitmask])
+./relations.rkt:2687:                (define combined-bm (bitwise-ior (current-worldview-bitmask) fact-bitmask))
+./relations.rkt:2689:                    (parameterize ([current-worldview-bitmask combined-bm])
+./propagator.rkt:197: current-worldview-bitmask
+./propagator.rkt:1601:           (define per-prop-wv (current-worldview-bitmask))
+./propagator.rkt:2013:       (define per-prop-wv (current-worldview-bitmask))
+./propagator.rkt:2170:(define current-worldview-bitmask (make-parameter 0))
+./propagator.rkt:2178:    (parameterize ([current-worldview-bitmask bitmask])
+./propagator.rkt:3492:                                          (not (zero? (current-worldview-bitmask)))])])]
+./propagator.rkt:4067:       (define per-prop-wv (current-worldview-bitmask))
+./propagator.rkt:4481:  (define per-prop-wv (current-worldview-bitmask))
+./propagator.rkt:4520:  (define wv (or (current-worldview-bitmask) 0))
+./metavar-store.rkt:504:                       (tagged-cell-read tcv (or (current-worldview-bitmask) 0))]
+./metavar-store.rkt:1485:  (define bm (current-worldview-bitmask))
+./elab-speculation-bridge.rkt:298:           (parameterize ([current-worldview-bitmask
+./elab-speculation-bridge.rkt:299:                           (bitwise-ior (or (current-worldview-bitmask) 0)
+./typing-propagators.rkt:700:     (define per-prop-wv (current-worldview-bitmask))
+./meta-universe.rkt:289:  (define per-prop-wv (current-worldview-bitmask))
+./meta-universe.rkt:313:  (define wv (or (current-worldview-bitmask) 0))
+./cell-ops.rkt:84:        (define bm (current-worldview-bitmask))
+=== current-worldview-bitmask : NON-PRODUCTION (tests/tools/benchmarks)
+./tests/test-tagged-cell-value.rkt:380:        (parameterize ([current-worldview-bitmask #b01])
+./tests/test-tagged-cell-value.rkt:384:        (parameterize ([current-worldview-bitmask #b10])
+./tests/test-tagged-cell-value.rkt:388:        (parameterize ([current-worldview-bitmask #b01])
+./tests/test-tagged-cell-value.rkt:394:        (parameterize ([current-worldview-bitmask #b10])
+./tests/test-tagged-cell-value.rkt:400:        (parameterize ([current-worldview-bitmask #b00])
+./tests/test-tagged-cell-value.rkt:414:        (parameterize ([current-worldview-bitmask #b10])
+./tests/test-tagged-cell-value.rkt:420:        (parameterize ([current-worldview-bitmask #b01])
+./tests/test-tagged-cell-value.rkt:426:        (parameterize ([current-worldview-bitmask #b10])
+./tests/test-tagged-cell-value.rkt:441:      (check-equal? (parameterize ([current-worldview-bitmask 0])
+./benchmarks/micro/bench-attribute-record.rkt:51:         (only-in "../../propagator.rkt" current-worldview-bitmask)
+./benchmarks/micro/bench-attribute-record.rkt:582:    (displayln "  E2: read under speculation (current-worldview-bitmask non-zero)")
+./benchmarks/micro/bench-attribute-record.rkt:583:    (parameterize ([current-worldview-bitmask 1])
+./benchmarks/micro/bench-attribute-record.rkt:589:    (parameterize ([current-worldview-bitmask 0])
+=== resolve-worldview-bitmask/pnet : PRODUCTION
+./propagator.rkt:181: resolve-worldview-bitmask/pnet
+./propagator.rkt:4480:(define (resolve-worldview-bitmask/pnet pnet)
+./propagator.rkt:4511:           (tagged-cell-read tcv (resolve-worldview-bitmask/pnet pnet))]
+./meta-universe.rkt:97: resolve-worldview-bitmask/pnet
+=== resolve-worldview-bitmask/pnet : NON-PRODUCTION (tests/tools/benchmarks)
+=== install-worldview-projection : PRODUCTION
+./propagator.rkt:142: install-worldview-projection
+./propagator.rkt:978:(define (install-worldview-projection net decisions-cid)
+./atms.rkt:237:    (install-worldview-projection net5 dec-cid))
+=== install-worldview-projection : NON-PRODUCTION (tests/tools/benchmarks)
+./tests/test-solver-context.rkt:104:      (define-values (net2 _pid) (install-worldview-projection net1 dec-cid))
+./tests/test-solver-context.rkt:123:      (define-values (net2 _pid) (install-worldview-projection net1 dec-cid))
+=== maybe-wrap-worldview : PRODUCTION
+./relations.rkt:2082:(define (maybe-wrap-worldview fire-fn)
+./relations.rkt:2132:          (net-add-propagator net input-cids output-cids (maybe-wrap-worldview unify-fire)
+./relations.rkt:2149:                                              (maybe-wrap-worldview
+./relations.rkt:2162:                                              (maybe-wrap-worldview
+./relations.rkt:2184:                                                 (maybe-wrap-worldview
+./relations.rkt:2354:                                           (maybe-wrap-worldview guard-fire)
+./relations.rkt:2637:                                                          (maybe-wrap-worldview
+./relations.rkt:2700:                                                              (maybe-wrap-worldview
+./relations.rkt:2795:    (maybe-wrap-worldview
+./relations.rkt:2839:    (maybe-wrap-worldview
+=== maybe-wrap-worldview : NON-PRODUCTION (tests/tools/benchmarks)

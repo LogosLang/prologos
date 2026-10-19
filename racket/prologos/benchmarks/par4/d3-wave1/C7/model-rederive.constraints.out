@@ -1,0 +1,4 @@
+file constraints-adversarial.prologos reps 10 samples 481 wall 680.91 ms
+command ms/run 37.75 | shares of command: rtq-bsp 76.82%  fire-and-collect 22.52%  bulk-merge 42.25%  pu-value-diff 60.53%
+round stats per run: rounds 214.0 fires 1136.0 fire 28.81 ms (width>=8: 19.12) merge 17.91 ms  sum fire/min(n,8) 6.1 ms
+MODELS (P0 formulas, same-run inputs): H-S 1.9x   H-S+K8 -14.21x   | profile-only H-S (bulk-merge removed) 1.73x

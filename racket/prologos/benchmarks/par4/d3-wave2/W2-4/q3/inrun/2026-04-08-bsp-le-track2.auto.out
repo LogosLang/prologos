@@ -1,0 +1,42 @@
+PERF-COUNTERS:{"cell_allocs":1571,"constraint_count":0,"constraint_retries":0,"elaborate_steps":249,"inert_dependent_skips":0,"infer_steps":489,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":289,"resolution_cycles":0,"solver_backtracks":66,"solver_col_compares":218,"solver_row_scans":178,"solver_unifies":315,"trait_resolve_steps":0,"unify_steps":31,"zonk_steps":324}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":2,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: color : _ defined.
+1: @[{:hue "red"}] : [PVec {:hue String}]
+2: @[{:item "banana"}] : [PVec {:item String}]
+3: @[{:item "apple", :hue "red"} {:item "banana", :hue "yellow"} {:item "grape", :hue "purple"} {:item "lime", :hue "green"}] : [PVec {:hue String :item String}]
+4: double : _ defined.
+5: @[{:result 42}] : [PVec {:result Int}]
+6: sign : _ defined.
+7: @[{:label "positive"}] : [PVec {:label String}]
+8: @[{:label "zero"}] : [PVec {:label String}]
+9: edge : _ defined.
+10: path : _ defined.
+11: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+12: @[{:src "d"} {:src "a"} {:src "b"} {:src "c"}] : [PVec {:src String}]
+13: @[{:x 42}] : _
+14: @[] : _
+15: @[{:x 99}] : _
+16: @[{:x 30}] : _
+17: @[{:a 9, :b 16, :sum 25}] : [PVec {:a Int :b Int :sum Int}]
+18: blocked : _ defined.
+19: reachable : _ defined.
+20: @[{:dest "b"}] : [PVec {:dest String}]
+21: @[{:x 10, :y 20, :sum 30}] : [PVec {:sum Int :x Int :y Int}]
+22: compute : _ defined.
+23: @[{:sum 8, :prod 15}] : [PVec {:prod Int :sum Int}]
+24: {:item "apple", :hue "red"} : {:hue String :item String}
+25: @[{:v1 1}] : _
+26: @[{:v2 2}] : _
+27: @[{:v3 3}] : _
+28: @[{:v4 4}] : _
+29: @[{:v5 5}] : _
+30: @[{:v6 6}] : _
+31: @[{:v7 7}] : _
+32: @[{:v8 8}] : _
+33: @[{:v9 9}] : _
+34: @[{:v10 10}] : _
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":27,"exec_rounds":27,"file":"2026-04-08-bsp-le-track2.prologos","nonfix_examples":"()","strat":"auto","wall_ms":153.0}

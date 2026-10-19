@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 181**
+> ### **NEXT FREE: 185**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6899,7 +6899,7 @@ three sites via one helper (`entries-union`); the live site was `make-tagged-mer
 not `:453`/`:465` (no production callers). Pure refinement, pinned by a rackcheck property
 against the old append on both reader paths. W2 re-write ×10 000: entries 10 000 → 1.
 The PAR 4 heap workload still grows (100 → 84 entries at 100 rounds) because it is an
-ascending chain per bitmask, not duplicates — the bitmask-keyed map form is a PAR 4 D.2 decision (placed there by the owner, 2026-10-13; `tracks/PAR/PAR_4/LOG.md` § DEFERRED 148), not a DEFERRED entry.
+ascending chain per bitmask, not duplicates — the bitmask-keyed map form is a PAR 4 D.2 decision (placed there by the owner, 2026-10-13; `tracks/PAR/PAR_4/PAR_4_LOG.md` § DEFERRED 148), not a DEFERRED entry.
 Record: `docs/tracking/handoffs/2026-10-13_DEFERRED_SWEEP_146-149_MERGE_NOTE.md` § 148 (branch `deferred-sweep-146-149` @ `8322459b`; merged to main in `11f558c8`).
 
 ### 149. ✅ **RESOLVED, NO CODE CHANGE — NOT A 9.3 REGRESSION; the 1.35× was main's build (see 159)** — ~~WATCHING — `test-transducer-01.rkt` is reproducibly ~1.35× SLOWER under Racket 9.3 than 9.0 (4.4→6.0 s, 4.3→5.8 s, worktree-pinned interleaved A/B); three other files at parity~~
@@ -7123,6 +7123,26 @@ read (the two-phase-set construction; Shapiro et al. 2011, CRDTs). Then the guar
 and needs no read-modify-write. Language-level impact — a failed guard's tagged writes staying
 visible — is CONJECTURE (not reproduced; the ATMS route is itself incomplete, Rel T1 A.2b).
 **When**: before PAR 4 P3 (K > 1 makes the race real at every round), or with BSP-LE 3. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md) §9.
+
+**Addendum 2026-10-18 (PAR 4 D.3 wave 2, agent W2-4; PD-10 in the synthesis): the S1 NAF handler has the same
+shape.** `process-naf-request` (`relations.rkt:206-354`) records a NAF failure as an AND-NOT read-modify-write
+directly on cell 1:
+- the per-binding path at `:240`;
+- the shared-bit path at `:350-353`.
+
+It does not write the decisions cell that cell 1 is projected from. Cell 1 therefore has a second writer: the
+worldview projection propagator, which `make-solver-context` installs on every query network (`atms.rkt:237`;
+`propagator.rkt:978-987`) and which writes cell 1 by replacement. After the run, the projection's output disagrees
+with cell 1, so the result is not a fixpoint of its own S0 propagators.
+- **Measured**: 12 of 76 ATMS query networks built on the production path are flagged, all of them relations with
+  `not` goals. On `examples/2026-07-19-rel-t1-acceptance.prologos`, `light-vehicle` gives `{"bicycle"}`, equal to
+  DFS. After one re-fire of the projection it gives `{"automobile"} {"bicycle"}`, an answer DFS rejects.
+- **Reach today**: latent. Nothing re-fires the projection after the handler, and none of the 12 queries that `auto`
+  routes to ATMS in the repo is flagged.
+- **Fix shape**: (b)'s growth construction, extended to the handler. NAF and guard verdicts are written as nogoods
+  (or invalidated bits) that the projection reads, so cell 1 has one writer, α(assumptions, decisions, nogoods).
+- **Evidence** (on main since PAR 4 checkpoint 2 `8a11ee1a`): `racket/prologos/benchmarks/par4/d3-wave2/W2-4/` (`q3-cell1.rkt`,
+  `q3-tier1-sweep.rkt`). W2-4-2 adds the `truths` rows to (a)'s parity set. Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §6.
 
 ### 158. ⬜ PROPAGATORS INSTALLED INSIDE A FIRE LOSE THEIR FLAGS — the BSP scheduler re-installs them from `(inputs outputs fire-fn)` only, dropping `PROP-FIRE-ONCE`, `#:assumption`, `#:component-paths` and srcloc; a fire-once propagator installed in a fire fires on every input change
 
@@ -7808,6 +7828,11 @@ not determined.
 
 **When**: independent of 4B.5.b; the next sweep, or with POL work.
 
+**Addendum 2026-10-19 (PAR 4 O-16 DECIDED (a), part 3).** Every budget exhaustion becomes a classified outcome of
+the command that ran out, on one channel, and never a whole-file abort. The fix shape above already has that form.
+Record: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on branch
+`par4-arena-executors` until PAR 4's next checkpoint).
+
 **Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-5 (on branch
 `ppn4c-elaboration-on-network` until its next checkpoint merge); probes `…/PPN_4C/research/4B5b/p23-*`–`p26-*`.
 
@@ -7933,8 +7958,8 @@ audit's GA-10 (on the branch); probes `…/PPN_4C/research/4B5b/q5-v27*`.
 
 ### 176. ⬜ THE PROPAGATOR OBSERVER'S RECORDS MISREPORT WHAT FLOWED — 45 % of BSP diff records show a value the cell does not hold; the sequential scheduler names a placeholder writer; the LSP merges every S0 run and fork in a file into one timeline that starts from the final state
 
-**Found by** PAR 4, re-posing owner decision O-3 (observers). Sources: D.1 Appendix A.6–A.7, on branch
-`par4-arena-executors`; the code is main `c1f389ab`. Two probes, with data in `data/par4-p0/o3/` (on the branch):
+**Found by** PAR 4, re-posing owner decision O-3 (observers). Sources: D.1 Appendix A.6–A.7 (on main since PAR 4
+checkpoint 2 `8a11ee1a`); the code is main `c1f389ab`. Two probes, with data in `data/par4-p0/o3/` (on main since PAR 4 checkpoint 2 `8a11ee1a`):
 - `benchmarks/par4/o3-observer-census.rkt`: 18 comparative files, with the observer installed the way the LSP installs it;
 - `benchmarks/par4/o3-observer-fixtures.rkt`: five small networks under BSP and under the sequential scheduler.
 
@@ -7984,13 +8009,13 @@ code, not run.
 - (a) and (b): with O-3's implementation in PAR 4 P1 or P2;
 - (c): before anyone relies on the editor view to answer a "why" question.
 
-**Record**: PAR 4 D.1 Appendix A.6–A.12 and LOG § *O-3 re-posed* (on branch `par4-arena-executors`).
+**Record**: PAR 4 D.1 Appendix A.6–A.12 and LOG § *O-3 re-posed* (on main since PAR 4 checkpoint 2 `8a11ee1a`).
 
 **Addendum (2026-10-14, owner guidance G-3)**: the owner wants a visual debugger as part of the language's dev
 tooling, for two purposes: demonstrating how the system works, and practical debugging and introspection. It is not
 in PAR 4's scope to deliver. Consequences for this entry:
 - (c) is **wanted, not optional polish**. It still needs an owner to place it on the roadmap.
-- (a) is sharpened by a new measurement (fixture probe `5fbb30df` on the branch). A round record must carry the
+- (a) is sharpened by a new measurement (fixture probe `5fbb30df`, on main since PAR 4 checkpoint 2 `8a11ee1a`). A round record must carry the
   cell, its old value, the value it holds after the round, the round's writers and the round index. With those, a
   cell's final value unfolds into a derivation in which every premise sits at an earlier round, so it is
   well-founded even on a cycle.
@@ -8000,10 +8025,10 @@ in PAR 4's scope to deliver. Consequences for this entry:
   rounds gives the same answer with termination by construction. *When*: with (c), or whenever error explanation is
   next revisited.
 
-Requirements table and critique: PAR 4 D.1 Appendix A.13 (on branch `par4-arena-executors`, `47edfd8a`).
+Requirements table and critique: PAR 4 D.1 Appendix A.13 (on main since PAR 4 checkpoint 2 `8a11ee1a`, `47edfd8a`).
 
 **Addendum (2026-10-15, owner decision O-3 = OB-4, "observation in logical time")**: the contract this entry's fixes
-follow is now decided (PAR 4 D.1 §14 O-3, `1e1684e2` on the branch).
+follow is now decided (PAR 4 D.1 §14 O-3, `1e1684e2`, on main since PAR 4 checkpoint 2 `8a11ee1a`).
 - (a) and (b) land in PAR 4. D.2 places them in P1 or P2 for the round records and in P2 for the epoch records, the
   shared (network, epoch, round) keys and the replay.
 - (c) and (d) remain outside PAR 4 and still need a roadmap home, which is the owner's call.
@@ -8014,7 +8039,7 @@ The entry stays open until the fixes land.
 
 **Found by** PAR 4's D.3 adversarial critique round. Critic C9 (red team) found it; C4 independently measured the
 read-side mechanism. Reproduced by hand on 2026-10-15 with `tools/scratch-run.sh` on the two probe files. The code
-is main `c1f389ab`. The probes are kept on branch `par4-arena-executors` in
+is main `c1f389ab`. The probes are kept on main since PAR 4 checkpoint 2 `8a11ee1a` in
 `racket/prologos/benchmarks/par4/d3-wave1/C9/`: `c1-overwrite.prologos` and `c4-varvar.prologos`.
 
 | query | `:strategy atms` | `:strategy depth-first` |
@@ -8053,12 +8078,47 @@ do not depend on the schedule.
 wrong answers fixed sooner.
 
 **Record**: PAR 4 D.3 wave-1 triage §1, §3 CL-6 and §4 PD-1
-(`docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-15_PAR_4_D3_WAVE1_TRIAGE.md` on the branch).
+(`docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-15_PAR_4_D3_WAVE1_TRIAGE.md`; on main since PAR 4 checkpoint 2 `8a11ee1a`).
+
+**Addendum 2026-10-18 (PAR 4 D.3 wave 2; synthesis SC-24 and SC-30).**
+- **Reach is wider than stated above.** `:strategy auto` picks ATMS (`stratified-eval.rkt:253-293`) when either of
+  these holds:
+  - a clause of the queried relation carries a `not` goal (`:265-270`);
+  - facts + clauses ≥ 256 (`:272-276`).
+
+  It also requires that no reachable relation has a body-local variable or a guard (`:292-293`). With **one `not`
+  goal**, all three rows above reproduce under a plain `solve`. Reproduced by hand with
+  `racket/prologos/benchmarks/par4/d3-wave2/W2-4/reach/reach-naf.prologos` (W2-4). In-repo programs do not hit it:
+  12 of 293 auto-routed queries take ATMS, and all 460 solve lines match DFS. No test pins a wrong answer, and none
+  could catch one.
+- **Two more wrong-answer shapes**, reproduced by hand with `…/d3-wave2/W2-6/w26-crosssite.prologos` (W2-6):
+
+| query (`pick` ∈ {`x = 1`, `x = 2`}) | `:strategy atms` | `:strategy depth-first` |
+|---|---|---|
+| `(rel [?x ?y] (pick ?x) (pick ?y) (= ?x ?y))` | `@[{:x 1, :y 1}]` (**loses** `{x 2, y 2}`) | `@[{:x 1, :y 1} {:x 2, :y 2}]` |
+| `(rel [?x] (pick ?x) (= ?x 2))` | `@[{:x 1} {:x 2} {:x 1}]` | `@[{:x 2}]` |
+| `(rel [?x ?y] (pick ?x) (= ?y 1) (= ?x ?y))` (control) | `@[{:x 1, :y 1}]` | `@[{:x 1, :y 1}]` |
+
+  W2-7 found three more programs, among its Q4–Q8, that give wrong answers on today's solver
+  (`…/d3-wave2/W2-7/`).
+- **The fix shape above is not enough.** (a)+(b)+(c) fixes the three rows above, but not the two new shapes. In
+  W2-6's lattice-level model on the real substrate, those also need:
+  - (d) no network-wide tag source or viewpoint: labels come from the writing propagator, and the viewpoint is per
+    propagator or per query;
+  - (e) unlabelled readers lifted per entry, or on the union-closure of their input labels;
+  - (f) a premise set P, so that elaboration's commit-by-keeping-the-bit keeps working (`meta-universe.rkt:257-263`).
+
+  With all six, the model gives DFS's answers on 8/8 rows under 3 schedules, and dropping any one part breaks at
+  least one row. W2-7's model gives 10/10 when ⊤ under ev_W is read as the nogood of the joined labels (an empty
+  label set means the query fails) and never as a network contradiction.
+- **Test layer**: the rows above, plus W2-7's Q4–Q8, in `test-solver-parity.rkt`.
+- **Owner decision pending**: whether PAR 4 P1a or BSP-LE 3 owns the fix (O-17 in the synthesis). Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §5.7, §6
+  (on main since PAR 4 checkpoint 2 `8a11ee1a`).
 
 ### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
 
 **Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
-2026-10-15 with C2's `probe-tier1.rkt` (on branch `par4-arena-executors`, in
+2026-10-15 with C2's `probe-tier1.rkt` (on main since PAR 4 checkpoint 2 `8a11ee1a`, in
 `racket/prologos/benchmarks/par4/d3-wave1/C2/`).
 
 The probe network: a copy propagator A → B, already quiescent, then a fire-once propagator with no inputs that
@@ -8089,7 +8149,19 @@ corrected in the D.3 triage (SC-20). Under PAR 4 P2, Tier 1 becomes the first pa
 
 **When**: PAR 4 P0.5 (with DEFERRED 150), or sooner if a trap measures production reach.
 
-**Record**: PAR 4 D.3 wave-1 triage §1 and §4 PD-2 (on the branch).
+**Record**: PAR 4 D.3 wave-1 triage §1 and §4 PD-2 (on main since PAR 4 checkpoint 2 `8a11ee1a`).
+
+**Addendum 2026-10-18 (PAR 4 D.3 wave 2, W2-4 and W2-9).** Today's production paths cannot reach it:
+- Every top-level query network carries the worldview projection propagator on its worklist (`atms.rkt:237`), so
+  Tier 1's all-fire-once predicate is false.
+- The NAF S1 fork builds its inner goal over fresh inner-scope cells (`relations.rkt:278`), whose flushed writes
+  have no dependents.
+- The generic non-fixpoint detector (`…/d3-wave2/W2-4/q3-tier1-sweep.rkt`) finds 0 Tier-1 entries in 76 production
+  ATMS query networks. The same detector does flag C2's network.
+
+The fix shape is now "**deleted by PAR 4 P2**", which deletes the Tier-1 branch (W2-9-3), with an interim fix only
+if P2 slips. Tier-1 dispatch reads cell 1 (`propagator.rkt:3410`), so PAR 4 P1a row 1 lands with or after the
+deletion (W2-6-3). Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §5.2, §6.
 
 ### 179. ⬜ Q_U56'S GUIDED `*->` TEXT MISSES THE BLOCK-CLOSER POSITION — `env{prod dev}*->` reports the comparison-keyword hint ("comparison keywords are spelled lt/le/gt/ge …"), not the star-family diagnostic
 
@@ -8119,3 +8191,151 @@ lexeme not compared); its readers are the arrival gate and the `p4e-star-type` p
 equals the injected IR, 68 rows) both hold. This is instrument POWER: a regression that split `*-` into `*` and `-` would
 pass the arrival gate. **Fix shape**: require the minting token's LEXEME to equal the table lexeme under test (the gate
 already iterates the table). **When**: with DEFERRED 144, or the next edit of the arrival matrix.
+
+### 181. ⬜ ⭐ A FIRE THAT RAISES HANGS THE PRODUCTION BSP EXECUTOR — on any round of ≥ 8 fires, `make-parallel-thread-fire-all` (installed at load, `driver.rkt:567`) loses the exception with its thread and the joiner blocks forever in `channel-get`; the LSP, whose error port goes nowhere, wedges with an empty log
+
+**Found by** PAR 4's D.3 round, wave 2. Gap critic W2-10 found it; C6-4 had predicted it for P3's persistent
+executors. Reproduced by hand on 2026-10-18 with `exec-exn.rkt` (on main since PAR 4 checkpoint 2 `8a11ee1a`,
+`racket/prologos/benchmarks/par4/d3-wave2/W2-10/`). The probe is one round of N propagators over one source cell,
+in which one fire raises.
+
+| executor | N = 4 | N = 12 |
+|---|---|---|
+| `sequential-fire-all` | raises | raises |
+| production `make-parallel-thread-fire-all` | raises (below its threshold of 8 it runs sequentially) | **hangs**; the text goes to the run's error port |
+| a persistent worker (P3's shape) | **hangs** | **hangs**; the text goes to the creation-time stderr |
+
+Power rows: with no raising fire, all six legs return ok.
+
+**Mechanism** (read in code): each chunk runs in `thread #:pool 'own` and calls `channel-put` only after its fires
+succeed (`propagator.rkt:3715-3721`). The joiner reads every channel with `channel-get` (`:3726`), and there is no
+handler. `fire-propagator` (`:377-379`) has none either. The LSP sends its error and output ports to nowhere
+(`lsp/server.rkt:543-545`), and `$/cancelRequest` is a no-op (`:453`).
+
+**Reach**: any exception inside a fire or a merge in a wide round. For example, whnf's `error 'reduction "fuel
+exhausted"` (`reduction.rkt:2861`) is reachable from merges (`type-lattice.rkt:300-301`, `:403-404`) and from user
+`net-add-prop` fires (`reduction.rkt:4440`). The debug invariant checks in `fire-and-collect-writes` (`:2951-2964`,
+documented as "caught LOUDLY") would hang instead of reporting. No user-level program in the corpus has been shown
+to hit it.
+
+**The same executor's other measured defects** (PAR 4 D.3 wave 2):
+- **Cost**: 1.50–1.55× on the two heavy comparative files and 1.28× on the medium tier (W2-2, timed under the suite
+  lock; about 7 ms of it is GC).
+- **Counter races**: the perf counters (`performance-counters.rkt:181-195`, documented as deterministic) lose 36–180
+  increments per run (W2-4).
+- **Lost assignments**: direct parameter assignments made in a fire are lost (W2-5, power rows).
+
+**Fix shape**: delete the installation and the executor and keep the `current-parallel-executor` seam (PAR 4
+O-14, **DECIDED (a) 2026-10-18**, `329319cb`, on main since PAR 4 checkpoint 2 `8a11ee1a`). Independently of that, exceptions become data at the fire wrapper that every scheduler shares, and
+the boundary re-raises one canonically (synthesis §5.5).
+
+**When**: PAR 4 P0.5.
+
+**Record**: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §1, §5.1, §5.5 (on main since PAR 4 checkpoint 2 `8a11ee1a`); O-14 in `…/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md` §15.
+
+### 182. ⬜ ⭐ AN INLINE SOLVER OVERRIDE RESETS EVERY KEY IT DOES NOT NAME — `solve-with wf-solver {:timeout 100} (p-holds)` drops `:semantics well-founded`, runs stratified DFS on cyclic negation, and aborts the whole file with an uncaught `solve: Depth limit exceeded (100)`
+
+**Found by** PAR 4's D.3 round, wave 2 (gap critic W2-10). Reproduced by hand on 2026-10-18 with `u8a.prologos` and
+`u8b.prologos` (on main since PAR 4 checkpoint 2 `8a11ee1a`, `racket/prologos/benchmarks/par4/d3-wave2/W2-10/`):
+- `solve-with wf-solver (p-holds)` gives `@[]`.
+- With `{:timeout 100}`, the file aborts: no later result is printed.
+- `{:semantics well-founded :timeout 100}` gives `@[]`.
+
+**Mechanism** (W2-10, read in code): `elaborator.rkt:3128` builds the override with `make-solver-config`, which
+fills in every default (`solver.rkt:73-100`). `reduction.rkt:4675-4690` then merges all of those keys over the named
+solver. `:strategy` is reset as well: under `atms-s`, `{:timeout 0}` returns DFS's `@[]` (W2-10 `u3`).
+
+**Masked in the repo**: `examples/2026-03-14-wfle-acceptance.prologos:642` ("I6: WF with timeout override …
+accepted via solver config merge") therefore runs stratified semantics. Its answers happen to coincide.
+
+**Related surface gaps** (W2-10, measured or read in code):
+- (a) `:timeout`, documented in milliseconds (`docs/spec/grammar.org:1427`), is implemented as fuel = ms × 1000
+  fires (`relations.rkt:3115-3116`). `:timeout 0` still returns the full answers.
+- (b) `:parallelism`, `:fairness` and `:scheduler-io` are validated (`macros.rkt:1017-1028`) and never read; only
+  `:fuel` is read (`driver.rkt:1332`). An acceptance file declares two of them
+  (`examples/2026-03-18-track7-acceptance.prologos:161-168`).
+
+**Fix shape**: an override carries only the keys it names; build it as a partial map, not with
+`make-solver-config`. The meaning of `:timeout` and the dead keys are posed to the owner with PAR 4's budgets
+decision (O-16 in the synthesis; it re-opens O-2).
+
+**When**: the override fix is independent and small, so it could land at any time. The surface questions are
+decided with O-16.
+
+**Record**: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §1, §5.6 (on main since PAR 4 checkpoint 2 `8a11ee1a`).
+
+**Addendum 2026-10-19: the surface questions are decided (PAR 4 O-16 DECIDED (a), a budget contract in logical time).**
+- **(a) `:timeout` becomes the wall-clock deadline its documentation describes.** It is a resource guard: when it
+  trips, the command gets a classified "not decided within the deadline" outcome, never an answer set.
+- **The logical budget gets its own key**, counting Kleene steps, so its verdict is a function of the program. The key
+  names are proposed in PAR 4's D.3.
+- **(b) A key that is validated but never read** (`:parallelism`, `:fairness`, `:scheduler-io`) is rejected at the
+  definition as reserved and not implemented, or removed. The acceptance file's lines 161-168 change with the fix.
+- **The override fix shape above stands**: an override is a record update.
+- **The DFS depth abort** (this entry's headline, and DEFERRED 153) becomes a per-command outcome (O-16 part 3).
+- **Natural home**: BSP-LE Track 5, Solver Language ("make `solver-config` knobs operational", `:timeout` included;
+  `docs/tracking/2026-03-21_BSP_LE_MASTER.md:203-213`). Who implements it is not decided; O-17 asks the same question
+  for 177.
+- **Record**: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on branch
+  `par4-arena-executors` until PAR 4's next checkpoint).
+
+---
+
+### 183. ⬜ A SESSION PROCESS THAT RUNS OUT OF `strategy :fuel` IS REPORTED AS A "PROTOCOL VIOLATION" — a correct `defproc` under `:fuel 1` prints `ERROR: sender process execution failed: protocol violation ([!Nat . end])`
+
+**Found by** PAR 4's D.3 round, wave 2 (gap critic W2-10, finding W2-10-2(a)). Reproduced by hand on 2026-10-19 with
+`tools/scratch-run.sh racket/prologos/benchmarks/par4/d3-wave2/W2-10/u9-spawn-fuel.prologos` (on main since PAR 4
+checkpoint 2 `8a11ee1a`):
+- the same `defproc sender : S` under `strategy roomy` prints `Protocol completed`;
+- under `strategy tiny :fuel 1` it prints the protocol-violation error.
+
+**Mechanism** (W2-10, read in code): `rt-execute-process` maps any contradiction to `'contradiction`
+(`session-runtime.rkt:1077-1079`), and `driver.rkt:1340-1344` renders that as a protocol violation. A budget trip is
+therefore reported as a type-level error in a well-typed program.
+
+**Test gap**: the only test, `test-session-runtime-04.rkt:104-112`, accepts `'ok` or `'contradiction`, so it pins
+nothing.
+
+**Fix shape** (PAR 4 O-16 DECIDED (a), parts 2 and 3): distinguish the budget's reason from a protocol contradiction.
+A trip becomes a classified outcome of the command, naming the budget, its value and the key that raises it. Also
+decide which O-16 tier `:fuel` belongs to: a logical budget (process steps) or a resource guard.
+
+**When**: independent and small, with the session runtime's next work or a sweep.
+
+**Record**: PAR 4 D.3 synthesis §5.6 (`docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md`);
+PAR 4 D.2 §15 O-16, fact 1.
+
+---
+
+### 184. ⬜ ⭐ A NETWORK BUDGET THAT TRIPS IS NEVER READ BY THE SOLVER OR BY TYPING — at top level the full answer set comes back silently (`:timeout 0`); inside a branch the trip becomes a nogood, i.e. silently fewer answers; in typing a ⊤ root falls back to the imperative checker
+
+**Found by** PAR 4's D.3 round, wave 2 (gap critic W2-10, finding W2-10-2(b), (c)). Code is main `a01f3fc7`.
+- **Measured** (W2-10, `u3` and `u4`; on main since checkpoint 2, `racket/prologos/benchmarks/par4/d3-wave2/W2-10/`):
+  `solver atms-t0 :strategy atms :timeout 0` gives fuel 0 (`relations.rkt:3115-3116`).
+  - The BSP observer recorded exactly one contradicted run per fuel-0 query: 2/2 in `u3` and 3/3 in `u4`. The
+    `atms-s` control queries recorded 0.
+  - Every fuel-0 query returned its full answer set, with no message.
+  - Reproduced by hand on 2026-10-19 with `tools/scratch-run.sh …/u4-fuel-silent.prologos`: the fuel-0 queries print
+    the same answer sets as the controls.
+- **Read in code** (W2-10, re-checked 2026-10-19):
+  - `dissolve-solver-pu` (`relations.rkt:2869-`) never reads the contradiction. Inside a branch, a contradiction
+    becomes a nogood, so a budget trip prunes a world that may be consistent.
+  - `infer-on-network/full` and `/err` (`typing-propagators.rkt:3009-3082`, `:3154-3236`) never read it: the file
+    has 0 occurrences of `net-contradiction?` or `prop-network-contradiction`. The same grep finds
+    `relations.rkt:461` and `elaborator-network.rkt:254`, so the check has power. A ⊤ root falls back to the
+    imperative checker (`:3198-3200`).
+
+**Not measured**: how often `TYPING-FUEL-LIMIT` (200 fires, `typing-propagators.rkt:2978`) trips on the corpus and
+the library.
+
+**Fix shape** (PAR 4 O-16 DECIDED (a), part 3):
+- Each consumer reads the contradiction cell and classifies its reason. A budget reason (`'tropical-fuel-exhausted`)
+  becomes the command's "not decided within the budget" outcome. It is never an answer set, never a nogood inside a
+  branch, and never a silent fallback.
+- Inside an ATMS branch this meets DEFERRED 177's fix: ⊤ under ev_W is a nogood only for a *logical* contradiction.
+- The typing half is elaboration on the network (PPN 4C's ground).
+
+**When**: the solver half goes with whoever owns 177's fix (PAR 4 O-17); the typing half with PPN 4C, or a sweep.
+First, the census of `TYPING-FUEL-LIMIT` trips.
+
+**Record**: PAR 4 D.3 synthesis §5.6; PAR 4 D.2 §15 O-16, facts 1 and 4, and part 3.

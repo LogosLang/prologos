@@ -1,0 +1,80 @@
+Hole ??__match-fail : ?meta1997
+Context:
+  x : ?meta1996  (w)
+  y : ?meta1995  (w)
+  z : examples::ppn-track4::MyPair  (w)
+Hole ??__match-fail : ?meta1997
+Context:
+  x : ?meta1996  (w)
+  y : ?meta1995  (w)
+  z : examples::ppn-track4::MyPair  (w)
+Hole ??__match-fail : ?meta1997
+Context:
+  x : ?meta1996  (w)
+  y : ?meta1995  (w)
+  z : examples::ppn-track4::MyPair  (w)
+Hole ??__match-fail : ?meta1995
+Context:
+  x : ?meta1996  (w)
+  y : ?meta1995  (w)
+  z : examples::ppn-track4::MyPair  (w)
+Hole ??__match-fail : ?meta1995
+Context:
+  x : ?meta1996  (w)
+  y : ?meta1995  (w)
+  z : examples::ppn-track4::MyPair  (w)
+PERF-COUNTERS:{"cell_allocs":2141,"constraint_count":0,"constraint_retries":0,"elaborate_steps":192,"inert_dependent_skips":0,"infer_steps":135,"meta_created":24,"meta_solved":18,"prop_allocs":0,"prop_firings":0,"reduce_steps":571,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":65,"zonk_steps":335}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":6,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":20,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Color : [Type 0] defined.
+1: Red : examples::ppn-track4::Color defined.
+2: Green : examples::ppn-track4::Color defined.
+3: Blue : examples::ppn-track4::Color defined.
+4: MyPair : [Type 0] defined.
+5: A : [Type 0] -> examples::ppn-track4::MyPair defined.
+6: B : [Type 0] -> examples::ppn-track4::MyPair defined.
+7: := : examples::ppn-track4::MyPair defined.
+8: MkPair : examples::ppn-track4::MyPair defined.
+9: A : examples::ppn-track4::MyPair defined.
+10: B : examples::ppn-track4::MyPair defined.
+11: greeting : String defined.
+12: magic : Int defined.
+13: is-zero : Int -> Bool defined.
+14: true : Bool
+15: false : Bool
+16: 7 : Int
+17: x : Int defined.
+18: 30 : Int
+19: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+20: 42 : Int
+21: "hello" : String
+22: true : Bool
+23: const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+24: 1 : Int
+25: color-name : examples::ppn-track4::Color -> String defined.
+26: "red" : String
+27: "blue" : String
+28: my-fst : examples::ppn-track4::MyPair _ _ -> _ defined.
+29: 7 : Int
+30: 30 : Int
+31: 7 : Int
+32: my-list : [prologos::data::list::List Int] defined.
+33: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+34: [prologos::data::option::some [prologos::data::list::List Int] '[2 3]] : [prologos::data::option::Option [prologos::data::list::List Int]]
+35: 3N : Nat
+36: my-map : {:age Int :name String} defined.
+37: "alice" : String
+38: 30 : Int
+39: dbl : Int -> Int defined.
+40: 42 : Int
+41: 20 : Int
+42: user : {:active Bool :name String} defined.
+43: "bob" : String
+44: true : Bool
+45: dep-id : [Pi [x <[Type 0]>] x -> x] defined.
+46: 42 : Int
+47: "hello" : String
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":201,"exec_rounds":50,"exec_wide_rounds":4,"file":"2026-04-04-ppn-track4.prologos","handler_calls":2,"outer_hist":{"0":25},"outer_max":0,"outer_runs":25,"strat":"auto","wall_ms":168.0}

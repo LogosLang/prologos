@@ -1,0 +1,26 @@
+RESULT 0.0: Person : [Type 0] defined.
+RESULT 0.1: Cfg : [Type 0] defined.
+RESULT 0.2: Checked : [Type 0] defined.
+RESULT 0.3: a1 : benchmarks::records-seal-validate::Person defined.
+RESULT 0.4: a2 : benchmarks::records-seal-validate::Person defined.
+RESULT 0.5: {:name "carol", :age 40} : benchmarks::records-seal-validate::Person
+RESULT 0.6: c1 : benchmarks::records-seal-validate::Cfg defined.
+RESULT 0.7: "localhost" : String
+RESULT 0.8: cg : benchmarks::records-seal-validate::Checked defined.
+RESULT 0.9: m : {:age Int :name String | _} defined.
+RESULT 0.10: [prologos::data::result::ok {:name "eve", :age 20}] : [prologos::data::result::Result benchmarks::records-seal-validate::Person [Map Keyword prologos::data::reason::Reason]]
+RESULT 0.11: bad : {:age String :name String | _} defined.
+RESULT 0.12: [prologos::data::result::err {:age [prologos::data::reason::type-mismatch "Int" "String"]}] : [prologos::data::result::Result benchmarks::records-seal-validate::Person [Map Keyword prologos::data::reason::Reason]]
+RESULT 0.13: [prologos::data::result::ok {:host "localhost", :port 8080}] : [prologos::data::result::Result benchmarks::records-seal-validate::Cfg [Map Keyword prologos::data::reason::Reason]]
+RESULT 0.14: [prologos::data::result::err {:age [prologos::data::reason::check-failed "(> _ 0)"]}] : [prologos::data::result::Result benchmarks::records-seal-validate::Checked [Map Keyword prologos::data::reason::Reason]]
+RESULT 0.15: [prologos::data::result::ok {:name "hank", :age 9}] : [prologos::data::result::Result benchmarks::records-seal-validate::Checked [Map Keyword prologos::data::reason::Reason]]
+RESULT 0.16: [prologos::data::result::ok {:name "i", :age 1}] : [prologos::data::result::Result benchmarks::records-seal-validate::Person [Map Keyword prologos::data::reason::Reason]]
+RESULT 0.17: [prologos::data::result::ok {:name "j", :age 2}] : [prologos::data::result::Result benchmarks::records-seal-validate::Person [Map Keyword prologos::data::reason::Reason]]
+RESULT 0.18: [prologos::data::result::ok {:name "k", :age 3}] : [prologos::data::result::Result benchmarks::records-seal-validate::Person [Map Keyword prologos::data::reason::Reason]]
+RESULT 0.19: selection NameOnly from Person registered.
+RESULT 0.20: [prologos::data::result::ok {:name "leo", :age 7}] : [prologos::data::result::Result benchmarks::records-seal-validate::NameOnly [Map Keyword prologos::data::reason::Reason]]
+RESULT 0.21: manual-ok : Bool defined.
+RESULT 0.22: manual-ok2 : Bool defined.
+RESULT 0.23: "eve" : String
+RESULT 0.24: 20 : Int
+STATS leg=prod files=1 params=219 rounds=21 wide-rounds(>=8)=1 fires=52 reentrant=0 ms=32.0

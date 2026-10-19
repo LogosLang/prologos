@@ -1,0 +1,282 @@
+
+=== S1: PSO with BOTH releases — pub (before cons/indicator/credit publication) and send (prod store before the lane publish) ===
+CASCADE  FLAG   PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  18011  sound+live
+      (0.3s)
+SENDWRITE FLAG   PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  22822  sound+live
+      (0.3s)
+FREQ     FLAG   PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  14613  sound+live
+      (0.2s)
+BOUNCE   FLAG   PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  96055  sound+live
+      (1.6s)
+SEEDS2   FLAG   PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  26500  sound+live
+      (0.4s)
+    send alone (no pub):
+SENDWRITE FLAG   PSO SEP fr=counted   bnd=Q   scans=2 fences=send send=prod-lane pub=ind-cons states= 140161  PREMATURE STALE
+      (3.0s)
+CASCADE  ACT    PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  27748  sound+live
+      (0.4s)
+SENDWRITE ACT    PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  34410  sound+live
+      (0.5s)
+FREQ     ACT    PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  23299  sound+live
+      (0.3s)
+BOUNCE   ACT    PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states= 248430  sound+live
+      (4.1s)
+SEEDS2   ACT    PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  35310  sound+live
+      (0.5s)
+    send alone (no pub):
+SENDWRITE ACT    PSO SEP fr=counted   bnd=Q   scans=2 fences=send send=prod-lane pub=ind-cons states= 204367  PREMATURE STALE
+      (4.5s)
+CASCADE  QUIET  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  21868  sound+live
+      (0.3s)
+SENDWRITE QUIET  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  27030  sound+live
+      (0.4s)
+FREQ     QUIET  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  18873  sound+live
+      (0.3s)
+BOUNCE   QUIET  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states= 157422  sound+live
+      (2.7s)
+SEEDS2   QUIET  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  29688  sound+live
+      (0.4s)
+    send alone (no pub):
+SENDWRITE QUIET  PSO SEP fr=counted   bnd=Q   scans=2 fences=send send=prod-lane pub=ind-cons states= 120631  STALE
+      (2.4s)
+CASCADE  DEFER  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  20091  sound+live
+      (0.3s)
+SENDWRITE DEFER  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  24594  sound+live
+      (0.4s)
+FREQ     DEFER  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  13321  sound+live
+      (0.2s)
+BOUNCE   DEFER  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states= 120639  sound+live
+      (2.0s)
+SEEDS2   DEFER  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  26509  sound+live
+      (0.4s)
+    send alone (no pub):
+SENDWRITE DEFER  PSO SEP fr=counted   bnd=Q   scans=2 fences=send send=prod-lane pub=ind-cons states=  67849  STALE
+      (1.3s)
+CASCADE  SEEDS  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=   8004  sound+live
+      (0.1s)
+SENDWRITE SEEDS  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=   9333  sound+live
+      (0.1s)
+FREQ     SEEDS  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=   5088  sound+live
+      (0.1s)
+BOUNCE   SEEDS  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  44103  sound+live
+      (0.7s)
+SEEDS2   SEEDS  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  35256  sound+live
+      (0.6s)
+    send alone (no pub):
+SENDWRITE SEEDS  PSO SEP fr=counted   bnd=Q   scans=2 fences=send send=prod-lane pub=ind-cons states=  24870  STALE
+    STALE witness (29 steps): A:drain B(0) ; A:drain S(1) ; A:fire p: prod=1 ; A~PA ; A:FENCE ; A:send delta->B ; A~L[B<-A] ; A:write cA ; A:drain B(0) ; A:drain S(0) ; A:cons=1 ; A~CA ; B:drain A(1) ; B:write cB ; B:drain S(0) ; B:fire q1: write cB2 ; B:drain A(0) ; B:drain S(0) ; B:cons=1 ; B~CB ; D:read PA=1 ; D:read CA=1 ; D:read PB=0 ; D:read CB=1 ; D:read PA=1 ; D:read CA=1 ; D:read PB=0 ; D:read CB=1 -> DECLARE (0,) ; D:handler reads cA=0
+      (0.4s)
+CASCADE  CREDIT PSO SEP fr=counted   bnd=Q   scans=1 fences=pub+send send=prod-lane pub=ind-cons states=    364  sound+live
+      (0.0s)
+SENDWRITE CREDIT PSO SEP fr=counted   bnd=Q   scans=1 fences=pub+send send=prod-lane pub=ind-cons states=    456  sound+live
+      (0.0s)
+FREQ     CREDIT PSO SEP fr=counted   bnd=Q   scans=1 fences=pub+send send=prod-lane pub=ind-cons states=    252  sound+live
+      (0.0s)
+BOUNCE   CREDIT PSO SEP fr=counted   bnd=Q   scans=1 fences=pub+send send=prod-lane pub=ind-cons states=   1052  sound+live
+      (0.0s)
+SEEDS2   CREDIT PSO SEP fr=counted   bnd=Q   scans=1 fences=pub+send send=prod-lane pub=ind-cons states=   1444  sound+live
+      (0.0s)
+    send alone (no pub):
+SENDWRITE CREDIT PSO SEP fr=counted   bnd=Q   scans=1 fences=send send=prod-lane pub=ind-cons states=   1318  STALE
+      (0.0s)
+  K=3 under PSO with both releases:
+K3       SEEDS  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states= 549274  sound+live
+      (13.0s)
+K3       DEFER  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons states=4983244  sound+live
+      (130.0s)
+K3       SEEDS  PSO LOG fr=counted   bnd=Q   scans=2 fences=pub                         states=1657466  sound+live
+      (51.0s)
+
+=== S2: the detector reads each scan's words in ANY order (ARM load-load reordering inside a scan) ===
+CASCADE  D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  61918  PREMATURE STALE
+      (1.1s)
+CASCADE  D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 218418  PREMATURE STALE
+      (4.3s)
+SENDWRITE D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  60060  PREMATURE STALE
+      (1.1s)
+SENDWRITE D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 299991  PREMATURE STALE
+      (6.7s)
+BOUNCE   D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 266314  PREMATURE STALE
+      (5.2s)
+BOUNCE   D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=1021970  PREMATURE STALE
+      (22.3s)
+SEEDS2   D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  69550  PREMATURE STALE
+      (1.2s)
+SEEDS2   D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 312702  PREMATURE STALE
+      (7.0s)
+FREQ     D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  48150  PREMATURE STALE
+      (0.9s)
+FREQ     D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 160258  PREMATURE STALE
+      (3.8s)
+CASCADE  FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  71764  sound+live
+      (1.5s)
+CASCADE  FLAG   TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 297112  sound+live
+      (7.5s)
+SENDWRITE FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  74164  sound+live
+      (1.4s)
+SENDWRITE FLAG   TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 426139  sound+live
+      (11.1s)
+BOUNCE   FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 452816  PREMATURE STALE
+    PREMATURE witness (27 steps): A:drain B(0) ; A:fire p: prod=1 ; B:drain A(0) ; A:send delta->B ; A:drain B(0) ; A:ind=1 ; B:ind=1 ; B:drain A(1) ; B:write cB ; D:read PA=1 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read IB=1 ; B:ind=0 ; B:cons=1 ; D:read CB=1 ; D:read PA=1 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; B:fire q1: prod=1 ; B:send delta->A ; B:drain A(0) ; B:ind=1 ; D:read CB=1 ; D:read IB=1 -> DECLARE (0,)
+      (9.3s)
+BOUNCE   FLAG   TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=2167718  PREMATURE STALE
+      (53.6s)
+SEEDS2   FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  81768  sound+live
+      (1.5s)
+SEEDS2   FLAG   TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 397552  sound+live
+      (8.7s)
+FREQ     FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  60378  sound+live
+      (1.1s)
+FREQ     FLAG   TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 226122  sound+live
+      (5.2s)
+CASCADE  ACT    SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 127626  sound+live
+      (2.6s)
+CASCADE  ACT    TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 445216  sound+live
+      (11.0s)
+SENDWRITE ACT    SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 131263  sound+live
+      (2.8s)
+SENDWRITE ACT    TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 642252  sound+live
+      (16.9s)
+BOUNCE   ACT    SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=1708394  sound+live
+      (37.1s)
+BOUNCE   ACT    TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY LIMIT (state limit 6000000)
+      (134.4s)
+SEEDS2   ACT    SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 131242  sound+live
+      (2.7s)
+SEEDS2   ACT    TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 533160  sound+live
+      (13.3s)
+FREQ     ACT    SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 109848  sound+live
+      (2.4s)
+FREQ     ACT    TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 361726  sound+live
+      (8.5s)
+CASCADE  QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  84012  sound+live
+      (1.6s)
+CASCADE  QUIET  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 303460  sound+live
+      (6.7s)
+SENDWRITE QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  85586  sound+live
+      (1.6s)
+SENDWRITE QUIET  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 436135  sound+live
+      (9.9s)
+BOUNCE   QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 695346  sound+live
+      (14.4s)
+BOUNCE   QUIET  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=2907390  sound+live
+      (74.1s)
+SEEDS2   QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  91648  sound+live
+      (1.7s)
+SEEDS2   QUIET  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 401744  sound+live
+      (8.8s)
+FREQ     QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  70258  sound+live
+      (1.3s)
+FREQ     QUIET  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 236650  sound+live
+      (5.5s)
+CASCADE  DEFER  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  53588  sound+live
+      (1.0s)
+CASCADE  DEFER  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 192688  sound+live
+      (4.4s)
+SENDWRITE DEFER  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  56220  sound+live
+      (1.0s)
+SENDWRITE DEFER  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 279903  sound+live
+      (6.9s)
+BOUNCE   DEFER  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 298832  sound+live
+      (6.7s)
+BOUNCE   DEFER  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=1353862  sound+live
+      (32.9s)
+SEEDS2   DEFER  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  59844  sound+live
+      (1.1s)
+SEEDS2   DEFER  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 268752  sound+live
+      (6.4s)
+FREQ     DEFER  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  44798  sound+live
+      (0.9s)
+FREQ     DEFER  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 143030  sound+live
+      (3.4s)
+CASCADE  SEEDS  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=   9480  sound+live
+      (0.1s)
+CASCADE  SEEDS  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  27501  sound+live
+      (0.5s)
+SENDWRITE SEEDS  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=   9318  sound+live
+      (0.1s)
+SENDWRITE SEEDS  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  38143  sound+live
+      (0.7s)
+BOUNCE   SEEDS  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  44634  sound+live
+      (0.8s)
+BOUNCE   SEEDS  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 170826  sound+live
+      (3.9s)
+SEEDS2   SEEDS  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  27561  sound+live
+      (0.5s)
+SEEDS2   SEEDS  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states= 130575  sound+live
+      (3.1s)
+FREQ     SEEDS  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=   7995  sound+live
+      (0.1s)
+FREQ     SEEDS  TSO SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  19185  sound+live
+      (0.4s)
+CASCADE  CREDIT SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=ANY states=    168  sound+live
+      (0.0s)
+CASCADE  CREDIT TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=ANY states=    520  sound+live
+      (0.0s)
+SENDWRITE CREDIT SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=ANY states=    184  sound+live
+      (0.0s)
+SENDWRITE CREDIT TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=ANY states=    791  sound+live
+      (0.0s)
+BOUNCE   CREDIT SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=ANY states=    344  sound+live
+      (0.0s)
+BOUNCE   CREDIT TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=ANY states=   1498  sound+live
+      (0.0s)
+SEEDS2   CREDIT SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=ANY states=    420  sound+live
+      (0.0s)
+SEEDS2   CREDIT TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=ANY states=   2220  sound+live
+      (0.0s)
+FREQ     CREDIT SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=ANY states=    146  sound+live
+      (0.0s)
+FREQ     CREDIT TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=ANY states=    402  sound+live
+      (0.0s)
+K3       SEEDS  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=1782752  sound+live
+      (48.2s)
+K3       DEFER  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY LIMIT (state limit 6000000)
+      (562.4s)
+K3       QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY LIMIT (state limit 6000000)
+      (148.7s)
+K3       ACT    SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ANY LIMIT (state limit 6000000)
+      (137.1s)
+BOUNCE   SEEDS  PSO SEP fr=counted   bnd=Q   scans=2 fences=pub+send send=prod-lane pub=ind-cons read=ANY states= 177344  sound+live
+      (3.2s)
+BOUNCE   SEEDS  PSO LOG fr=counted   bnd=Q   scans=2 fences=pub read=ANY                states=4094475  sound+live
+      (110.5s)
+
+=== S3: re-runs after fixes (credit = one unit per region; contradiction handshake with all releases) ===
+REGIONS  CREDIT SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons tasks=[(1,), (2,)] states=   1494  PREMATURE WRONGFIX STALE
+    PREMATURE witness (9 steps): A:drain B(0) ; A:fire p1: write cA1 ; A:drain B(0) ; A:returned=1 ; B:drain A(0) ; B:fire q2: drain A(0) ; B:fire q3: write cB2 ; D:read RA[r1]=1 ; D:read RB[r1]=0 -> DECLARE (1,)
+      (0.0s)
+REGIONS  CREDIT SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons tasks=[(2,), (1,)] states=    556  PREMATURE STALE
+    PREMATURE witness (17 steps): A:drain B(0) ; A:fire p1: write cA1 ; A:drain B(0) ; A:returned=1 ; B:drain A(0) ; B:fire q2: drain A(0) ; B:fire q3: write cB2 ; B:prod=1 ; B:send delta->A ; B:drain A(0) ; B:returned=1 ; D:read RA[r2]=0 ; D:read RB[r2]=1 -> DECLARE (2,) ; D:handler reads cB2=1 ; D:handler done ; D:read RA[r1]=1 ; D:read RB[r1]=0 -> DECLARE (1,)
+      (0.0s)
+REGIONS  CREDIT SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons UNKEYED states=    294  sound+live
+      (0.0s)
+REGIONS  CREDIT TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons tasks=[(1,), (2,)] states=   5206  PREMATURE WRONGFIX STALE
+      (0.1s)
+REGIONS  CREDIT TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons tasks=[(2,), (1,)] states=   2530  PREMATURE STALE
+      (0.0s)
+REGIONS  CREDIT TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons UNKEYED states=   1618  sound+live
+      (0.0s)
+CONTRA   SEEDS  PSO SEP fr=counted   bnd=QCH scans=2 fences=park+pub+send send=prod-lane pub=ind-cons states=  16850  sound+live
+      (0.2s)
+CONTRA   SEEDS  PSO SEP fr=counted   bnd=QCH scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  22712  RACE
+    RACE witness (24 steps): A:CW=0 ; A:drain B(0) ; A:drain S(1) ; A:fire p: prod=1 ; A~PA ; A:FENCE ; A:send delta->B ; A~L[B<-A] ; A:CONTRADICTION ; A:sees CW -> stop ; A:parked ; A~parkedA ; B:CW=0 ; A~CW ; B:drain A(1) ; B:write cB ; B:drain S(0) ; B:fire q1: sees CW -> stop ; B:parked ; B~parkedB ; D:read CW=1 -> CONTRADICTION BOUNDARY ; D:read parkedA=1 ; D:read parkedB=1 -> all parked: handler ; B~cB
+      (0.3s)
+CONTRA   DEFER  PSO SEP fr=counted   bnd=QCH scans=2 fences=park+pub+send send=prod-lane pub=ind-cons states=  61870  sound+live
+      (0.8s)
+CONTRA   DEFER  PSO SEP fr=counted   bnd=QCH scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  92707  RACE
+      (1.3s)
+CONTRA   FLAG   PSO SEP fr=counted   bnd=QCH scans=2 fences=park+pub+send send=prod-lane pub=ind-cons states=  51173  sound+live
+      (0.6s)
+CONTRA   FLAG   PSO SEP fr=counted   bnd=QCH scans=2 fences=pub+send send=prod-lane pub=ind-cons states=  69932  RACE
+      (1.0s)
+CONTRA   CREDIT PSO SEP fr=counted   bnd=QCH scans=1 fences=park+pub+send send=prod-lane pub=ind-cons states=   2218  sound+live
+      (0.0s)
+CONTRA   CREDIT PSO SEP fr=counted   bnd=QCH scans=1 fences=pub+send send=prod-lane pub=ind-cons states=   3118  RACE
+      (0.0s)
+CONTRA   SEEDS  PSO LOG fr=counted   bnd=QCH scans=2 fences=park+pub                    states=  22520  sound+live
+      (0.3s)
+CONTRA   SEEDS  TSO SEP fr=counted   bnd=QCH scans=2 fences=- send=prod-lane pub=ind-cons read=ANY states=  52908  sound+live
+      (0.8s)
+
+total 1826s

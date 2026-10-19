@@ -1,0 +1,31 @@
+file                                         A wall           B wall           C wall           D wall   B/A   C/A   D/A   D/B  fp-same  fire A/B/C/D            merge A/B/C/D
+atms-adversarial.prologos            28.9[  27-  30]   28.4[  28-  30]   29.7[  29-  30]   28.1[  27-  32]  0.98  1.03  0.97  0.99  True   1.1/0.1/1.1/0.1   0.0/0.0/0.0/0.0
+bool-logic.prologos                   5.4[   5-   6]    3.4[   3-   4]    5.5[   5-   6]    3.3[   3-   4]  0.63  1.01  0.61  0.97  True   2.2/0.3/2.2/0.2   0.2/0.1/0.2/0.2
+church-folds.prologos                 2.0[   2-   2]    2.0[   2-   2]    1.9[   2-   2]    2.0[   2-   2]  1.00  0.97  1.00  1.00  True   0.0/0.0/0.0/0.0   0.0/0.0/0.0/0.0
+constraints-adversarial.prologos     66.3[  63-  67]   44.1[  43-  46]   54.7[  52-  57]   30.0[  28-  31]  0.66  0.83  0.45  0.68  True   27.1/10.6/21.8/2.4   16.4/12.4/14.0/10.2
+dependent-types.prologos              1.8[   2-   2]    1.8[   2-   2]    1.8[   2-   2]    1.8[   2-   2]  0.98  0.99  1.00  1.02  True   0.0/0.0/0.0/0.0   0.0/0.0/0.0/0.0
+higher-order.prologos                 2.4[   2-   2]    2.3[   2-   3]    2.4[   2-   2]    2.3[   2-   2]  0.99  0.99  0.98  0.99  True   0.0/0.0/0.0/0.0   0.0/0.0/0.0/0.0
+implicit-args.prologos                6.1[   6-   6]    3.3[   3-   3]    6.1[   5-   6]    3.2[   3-   4]  0.54  1.00  0.52  0.96  True   3.1/0.4/2.9/0.3   0.2/0.2/0.2/0.2
+nat-arithmetic.prologos               3.1[   3-   3]    2.3[   2-   3]    3.1[   3-   3]    2.2[   2-   2]  0.74  1.01  0.73  0.99  True   0.9/0.2/0.9/0.1   0.1/0.1/0.1/0.1
+pairs-sigma.prologos                  2.6[   2-   3]    2.5[   2-   3]    2.5[   2-   3]    2.5[   2-   3]  0.96  0.98  0.98  1.02  True   0.0/0.0/0.0/0.0   0.0/0.0/0.0/0.0
+pattern-matching.prologos             2.3[   2-   2]    2.3[   2-   3]    2.3[   2-   2]    2.3[   2-   2]  0.99  0.98  0.99  1.00  True   0.0/0.0/0.0/0.0   0.0/0.0/0.0/0.0
+records-seal-validate.prologos        6.6[   6-   7]    5.6[   5-   6]    6.5[   6-   7]    5.4[   5-   6]  0.85  0.99  0.82  0.96  True   0.5/0.1/0.5/0.1   0.1/0.0/0.1/0.1
+records-typing.prologos               5.7[   5-   6]    5.9[   6-   6]    5.7[   5-   6]    5.7[   5-   6]  1.03  1.00  1.00  0.97  True   0.0/0.0/0.0/0.0   0.0/0.0/0.0/0.0
+recursive-types.prologos              3.2[   3-   3]    3.3[   3-   4]    3.2[   3-   4]    3.3[   3-   3]  1.04  1.01  1.02  0.98  True   0.0/0.0/0.0/0.0   0.0/0.0/0.0/0.0
+scheduler-adversarial.prologos        8.3[   8-   9]    6.4[   6-   7]    8.2[   8-   9]    6.3[   6-   7]  0.77  0.99  0.76  0.99  True   2.2/0.2/2.0/0.1   0.1/0.1/0.1/0.1
+simple-typed.prologos                 1.9[   2-   2]    2.0[   2-   2]    1.9[   2-   2]    1.9[   2-   2]  1.05  1.03  1.03  0.98  True   0.0/0.0/0.0/0.0   0.0/0.0/0.0/0.0
+solve-adversarial.prologos           20.3[  19-  22]   20.7[  20-  22]   20.6[  19-  23]   20.4[  19-  21]  1.02  1.01  1.00  0.98  True   0.1/0.1/0.1/0.1   0.0/0.0/0.0/0.0
+solve-scale.prologos                 15.0[  14-  16]   15.1[  15-  16]   14.8[  14-  15]   15.1[  14-  16]  1.01  0.99  1.00  1.00  True   0.0/0.0/0.0/0.0   0.0/0.0/0.0/0.0
+type-adversarial.prologos            63.5[  61-  67]   40.9[  39-  43]   56.1[  52-  59]   32.1[  31-  36]  0.64  0.88  0.51  0.78  True   23.9/7.4/20.4/2.7   11.5/8.2/10.5/7.0
+n processes per (file,leg): {'A': 8, 'B': 8, 'C': 8, 'D': 8}
+HEAVY (2) sum of medians: A=129.9  B=85.0  C=110.8  D=62.1   B/A=0.654 C/A=0.853 D/A=0.478 D/B=0.731 D/C=0.560
+MEDIUM (18) sum of medians: A=245.4  B=192.2  C=226.9  D=167.8   B/A=0.783 C/A=0.925 D/A=0.684 D/B=0.873 D/C=0.740
+  HEAVY leg A: per-process totals min 126.0 med 128.5 max 134.0
+  HEAVY leg B: per-process totals min 83.1 med 84.9 max 89.1
+  HEAVY leg C: per-process totals min 106.3 med 110.9 max 116.4
+  HEAVY leg D: per-process totals min 58.3 med 62.1 max 65.3
+  MEDIUM leg A: per-process totals min 234.1 med 244.6 max 253.9
+  MEDIUM leg B: per-process totals min 190.4 med 192.5 max 199.4
+  MEDIUM leg C: per-process totals min 217.7 med 226.3 max 236.9
+  MEDIUM leg D: per-process totals min 157.5 med 168.5 max 172.9
+MEDIUM minus heavy (16): A=115.5  B=107.2  C=116.1  D=105.7   B/A=0.928 C/A=1.005 D/A=0.915

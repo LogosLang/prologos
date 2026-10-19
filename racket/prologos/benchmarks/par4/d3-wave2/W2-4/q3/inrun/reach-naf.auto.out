@@ -1,0 +1,23 @@
+PERF-COUNTERS:{"cell_allocs":801,"constraint_count":0,"constraint_retries":0,"elaborate_steps":108,"inert_dependent_skips":0,"infer_steps":185,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":107,"resolution_cycles":0,"solver_backtracks":26,"solver_col_compares":21,"solver_row_scans":22,"solver_unifies":50,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":155}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: dfs-s : Solver defined.
+1: blocked : _ defined.
+2: tagged : _ defined.
+3: @[{:x 2} {:x 1}] : [PVec {:x Int}]
+4: @[{:x 1}] : [PVec {:x Int}]
+5: @[{:x 2, :c 2} {:x 1, :c 1}] : [PVec {:c Int :x Int}]
+6: @[{:x 1, :c 1} {:x 2, :c 2}] : [PVec {:c Int :x Int}]
+7: two-naf : _ defined.
+8: @[{:x 1}] : [PVec {:x Int}]
+9: @[] : [PVec {:x Int}]
+10: clash-naf : _ defined.
+11: @[{:x 1, :y 2}] : [PVec {:x Int :y Int}]
+12: @[] : [PVec {:x Int :y Int}]
+13: agree-naf : _ defined.
+14: @[{:x 1, :y 1}] : [PVec {:x Int :y Int}]
+15: @[{:x 1, :y 1}] : [PVec {:x Int :y Int}]
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":51,"exec_rounds":20,"file":"reach-naf.prologos","nonfix_entry_points":10,"nonfix_examples":"()","nonfix_quiescence_points":5,"strat":"auto","wall_ms":188.0}

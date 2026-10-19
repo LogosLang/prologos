@@ -1,0 +1,8 @@
+W27 :usage carriers vs the checkQ oracle — 21 cases (declared d × schedule × final ?m)
+  TODAY (ω in fire, add-usage): verdict mismatches 2/21 e.g. ((m0 after m0) (m1 after m1))
+  CHAIN-LB (⊥·x=m0, max): verdict mismatches 1/21 e.g. ((m0 never #f))
+  CHAIN-STRICT (⊥·x=⊥, max): verdict mismatches 0/21 
+  FLAT (⊥·m0=m0 else ⊥; flat join): verdict mismatches 0/21 
+  INTERVAL ([m0,mw], join): verdict mismatches 0/21 
+  (case = (declared-mult-of-y schedule final-?m); #f = never solved, ω default)
+  witness: (fn [y :0] (f y)), f : Pi(?m,…), ?m never solved — oracle accepts? #f ; CHAIN-LB accepts? #t ; INTERVAL accepts? #f

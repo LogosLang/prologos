@@ -1,0 +1,50 @@
+PERF-COUNTERS:{"cell_allocs":1918,"constraint_count":0,"constraint_retries":0,"elaborate_steps":149,"inert_dependent_skips":0,"infer_steps":128,"meta_created":29,"meta_solved":28,"prop_allocs":0,"prop_firings":0,"reduce_steps":1002,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":80,"zonk_steps":337}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":2,"trait_resolve_ms":0,"type_check_ms":9,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":9,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: x : Int defined.
+1: y : Int defined.
+2: 2184 : Int
+3: n : Nat defined.
+4: 5N : Nat
+5: false : Bool
+6: false : Bool
+7: 7 : Int
+8: 30 : Int
+9: 7 : Int
+10: xs : [prologos::data::list::List Int] defined.
+11: 5N : Nat
+12: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+13: '[2 3 4 5 6] : [prologos::data::list::List Int]
+14: o : [prologos::data::option::Option Int] defined.
+15: true : Bool
+16: false : Bool
+17: is-pos : Int -> Bool defined.
+18: false : Bool
+19: true : Bool
+20: 42 : Int
+21: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+22: 42 : Int
+23: true : Bool
+24: result : Int defined.
+25: 86 : Int
+26: s : String defined.
+27: 11 : Int
+28: 3 : Int
+29: true : Bool
+30: false : Bool
+31: double : Int -> Int defined.
+32: 42 : Int
+33: p : [Sigma Int Int] defined.
+34: 1 : Int
+35: 2 : Int
+36: r : [prologos::data::result::Result Int _] defined.
+37: true : Bool
+38: false : Bool
+39: a : Int defined.
+40: b : Int defined.
+41: c : Int defined.
+42: 3 : Int
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":335,"exec_rounds":75,"exec_wide_rounds":7,"file":"2026-03-24-track10.prologos","handler_calls":3,"outer_hist":{"0":34},"outer_max":0,"outer_runs":34,"strat":"auto","wall_ms":214.0}

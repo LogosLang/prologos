@@ -1,0 +1,37 @@
+ns probes::w2u3
+
+;; W2-10 u3: does :timeout reach the network's fuel, and what does the user see at exhaustion?
+;; :timeout ms => fuel = ms x 1000 fires (relations.rkt:3115-3116). 0 => fuel 0.
+
+solver atms-s
+  :strategy atms
+
+solver atms-t0
+  :strategy atms
+  :timeout 0
+
+solver atms-t1
+  :strategy atms
+  :timeout 1
+
+defr pick [?x]
+  &> (= x 1)
+  &> (= x 2)
+  &> (= x 3)
+  &> (= x 4)
+  &> (= x 5)
+  &> (= x 6)
+
+defr two [?x]
+  &> (= x 1) (= x 2)
+
+;; 6..8: named solvers, timeout in the definition
+solve-with atms-s (pick ?x)
+solve-with atms-t0 (pick ?x)
+solve-with atms-t1 (pick ?x)
+;; 9..10: timeout as an inline override on a named atms solver
+solve-with atms-s {:timeout 0} (pick ?x)
+solve-with atms-s {:timeout 0} (two ?x)
+;; 11..12: route witness — ATMS answers @[{:x 2}] here (PD-1), DFS answers @[]
+solve-with atms-s (two ?x)
+solve-with atms-t0 (two ?x)

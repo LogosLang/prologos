@@ -1,0 +1,77 @@
+PERF-COUNTERS:{"cell_allocs":2440,"constraint_count":0,"constraint_retries":0,"elaborate_steps":436,"inert_dependent_skips":0,"infer_steps":334,"meta_created":55,"meta_solved":25,"prop_allocs":0,"prop_firings":0,"reduce_steps":2425,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":103,"zonk_steps":703}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":2,"qtt_ms":0,"reduce_ms":38,"trait_resolve_ms":0,"type_check_ms":41,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":17,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: true : Bool
+1: false : Bool
+2: true : Bool
+3: false : Bool
+4: true : Bool
+5: false : Bool
+6: true : Bool
+7: '[{:y 0N, :x 7N} {:y 1N, :x 6N} {:y 2N, :x 5N} {:y 3N, :x 4N} {:y 4N, :x 3N} {:y 5N, :x 2N} {:y 6N, :x 1N} {:y 7N, :x 0N}] : _
+8: sum-of-doubles : Int -> Int defined.
+9: 18 : Int
+10: chain-add : Int Int -> Int defined.
+11: 14 : Int
+12: ERROR: Unbound variable
+13: ERROR: Unbound variable
+14: ERROR: Unbound variable
+15: '[{:x 4N}] : _
+16: '[{:a 4N, :b 0N} {:a 3N, :b 1N} {:a 2N, :b 2N} {:a 1N, :b 3N} {:a 0N, :b 4N}] : _
+17: '[{:y 3N}] : _
+18: '[{:y 4N}] : _
+19: '[{:x 4N}] : _
+20: true : Bool
+21: fruits : [prologos::data::list::List Int] defined.
+22: 10 : Int
+23: 30 : Int
+24: 50 : Int
+25: idx : Int defined.
+26: 40 : Int
+27: 20 : Int
+28: config : [Map Keyword Int] defined.
+29: ERROR: keyword index `[:port]` was retired — spell the field `m.port` or use `[get m :port]`
+30: ERROR: keyword index `[:timeout]` was retired — spell the field `m.timeout` or use `[get m :timeout]`
+31: kw : Keyword defined.
+32: 3 : Int
+33: nested : [Map Keyword [Map Keyword Int]] defined.
+34: ERROR: keyword index `[:port]` was retired — spell the field `m.port` or use `[get m :port]`
+35: ERROR: keyword index `[:ttl]` was retired — spell the field `m.ttl` or use `[get m :ttl]`
+36: people : [prologos::data::list::List [Map Keyword Int]] defined.
+37: ERROR: keyword index `[:age]` was retired — spell the field `m.age` or use `[get m :age]`
+38: ERROR: keyword index `[:score]` was retired — spell the field `m.score` or use `[get m :score]`
+39: 25 : Int
+40: 85 : Int
+41: infra : [Map Keyword [Map Keyword Int]] defined.
+42: ERROR: keyword index `[:workers]` was retired — spell the field `m.workers` or use `[get m :workers]`
+43: ERROR: keyword index `[:buffer]` was retired — spell the field `m.buffer` or use `[get m :buffer]`
+44: nums : [prologos::data::list::List Int] defined.
+45: true : Bool
+46: false : Bool
+47: sum-first-two : [prologos::data::list::List Int] -> Int defined.
+48: 300 : Int
+49: inventory : [Map Keyword Int] defined.
+50: ERROR: keyword index `[:apples]` was retired — spell the field `m.apples` or use `[get m :apples]`
+51: ERROR: keyword index `[:cherries]` was retired — spell the field `m.cherries` or use `[get m :cherries]`
+52: weights : [Map Keyword Int] defined.
+53: ERROR: keyword index `[:large]` was retired — spell the field `m.large` or use `[get m :large]`
+54: ERROR: keyword index `[:small]` was retired — spell the field `m.small` or use `[get m :small]`
+55: '[{:y 0N, :x 5N} {:y 1N, :x 4N} {:y 2N, :x 3N} {:y 3N, :x 2N} {:y 4N, :x 1N} {:y 5N, :x 0N}] : _
+56: '[{:a 3N}] : _
+57: ERROR: Unbound variable
+58: ERROR: Unbound variable
+59: ERROR: Unbound variable
+60: app-config : [Map Keyword Int] defined.
+61: ERROR: keyword index `[:port]` was retired — spell the field `m.port` or use `[get m :port]`
+62: records : [prologos::data::list::List [Map Keyword Int]] defined.
+63: ERROR: keyword index `[:val]` was retired — spell the field `m.val` or use `[get m :val]`
+64: ERROR: Unbound variable
+65: ERROR: keyword index `[:val]` was retired — spell the field `m.val` or use `[get m :val]`
+66: ERROR: keyword index `[:val]` was retired — spell the field `m.val` or use `[get m :val]`
+67: true : Bool
+68: '[{:y 0N, :x 5N} {:y 1N, :x 4N} {:y 2N, :x 3N} {:y 3N, :x 2N} {:y 4N, :x 1N} {:y 5N, :x 0N}] : _
+69: '[{:x 4N}] : _
+
+--- 23 errors ---
+W24 {"exec":"prod","exec_fires":392,"exec_rounds":72,"exec_wide_rounds":11,"file":"2026-03-10-surface-ergonomics.prologos","handler_calls":11,"outer_hist":{"0":25},"outer_max":0,"outer_runs":25,"strat":"auto","wall_ms":239.0}

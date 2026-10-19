@@ -1,0 +1,12 @@
+0: Vec : [Type 0] defined.
+1: A : [Type 0] -> benchmarks::comparative::dependent-types::Vec defined.
+2: n : Nat -> benchmarks::comparative::dependent-types::Vec defined.
+3: where : benchmarks::comparative::dependent-types::Vec defined.
+4: ERROR@?: Unbound variable
+5: ERROR@?: Map literal requires an even number of elements (key-value pairs)
+6: ERROR@?: Type mismatch
+7: ERROR@?: Type mismatch
+8: ERROR@?: vcons expects 4 arguments, got 2
+9: ERROR@?: vhead expects 3 arguments, got 1
+10: ERROR@?: vtail expects 3 arguments, got 1
+-- leg drain: 11 results, 2.0 ms | observer: 0 BSP rounds in 0 runs, 0 diffs, 0 runs ending contradicted

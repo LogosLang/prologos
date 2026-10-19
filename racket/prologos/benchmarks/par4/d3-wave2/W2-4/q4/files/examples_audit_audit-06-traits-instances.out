@@ -1,0 +1,30 @@
+PERF-COUNTERS:{"cell_allocs":1042,"constraint_count":0,"constraint_retries":0,"elaborate_steps":138,"inert_dependent_skips":0,"infer_steps":60,"meta_created":21,"meta_solved":21,"prop_allocs":0,"prop_firings":0,"reduce_steps":1407,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":45,"zonk_steps":234}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":2,"trait_resolve_ms":0,"type_check_ms":8,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Describable-describe : [Pi [x :0 <[Type 0]>] [x -> Nat] x -> Nat] defined.
+1: describe : [Pi [x :0 <[Type 0]>] [x -> Nat] x -> Nat] defined.
+2: true : Bool
+3: false : Bool
+4: prologos::data::ordering::lt-ord : prologos::data::ordering::Ordering
+5: prologos::data::ordering::gt-ord : prologos::data::ordering::Ordering
+6: prologos::data::ordering::eq-ord : prologos::data::ordering::Ordering
+7: 5N : Nat
+8: 7N : Nat
+9: 20N : Nat
+10: true : Bool
+11: true : Bool
+12: true : Bool
+13: false : Bool
+14: true : Bool
+15: false : Bool
+16: both-eq : [Pi [x :0 <[Type 0]>] [x x -> Bool] x x -> Bool] defined.
+17: true : Bool
+18: false : Bool
+19: Nat--Describable--describe : Nat -> Nat defined.
+20: Nat--Describable--dict : Nat -> Nat defined.
+21: Bool--Describable--describe : Bool -> Nat defined.
+22: Bool--Describable--dict : Bool -> Nat defined.
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":309,"exec_rounds":61,"exec_wide_rounds":9,"file":"audit-06-traits-instances.prologos","handler_calls":9,"outer_hist":{"0":25},"outer_max":0,"outer_runs":25,"strat":"auto","wall_ms":153.0}

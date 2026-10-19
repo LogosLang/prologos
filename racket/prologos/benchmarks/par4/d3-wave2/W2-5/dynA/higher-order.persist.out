@@ -1,0 +1,13 @@
+RESULT 0.0: ERROR: Type mismatch
+RESULT 0.1: ERROR: Type mismatch
+RESULT 0.2: ERROR: Type mismatch
+RESULT 0.3: ERROR: Type mismatch
+RESULT 0.4: ERROR: Type mismatch
+RESULT 0.5: ERROR: fn: all parameters except body must be bare symbols or a binder (x : T)
+RESULT 0.6: ERROR: Unbound variable
+RESULT 0.7: ERROR: Unbound variable
+RESULT 0.8: ERROR: Unbound variable
+RESULT 0.9: ERROR: Unbound variable
+RESULT 0.10: ERROR: Unbound variable
+RESULT 0.11: ERROR: Unbound variable
+STATS leg=persist files=1 params=219 rounds=0 wide-rounds(>=8)=0 fires=0 reentrant=0 ms=3.0

@@ -1,0 +1,93 @@
+PERF-COUNTERS:{"cell_allocs":3725,"constraint_count":0,"constraint_retries":0,"elaborate_steps":389,"inert_dependent_skips":0,"infer_steps":740,"meta_created":41,"meta_solved":25,"prop_allocs":0,"prop_firings":0,"reduce_steps":890,"resolution_cycles":0,"solver_backtracks":44,"solver_col_compares":213,"solver_row_scans":184,"solver_unifies":226,"trait_resolve_steps":0,"unify_steps":111,"zonk_steps":736}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":3,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":8,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":26,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":4,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Color : [Type 0] defined.
+1: red : acceptance::punify-p3::Color defined.
+2: green : acceptance::punify-p3::Color defined.
+3: blue : acceptance::punify-p3::Color defined.
+4: Shape : [Type 0] defined.
+5: circle : Nat -> acceptance::punify-p3::Shape defined.
+6: rect : Nat Nat -> acceptance::punify-p3::Shape defined.
+7: triangle : Nat Nat Nat -> acceptance::punify-p3::Shape defined.
+8: parent : _ defined.
+9: @[{:child "bob"} {:child "carol"}] : [PVec {:child String}]
+10: ancestor : _ defined.
+11: @[{:desc "bob"} {:desc "carol"} {:desc "dave"} {:desc "eve"} {:desc "frank"}] : [PVec {:desc String}]
+12: {:child "bob"} : {:child String}
+13: ERROR: unsafe negation: variable anyone in a `not` goal of relation root-parent is not bound by any positive goal (floundering)
+14: ERROR: solve: Unknown relation: root-parent — its defr failed to register (see the earlier error)
+15: my-default : Solver defined.
+16: dfs-solver : Solver defined.
+17: debug-solver : Solver defined.
+18: parallel-solver : Solver defined.
+19: wf-solver : Solver defined.
+20: narrow-solver : Solver defined.
+21: @[{:child "bob"} {:child "carol"}] : [PVec {:child String}]
+22: @[{:child "bob"} {:child "carol"}] : [PVec {:child String}]
+23: @[{:child "bob"} {:child "carol"}] : [PVec {:child String}]
+24: @[{:desc "bob"} {:desc "carol"} {:desc "dave"} {:desc "eve"} {:desc "frank"}] : [PVec {:desc String}]
+25: Point : [Type 0] defined.
+26: Config : [Type 0] defined.
+27: Pixel : [Type 0] defined.
+28: Address : [Type 0] defined.
+29: Person : [Type 0] defined.
+30: Employee__manager : [Type 0] defined.
+31: Employee__address : [Type 0] defined.
+32: Employee : [Type 0] defined.
+33: origin : acceptance::punify-p3::Point defined.
+34: cfg : acceptance::punify-p3::Config defined.
+35: default-cfg : acceptance::punify-p3::Config defined.
+36: partial-cfg : acceptance::punify-p3::Config defined.
+37: selection NameOnly from Person registered.
+38: selection ContactInfo from Person registered.
+39: selection ZipOnly from Person registered.
+40: selection Extended from Person registered.
+41: user : {:age Int :name String} defined.
+42: "alice" : String
+43: 30 : Int
+44: nested : {:config {:host String :port String}} defined.
+45: {:host "localhost", :port "8080"} : {:host String :port String}
+46: "localhost" : String
+47: 0 : Int
+48: 0 : Int
+49: "admin" : String
+50: ERROR: dot-key `.:name` was retired — spell field access with `.name` (e.g. `m.name`); as a function value use `[fn [m] m.name]`
+51: xs : [prologos::data::list::List Int] defined.
+52: 1 : Int
+53: 3 : Int
+54: m : {:a Int :b Int :c Int} defined.
+55: ERROR: keyword index `[:a]` was retired — spell the field `m.a` or use `[get m :a]`
+56: ERROR: keyword index `[:c]` was retired — spell the field `m.c` or use `[get m :c]`
+57: 2 : Int
+58: matrix : [prologos::data::list::List [prologos::data::list::List Int]] defined.
+59: 2 : Int
+60: 7 : Int
+61: color-of : _ defined.
+62: @[{:thing "sky"} {:thing "ocean"}] : [PVec {:thing String}]
+63: connects : _ defined.
+64: two-hop : _ defined.
+65: @[{:dest "z"} {:dest "w"}] : [PVec {:dest String}]
+66: singleton : _ defined.
+67: @[{:child "bob"} {:child "carol"}] : [PVec {:child String}]
+68: ERROR: unsafe negation: variable anyone in a `not` goal of relation leaf-node is not bound by any positive goal (floundering)
+69: ERROR: solve: Unknown relation: leaf-node — its defr failed to register (see the earlier error)
+70: double-parent : _ defined.
+71: @[{:child "bob", :val 2} {:child "carol", :val 2}] : [PVec {:child String :val Int}]
+72: 7 : Int
+73: 30 : Int
+74: 36 : Int
+75: 3 : Int
+76: test-map : {:alpha Int :beta Int :gamma Int} defined.
+77: 2 : Int
+78: 42 : Int
+79: 99 : Int
+80: true : Bool
+81: true : Bool
+82: make-adder : Int Int -> Int defined.
+83: add5 : Int -> Int defined.
+84: 15 : Int
+85: DatabaseConfig : [Type 0] defined.
+
+--- 7 errors ---
+W24 {"exec":"prod","exec_fires":155,"exec_rounds":44,"exec_wide_rounds":5,"file":"2026-03-20-punify-p3-acceptance.prologos","outer_hist":{"0":29},"outer_max":0,"outer_runs":29,"strat":"auto","wall_ms":218.0}

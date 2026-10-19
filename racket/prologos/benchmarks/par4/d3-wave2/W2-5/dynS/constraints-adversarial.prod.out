@@ -1,0 +1,71 @@
+RESULT 0.0: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+RESULT 0.1: const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+RESULT 0.2: flip : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [x y -> z] y x -> z]]] defined.
+RESULT 0.3: compose : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y -> z] [x -> y] x -> z]]] defined.
+RESULT 0.4: on : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y y -> z] [x -> y] x x -> z]]] defined.
+RESULT 0.5: apply : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] x -> y]] defined.
+RESULT 0.6: twice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+RESULT 0.7: thrice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+RESULT 0.8: a1 : Int defined.
+RESULT 0.9: a2 : Int defined.
+RESULT 0.10: a3 : Int defined.
+RESULT 0.11: a4 : Int defined.
+RESULT 0.12: a5 : Int defined.
+RESULT 0.13: a6 : Int defined.
+RESULT 0.14: a7 : Int defined.
+RESULT 0.15: a8 : Int defined.
+RESULT 0.16: a9 : Int defined.
+RESULT 0.17: a10 : Int defined.
+RESULT 0.18: deep1 : Int defined.
+RESULT 0.19: deep2 : Int defined.
+RESULT 0.20: deep3 : Int defined.
+RESULT 0.21: d1 : Int defined.
+RESULT 0.22: d2 : Bool defined.
+RESULT 0.23: d3 : String defined.
+RESULT 0.24: d4 : Int defined.
+RESULT 0.25: d5 : String defined.
+RESULT 0.26: ERROR: Could not infer type
+RESULT 0.27: ERROR: Could not infer type
+RESULT 0.28: d8 : Int defined.
+RESULT 0.29: ERROR: Could not infer type
+RESULT 0.30: d10 : Int defined.
+RESULT 0.31: e1 : Bool defined.
+RESULT 0.32: e2 : Bool defined.
+RESULT 0.33: e3 : Bool defined.
+RESULT 0.34: p1 : Int defined.
+RESULT 0.35: p2 : Int defined.
+RESULT 0.36: 2 : Int
+RESULT 0.37: 4 : Int
+RESULT 0.38: 6 : Int
+RESULT 0.39: 8 : Int
+RESULT 0.40: 10 : Int
+RESULT 0.41: 12 : Int
+RESULT 0.42: 14 : Int
+RESULT 0.43: 16 : Int
+RESULT 0.44: 18 : Int
+RESULT 0.45: 20 : Int
+RESULT 0.46: 1 : Int
+RESULT 0.47: 4 : Int
+RESULT 0.48: 9 : Int
+RESULT 0.49: 16 : Int
+RESULT 0.50: 25 : Int
+RESULT 0.51: 1 : Int
+RESULT 0.52: 2 : Int
+RESULT 0.53: 3 : Int
+RESULT 0.54: true : Bool
+RESULT 0.55: false : Bool
+RESULT 0.56: 1 : Int
+RESULT 0.57: true : Bool
+RESULT 0.58: "a" : String
+RESULT 0.59: [fn [x <2>] [fn [y <1>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+RESULT 0.60: [fn [x <false>] [fn [y <true>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+RESULT 0.61: [fn [x <[fn [x <1>] x]>] x] : ?bvar0 -> ?bvar1
+RESULT 0.62: [fn [x <[fn [x <true>] x]>] x] : ?bvar0 -> ?bvar1
+RESULT 0.63: 1 : Int
+RESULT 0.64: ERROR: Could not infer type
+RESULT 0.65: [fn [x <[fn [x <1>] x]>] [fn [y <[fn [y <2>] y]>] x]] : ?bvar1 ?bvar1 -> ?bvar3
+RESULT 0.66: mix1 : Int defined.
+RESULT 0.67: mix2 : Int defined.
+RESULT 0.68: mix3 : Int defined.
+STATS leg=prod files=1 params=219 rounds=212 wide-rounds(>=8)=38 fires=1142 reentrant=0 ms=256.0
+SUBTYPE main-thread (current-subtype-check-count)=(8 . 4) global-subtype-total=8

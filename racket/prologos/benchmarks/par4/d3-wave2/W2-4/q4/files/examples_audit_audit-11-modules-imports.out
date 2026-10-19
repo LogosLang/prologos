@@ -1,0 +1,19 @@
+PERF-COUNTERS:{"cell_allocs":547,"constraint_count":0,"constraint_retries":0,"elaborate_steps":48,"inert_dependent_skips":0,"infer_steps":58,"meta_created":17,"meta_solved":14,"prop_allocs":0,"prop_firings":0,"reduce_steps":1016,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":2,"unify_steps":21,"zonk_steps":149}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":4,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":2,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":1,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: 5N : Nat
+1: '[2N 3N 4N] : [prologos::data::list::List Nat]
+2: true : Bool
+3: 30N : Nat
+4: 12N : Nat
+5: true : Bool
+6: 42N : Nat
+7: true : Bool
+8: private-val : Nat defined.
+9: 43N : Nat
+10: helper : Nat -> Nat defined.
+11: 15N : Nat
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":195,"exec_rounds":35,"exec_wide_rounds":5,"file":"audit-11-modules-imports.prologos","handler_calls":2,"outer_hist":{"0":13},"outer_max":0,"outer_runs":13,"strat":"auto","wall_ms":149.0}

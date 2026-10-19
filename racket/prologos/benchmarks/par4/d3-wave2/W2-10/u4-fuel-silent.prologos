@@ -1,0 +1,33 @@
+ns probes::w2u4
+
+;; W2-10 u4: is fuel exhaustion on the solver path reported, or are partial answers returned silently?
+;; atms-t0 has :timeout 0 => fuel 0 (relations.rkt:3115-3116). Multi-level relations need several BSP rounds.
+
+solver atms-s
+  :strategy atms
+
+solver atms-t0
+  :strategy atms
+  :timeout 0
+
+defr pick [?x]
+  &> (= x 1)
+  &> (= x 2)
+  &> (= x 3)
+
+defr q1 [?x]
+  &> (pick x)
+
+defr q2 [?x]
+  &> (q1 x)
+
+defr q3 [?x]
+  &> (q2 x)
+
+;; 7..12
+solve-with atms-s (pick ?x)
+solve-with atms-t0 (pick ?x)
+solve-with atms-s (q3 ?x)
+solve-with atms-t0 (q3 ?x)
+solve-with atms-s (q1 ?x)
+solve-with atms-t0 (q1 ?x)

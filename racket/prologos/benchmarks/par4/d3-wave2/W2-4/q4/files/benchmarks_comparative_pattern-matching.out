@@ -1,0 +1,20 @@
+PERF-COUNTERS:{"cell_allocs":494,"constraint_count":0,"constraint_retries":0,"elaborate_steps":34,"inert_dependent_skips":0,"infer_steps":1,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":1,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":5}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: List : [Type 0] defined.
+1: A : [Type 0] -> benchmarks::comparative::pattern-matching::List defined.
+2: where : benchmarks::comparative::pattern-matching::List defined.
+3: ERROR: Unbound variable
+4: ERROR: Unbound variable
+5: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+6: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+7: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+8: ERROR: unreachable match arm: arm 2 can never run, because arm 1 matches everything — and an unreachable arm is never type-checked, so mistakes in it go unreported. If a name there was meant as a CONSTRUCTOR, it was not recognised as one (check the spelling, and that its type is imported) and so became a catch-all variable pattern instead.
+9: ERROR: def: expected ':', got cons
+10: ERROR: Unbound variable
+11: ERROR: fn: all parameters except body must be bare symbols or a binder (x : T)
+12: ERROR: fn: all parameters except body must be bare symbols or a binder (x : T)
+
+--- 10 errors ---
+W24 {"exec":"prod","file":"pattern-matching.prologos","outer_hist":{},"outer_max":0,"outer_runs":0,"strat":"auto","wall_ms":3.0}

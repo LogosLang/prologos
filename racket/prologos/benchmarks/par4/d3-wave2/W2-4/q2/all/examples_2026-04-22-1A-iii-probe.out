@@ -1,0 +1,36 @@
+PERF-COUNTERS:{"cell_allocs":1281,"constraint_count":0,"constraint_retries":0,"elaborate_steps":112,"inert_dependent_skips":0,"infer_steps":82,"meta_created":5,"meta_solved":3,"prop_allocs":0,"prop_firings":0,"reduce_steps":206,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":45,"zonk_steps":170}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: ERROR: preparse: ns: namespace name cannot contain a `::` segment (those are the record access / broadcast operators). Use `::` for a hierarchical namespace (e.g. `examples::ppn-track4c::…`) or a single segment (e.g. `examples::ppn-track4c`). The only option `ns` accepts is `:no-prelude`.
+1: p1-x : Int defined.
+2: 42 : Int
+3: p1-y : String defined.
+4: "hello" : String
+5: p1-z : Int defined.
+6: 10 : Int
+7: p1-inc : Int -> Int defined.
+8: 42 : Int
+9: p2-double : Int -> Int defined.
+10: 42 : Int
+11: p2-compose : [Int -> Int] [Int -> Int] Int -> Int defined.
+12: 21 : Int
+13: p3-my-map : {:age Int :name String} defined.
+14: {:name "alice", :age 30} : {:age Int :name String}
+15: "alice" : String
+16: 30 : Int
+17: p4-nested : {:data {:x Int :y String} :flag Bool} defined.
+18: {:data {:y "two", :x 1}, :flag true} : {:data {:x Int :y String} :flag Bool}
+19: ERROR: Unbound variable
+20: ERROR: Unbound variable
+21: ERROR: Unbound variable
+22: ERROR: Unbound variable
+23: p5-chain : Int defined.
+24: 16 : Int
+25: p6-id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+26: 99 : Int
+27: "world" : String
+28: true : Bool
+
+--- 5 errors ---
+W24 {"exec":"prod","exec_fires":67,"exec_rounds":20,"exec_wide_rounds":2,"file":"2026-04-22-1A-iii-probe.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":6,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":6,"strat":"auto","wall_ms":8.0}

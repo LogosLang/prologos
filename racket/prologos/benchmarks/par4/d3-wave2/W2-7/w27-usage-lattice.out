@@ -1,0 +1,32 @@
+prelude mult-leq agrees with the chain on M: #t
+
+== CHAIN bot<m0<m1<mw ==
+ op +: 256 extensions; sound 48; sound+monotone 19; sound+monotone+associative 4
+   best sound abstraction (bot∘bot=m0 bot∘m0=m0 bot∘m1=m1 bot∘mw=mw): monotone #t, associative #t, arity-3 order-dep 0/64, arity-4 0/256
+   survivor (bot∘bot=bot bot∘m0=bot bot∘m1=bot bot∘mw=bot)  arity-3 dep 0 arity-4 dep 0; distinct-from-m0? #t
+   survivor (bot∘bot=bot bot∘m0=bot bot∘m1=m1 bot∘mw=mw)  arity-3 dep 0 arity-4 dep 0; distinct-from-m0? #t
+   survivor (bot∘bot=bot bot∘m0=m0 bot∘m1=m1 bot∘mw=mw)  arity-3 dep 0 arity-4 dep 0; distinct-from-m0? #t
+   survivor (bot∘bot=m0 bot∘m0=m0 bot∘m1=m1 bot∘mw=mw)  arity-3 dep 0 arity-4 dep 0; distinct-from-m0? #f
+ op ·: 256 extensions; sound 16; sound+monotone 5; sound+monotone+associative 3
+   best sound abstraction (bot∘bot=m0 bot∘m0=m0 bot∘m1=m0 bot∘mw=m0): monotone #t, associative #t, arity-3 order-dep 0/64, arity-4 0/256
+   survivor (bot∘bot=bot bot∘m0=bot bot∘m1=bot bot∘mw=bot)  arity-3 dep 0 arity-4 dep 0; distinct-from-m0? #t
+   survivor (bot∘bot=bot bot∘m0=m0 bot∘m1=m0 bot∘mw=m0)  arity-3 dep 0 arity-4 dep 0; distinct-from-m0? #t
+   survivor (bot∘bot=m0 bot∘m0=m0 bot∘m1=m0 bot∘mw=m0)  arity-3 dep 0 arity-4 dep 0; distinct-from-m0? #f
+
+== FLAT bot<{m0,m1,mw} ==
+ op +: 256 extensions; sound 2; sound+monotone 2; sound+monotone+associative 1
+   best sound abstraction (bot∘bot=bot bot∘m0=bot bot∘m1=bot bot∘mw=mw): monotone #t, associative #f, arity-3 order-dep 3/64, arity-4 22/256
+   survivor (bot∘bot=bot bot∘m0=bot bot∘m1=bot bot∘mw=bot)  arity-3 dep 0 arity-4 dep 0; distinct-from-m0? #t
+ op ·: 256 extensions; sound 2; sound+monotone 2; sound+monotone+associative 2
+   best sound abstraction (bot∘bot=bot bot∘m0=m0 bot∘m1=bot bot∘mw=bot): monotone #t, associative #t, arity-3 order-dep 0/64, arity-4 0/256
+   survivor (bot∘bot=bot bot∘m0=bot bot∘m1=bot bot∘mw=bot)  arity-3 dep 0 arity-4 dep 0; distinct-from-m0? #t
+   survivor (bot∘bot=bot bot∘m0=m0 bot∘m1=bot bot∘mw=bot)  arity-3 dep 0 arity-4 dep 0; distinct-from-m0? #t
+
+POWER: C4 addW (ω absorbs ⊥): sound(chain) #t assoc #f arity-3 dep 3 ; C4 mulS (0 absorbs ⊥): monotone(chain) #f monotone(flat) #t
+
+== INTERVAL [lo,hi] (|IV| = 6, unknown = [m0,mw]) ==
+ op +: sound (mw)  exact(=hull of the concrete results) #t  monotone #t  associative #t  arity-3 dep 0/216  arity-4 dep 0/1296
+ op ·: sound (mw)  exact(=hull of the concrete results) #t  monotone #t  associative #t  arity-3 dep 0/216  arity-4 dep 0/1296
+ join (max lo, min hi): C 0  A 0  I 0
+ x used once, scaled by an unsolved mult: m1·unknown = (m0 . mw) (open: the boundary knows to default/re-fire)
+ the CHAIN's best abstraction gives ⊥·m1 = m0, the same as an exactly-unused coordinate m0·m1 = m0: open and closed coincide

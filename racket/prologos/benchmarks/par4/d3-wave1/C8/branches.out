@@ -1,0 +1,10 @@
+ciu6-path-selection | ahead of main: 22 | last: 2026-10-15 |  | 
+deferred-sweep-146-149 | ahead of main: 1 | last: 2026-10-13 |  | 
+ppn4c-elaboration-on-network | ahead of main: 16 | last: 2026-10-14 |  | 
+par4-p0 | ahead of main: 0 | last: 2026-10-13 |  | 
+f3a-census | ahead of main: 2 | last: 2026-10-13 |  1 file changed, 17 insertions(+), 4 deletions(-) | type-lattice.rkt 
+egraph-relational-spike | ahead of main: 12 | last: 2026-06-12 |  1 file changed, 14 insertions(+), 9 deletions(-) | qtt.rkt 
+preduce-autonomy | ahead of main: 62 | last: 2026-06-11 |  3 files changed, 360 insertions(+), 31 deletions(-) | propagator.rkt sre-core.rkt typing-propagators.rkt 
+heuristic-thompson-a2091b | ahead of main: 0 | last: 2026-08-15 |  | 
+dazzling-wescoff-4b692b | ahead of main: 0 | last: 2026-08-15 |  | 
+power: par4-p0 vs its parent 4097b1c8~5 on propagator.rkt:  1 file changed, 96 insertions(+), 35 deletions(-)

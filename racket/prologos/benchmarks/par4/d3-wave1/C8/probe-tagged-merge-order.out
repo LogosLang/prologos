@@ -1,0 +1,4 @@
+x then y entries: ((4 . 7) (2 . 5))
+y then x entries: ((2 . 5) (4 . 7))
+equal? #f ; equal as sets? #t
+power row (same order twice): equal? #t

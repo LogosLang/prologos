@@ -1,0 +1,24 @@
+0: deep-id : [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option Nat]]]] -> [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option Nat]]]] defined.
+1: deep-val : [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option Nat]]]] defined.
+2: [prologos::data::option::some [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option Nat]]] [prologos::data::option::some [prologos::data::option::Option [prologos::data::option::Option Nat]] [prologos::data::option::some [prologos::data::option::Option Nat] [prologos::data::option::some Nat 42N]]]] : [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option [prologos::data::option::Option Nat]]]]
+3: ERROR@?: Type mismatch
+4: wide-val : [Sigma [Sigma Nat Bool] [Sigma Int String]] defined.
+5: ERROR@?: Unbound variable
+6: poly-map : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] [prologos::data::list::List x] -> [prologos::data::list::List y]]] defined.
+7: ERROR@?: Unbound variable
+8: ERROR@?: Unbound variable
+9: ERROR@?: Unbound variable
+10: ERROR@?: Unbound variable
+11: ERROR@?: Unbound variable
+12: ERROR@?: Unbound variable
+13: ERROR@?: Unbound variable
+14: ERROR@?: Unbound variable
+15: ERROR@?: Unbound variable
+16: ERROR@?: Unbound variable
+17: ERROR@?: Unbound variable
+18: ERROR@?: Unbound variable
+19: ERROR@?: Unbound variable
+20: ERROR@?: Unbound variable
+21: ERROR@?: Unbound variable
+22: ERROR@?: Unbound variable
+-- leg seq: 23 results, 166.0 ms | observer: 8 BSP rounds in 3 runs, 20 diffs, 0 runs ending contradicted

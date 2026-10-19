@@ -1,0 +1,18 @@
+RESULT 0: church-two : [Int -> Int] Int -> Int defined.
+RESULT 1: church-result : Int defined.
+RESULT 2: mixed : {:a Int :b String} defined.
+RESULT 3: 7 : Int
+RESULT 4: 12 : Int
+RESULT 5: true : Bool
+RESULT 6: xs : [prologos::data::list::List Int] defined.
+RESULT 7: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+RESULT 8: [prologos::data::option::some [prologos::data::list::List Int] '[2 3]] : [prologos::data::option::Option [prologos::data::list::List Int]]
+RESULT 9: 3N : Nat
+RESULT 10: pv : [PVec Int] defined.
+RESULT 11: 10 : Int
+RESULT 12: 30 : Int
+RESULT 13: m : {:age Int :name String} defined.
+RESULT 14: "Alice" : String
+RESULT 15: 30 : Int
+STATS2 leg=persist rounds=31 fires=147 control-divergent=0 thread-divergent=2 reentrant=0
+DIVFN ...ing-propagators.rkt:861:2 count=2 example: first-diff path=("struct:fire-result.1" car cdr #(struct:expr-meta meta1945 #f) :constraints) main=#(struct:constraint-set #<set: #(struct:constraint-candidate Seqable (List) List--Seqable--dict) #(struct:constraint-candidate Seqable (LSeq) LSeq--Seqable--dic… executor=constraint-top

@@ -1,0 +1,8 @@
+mode par file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos
+  BSP rounds through the executor: 212 (fires 1142); width>=8: 38 rounds, 611 fires, 592 parallel threads created (est.)
+  executor time: width>=8 16.0 ms (26.4 us/fire), width<8 10.0 ms; process-file wall 199.0 ms (incl. prelude load)
+  executor bytes: all rounds 68284 KB (59794 B/fire, 2640.0 B/us); width>=8 65683 KB (107500 B/fire)
+mode seq file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos
+  BSP rounds through the executor: 212 (fires 1142); width>=8: 38 rounds, 611 fires, 592 parallel threads created (est.)
+  executor time: width>=8 3.0 ms (4.6 us/fire), width<8 7.0 ms; process-file wall 175.0 ms (incl. prelude load)
+  executor bytes: all rounds 3013 KB (2639 B/fire, 308.0 B/us); width>=8 1297 KB (2123 B/fire)

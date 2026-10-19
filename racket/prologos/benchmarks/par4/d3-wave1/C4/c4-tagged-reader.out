@@ -1,0 +1,10 @@
+1. attribute map, real network
+  before any branch write, read at W=1: pos0 :type = #(struct:expr-Nat), pos1 :type = #(struct:expr-Bool)
+  after a branch write at pos2 under W=1, read at W=1: pos0 :type = type-bot, pos1 :type = type-bot, pos2 :type = #(struct:expr-Unit)
+  same cell read at W=0: pos0 :type = #(struct:expr-Nat)
+2. scope cell, real network
+  X at W=1 before the branch write: a ; after binding Y=b under W=1: X = scope-cell-bot, Y = b
+3. domain = set union (a join); 3 assumption bits; 400 random tagged values
+  production tagged-cell-read: non-monotone in t (t ⊑ t⊔s): 768/9600 ; non-monotone in W: 1187/10800 ; outer merge C on denotations: 0/1200
+  base ⊔ matching (the note's denotation): non-monotone in t (t ⊑ t⊔s): 0/9600 ; non-monotone in W: 0/10800 ; outer merge C on denotations: 0/1200
+  witness: t = {base {a}}, u = t ⊔ {1:{b}}; read at W=1: t -> #<seteq: a>, u -> #<seteq: b>

@@ -1,0 +1,13 @@
+processor-count 18
+N=4 raiser=#f sequential: (ok) | error port: <error port empty>
+N=4 raiser=#f thread-per-round: (ok) | error port: <error port empty>
+N=4 raiser=#f persistent-worker: (ok) | error port: <error port empty>
+N=4 raiser=#t sequential: (raised "fire: internal fault in propagator 2") | error port: <error port empty>
+N=4 raiser=#t thread-per-round: (raised "fire: internal fault in propagator 2") | error port: <error port empty>
+N=4 raiser=#t persistent-worker: (HUNG) | error port: <error port empty>
+N=12 raiser=#f sequential: (ok) | error port: <error port empty>
+N=12 raiser=#f thread-per-round: (ok) | error port: <error port empty>
+N=12 raiser=#f persistent-worker: (ok) | error port: <error port empty>
+N=12 raiser=#t sequential: (raised "fire: internal fault in propagator 6") | error port: <error port empty>
+N=12 raiser=#t thread-per-round: (HUNG) | error port: fire: internal fault in propagator 6
+N=12 raiser=#t persistent-worker: (HUNG) | error port: <error port empty>

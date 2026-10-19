@@ -1,0 +1,10 @@
+PERF-COUNTERS:{"cell_allocs":147,"constraint_count":0,"constraint_retries":0,"elaborate_steps":14,"inert_dependent_skips":0,"infer_steps":36,"meta_created":1,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":27,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":10,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":2,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":9,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":9,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: ERROR: Nat | Bool
+1: ERROR: Int | Bool
+2: ERROR: Nat | Bool | String
+
+--- 3 errors ---
+W24 {"exec":"prod","file":"2026-05-22-3C-Q6x-probe.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":0,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"strat":"auto","wall_ms":163.0}

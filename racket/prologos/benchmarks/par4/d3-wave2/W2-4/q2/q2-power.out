@@ -1,0 +1,5 @@
+processor-count 18
+production thread executor: W=16 ITER=20000 expected 320000 | box total 44903 (lost 275097) | perf reduce-steps 32546 (lost 287454)
+production thread executor: W=16 ITER=20000 expected 320000 | box total 42806 (lost 277194) | perf reduce-steps 30555 (lost 289445)
+production thread executor: W=16 ITER=20000 expected 320000 | box total 35366 (lost 284634) | perf reduce-steps 38669 (lost 281331)
+sequential-fire-all (control): W=16 ITER=20000 expected 320000 | box total 320000 (lost 0) | perf reduce-steps 320000 (lost 0)

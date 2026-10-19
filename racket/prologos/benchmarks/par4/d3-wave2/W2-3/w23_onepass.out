@@ -1,0 +1,70 @@
+=== one pass, cons before prod (CSPLIT), scans=1 — SEEDS (deferred acks, seeds counted, no indicator) ===
+CASCADE  SEEDS  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=    687  sound+live
+      (0.0s)
+CASCADE  SEEDS  TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=   2115  sound+live
+      (0.0s)
+CASCADE  SEEDS  PSO SEP fr=counted   bnd=Q   scans=1 fences=pub+send send=prod-lane pub=ind-cons read=CSPLIT states=   2066  sound+live
+      (0.0s)
+SENDWRITE SEEDS  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=    684  sound+live
+      (0.0s)
+SENDWRITE SEEDS  TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=   2992  sound+live
+      (0.1s)
+SENDWRITE SEEDS  PSO SEP fr=counted   bnd=Q   scans=1 fences=pub+send send=prod-lane pub=ind-cons read=CSPLIT states=   2463  sound+live
+      (0.0s)
+FREQ     SEEDS  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=    582  sound+live
+      (0.0s)
+FREQ     SEEDS  TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=   1521  sound+live
+      (0.0s)
+FREQ     SEEDS  PSO SEP fr=counted   bnd=Q   scans=1 fences=pub+send send=prod-lane pub=ind-cons read=CSPLIT states=   1350  sound+live
+      (0.0s)
+BOUNCE   SEEDS  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=   1485  sound+live
+      (0.0s)
+BOUNCE   SEEDS  TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=   6309  sound+live
+      (0.1s)
+BOUNCE   SEEDS  PSO SEP fr=counted   bnd=Q   scans=1 fences=pub+send send=prod-lane pub=ind-cons read=CSPLIT states=   6224  sound+live
+      (0.1s)
+SEEDS2   SEEDS  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=   1809  sound+live
+      (0.0s)
+SEEDS2   SEEDS  TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=   9507  sound+live
+      (0.2s)
+SEEDS2   SEEDS  PSO SEP fr=counted   bnd=Q   scans=1 fences=pub+send send=prod-lane pub=ind-cons read=CSPLIT states=   9099  sound+live
+      (0.2s)
+K3       SEEDS  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=  23408  sound+live
+      (0.5s)
+K3       SEEDS  TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=  87536  sound+live
+      (2.4s)
+  LOG representation (heads before tails), one pass:
+SENDWRITE SEEDS  PSO LOG fr=counted   bnd=Q   scans=1 fences=pub                         states=   4428  sound+live
+      (0.1s)
+BOUNCE   SEEDS  PSO LOG fr=counted   bnd=Q   scans=1 fences=pub                         states=  19453  sound+live
+      (0.4s)
+SEEDS2   SEEDS  PSO LOG fr=counted   bnd=Q   scans=1 fences=pub                         states=  17058  sound+live
+      (0.3s)
+K3       SEEDS  TSO LOG fr=counted   bnd=Q   scans=1 fences=-                           states= 217744  sound+live
+      (6.2s)
+  contradiction handshake and regions, one pass:
+CONTRA   SEEDS  TSO SEP fr=counted   bnd=QCH scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=   5410  sound+live
+      (0.1s)
+REGIONS  SEEDS  TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT tasks=[(2,), (1,)] states=  11580  sound+live
+      (0.2s)
+NESTED   SEEDS  TSO SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=   3459  sound+live
+      (0.1s)
+=== power rows (must fail) ===
+  one pass with prod read BEFORE cons (PCI order):
+BOUNCE   SEEDS  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons states=   4188  PREMATURE STALE
+    PREMATURE witness (11 steps): A:drain B(0) ; A:drain S(1) ; D:read PA=0 ; A:fire p: prod=1 ; A:send delta->B ; A:drain B(0) ; A:drain S(0) ; A:cons=1 ; D:read CA=1 ; D:read PB=0 ; D:read CB=0 -> DECLARE (0,)
+      (0.1s)
+  one pass, cons first, but the sender counts AFTER publishing (lane-prod):
+SENDWRITE SEEDS  SC  SEP fr=counted   bnd=Q   scans=1 fences=- read=CSPLIT               states=    981  PREMATURE STALE
+    PREMATURE witness (14 steps): A:drain B(0) ; A:drain S(1) ; A:fire p: send delta->B ; B:drain A(1) ; B:write cB ; B:drain S(0) ; B:fire q1: write cB2 ; B:drain A(0) ; B:drain S(0) ; B:cons=1 ; D:read CA=0 ; D:read CB=1 ; D:read PA=0 ; D:read PB=0 -> DECLARE (0,)
+      (0.0s)
+  EARLY = SEEDS with cons published at drain (D.2's ack point), one pass and two scans:
+CASCADE  EARLY  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons read=CSPLIT states=    972  PREMATURE STALE
+    PREMATURE witness (7 steps): A:drain B(0) ; A:drain S(1) ; A:cons=1 ; D:read CA=1 ; D:read CB=0 ; D:read PA=0 ; D:read PB=0 -> DECLARE (0,)
+      (0.0s)
+CASCADE  EARLY  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=   1959  PREMATURE STALE
+      (0.0s)
+  one pass, cons first, PSO without the send release:
+SENDWRITE SEEDS  PSO SEP fr=counted   bnd=Q   scans=1 fences=pub send=prod-lane pub=ind-cons read=CSPLIT states=   4239  PREMATURE STALE
+    PREMATURE witness (20 steps): A:drain B(0) ; A:drain S(1) ; A:fire p: prod=1 ; A:send delta->B ; A~L[B<-A] ; B:drain A(1) ; B:write cB ; B~cB ; B:drain S(0) ; B:fire q1: write cB2 ; B~cB2 ; B:drain A(0) ; B:drain S(0) ; B:FENCE ; B:cons=1 ; B~CB ; D:read CA=0 ; D:read CB=1 ; D:read PA=0 ; D:read PB=0 -> DECLARE (0,)
+      (0.1s)

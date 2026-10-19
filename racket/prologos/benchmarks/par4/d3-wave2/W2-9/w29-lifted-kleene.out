@@ -1,0 +1,193 @@
+W2-9 lifted-Kleene probe | propagator.rkt at worktree HEAD | BSP = sequential executor; DRAIN = Gauss-Seidel (DIRECT K=1 stand-in)
+columns: K-depth = Kleene depth; final; for each run: seq= per-depth sequence equal to KLEENE? (=K) and to BSP's rounds? (=B); evals = original-fire evaluations; stored = (cell,depth) entries
+
+== F1 chain-6   Kleene depth 6, final c6=1
+   base  bsp fwd  final c6=1  rounds=6 rounds=K:#t  fires=11
+   base  drain fwd  final c6=1  final=K:#t  fires=11
+   base  bsp rev  final c6=1  rounds=6 rounds=K:#t  fires=11
+   base  drain rev  final c6=1  final=K:#t  fires=11
+   lift  deps=decl view=depth bsp fwd  final c6=1  =K:#t =B:#t  lifted-fires=11 evals=16 stored=13
+   lift  deps=decl view=depth drain fwd  final c6=1  =K:#t =B:#t  lifted-fires=11 evals=16 stored=13
+   lift  deps=decl view=depth bsp rev  final c6=1  =K:#t =B:#t  lifted-fires=11 evals=16 stored=13
+   lift  deps=decl view=depth drain rev  final c6=1  =K:#t =B:#t  lifted-fires=11 evals=21 stored=13
+   lift  deps=decl view=latest bsp fwd  final c6=1  =K:#t =B:#t  lifted-fires=11 evals=16 stored=13
+   lift  deps=decl view=latest drain fwd  final c6=1  =K:#t =B:#t  lifted-fires=11 evals=16 stored=13
+   lift  deps=decl view=latest bsp rev  final c6=1  =K:#t =B:#t  lifted-fires=11 evals=16 stored=13
+   lift  deps=decl view=latest drain rev  final c6=1  =K:#t =B:#t  lifted-fires=11 evals=21 stored=13
+   lift  deps=all view=depth bsp fwd  final c6=1  =K:#t =B:#t  lifted-fires=42 evals=168 stored=13
+   lift  deps=all view=depth drain fwd  final c6=1  =K:#t =B:#t  lifted-fires=42 evals=203 stored=13
+   lift  deps=all view=depth bsp rev  final c6=1  =K:#t =B:#t  lifted-fires=42 evals=168 stored=13
+   lift  deps=all view=depth drain rev  final c6=1  =K:#t =B:#t  lifted-fires=42 evals=238 stored=13
+   POWER broken lift (no upward closure)  =K:#t final=K:#t | off-by-one lift (writes depth d)  =K:#f final=K:#t
+
+== F2 fan-in-4   Kleene depth 1, final o=4
+   base  bsp fwd  final o=4  rounds=1 rounds=K:#t  fires=4
+   base  drain fwd  final o=4  final=K:#t  fires=4
+   base  bsp rev  final o=4  rounds=1 rounds=K:#t  fires=4
+   base  drain rev  final o=4  final=K:#t  fires=4
+   lift  deps=decl view=depth bsp fwd  final o=4  =K:#t =B:#t  lifted-fires=4 evals=4 stored=6
+   lift  deps=decl view=depth drain fwd  final o=4  =K:#t =B:#t  lifted-fires=4 evals=4 stored=6
+   lift  deps=decl view=depth bsp rev  final o=4  =K:#t =B:#t  lifted-fires=4 evals=4 stored=6
+   lift  deps=decl view=depth drain rev  final o=4  =K:#t =B:#t  lifted-fires=4 evals=4 stored=6
+   lift  deps=decl view=latest bsp fwd  final o=4  =K:#t =B:#t  lifted-fires=4 evals=4 stored=6
+   lift  deps=decl view=latest drain fwd  final o=4  =K:#t =B:#t  lifted-fires=4 evals=4 stored=6
+   lift  deps=decl view=latest bsp rev  final o=4  =K:#t =B:#t  lifted-fires=4 evals=4 stored=6
+   lift  deps=decl view=latest drain rev  final o=4  =K:#t =B:#t  lifted-fires=4 evals=4 stored=6
+   lift  deps=all view=depth bsp fwd  final o=4  =K:#t =B:#t  lifted-fires=8 evals=12 stored=6
+   lift  deps=all view=depth drain fwd  final o=4  =K:#t =B:#t  lifted-fires=8 evals=15 stored=6
+   lift  deps=all view=depth bsp rev  final o=4  =K:#t =B:#t  lifted-fires=8 evals=12 stored=6
+   lift  deps=all view=depth drain rev  final o=4  =K:#t =B:#t  lifted-fires=20 evals=39 stored=6
+   POWER broken lift (no upward closure)  =K:#t final=K:#t | off-by-one lift (writes depth d)  =K:#f final=K:#t
+
+== F3 X3-cycle   Kleene depth 4, final c0=(0 1 2) c3=(0 1 2)
+   base  bsp fwd  final c0=(0 1 2) c3=(0 1 2)  rounds=4 rounds=K:#t  fires=12
+   base  drain fwd  final c0=(0 1 2) c3=(0 1 2)  final=K:#t  fires=11
+   base  bsp rev  final c0=(0 1 2) c3=(0 1 2)  rounds=4 rounds=K:#t  fires=12
+   base  drain rev  final c0=(0 1 2) c3=(0 1 2)  final=K:#t  fires=9
+   lift  deps=decl view=depth bsp fwd  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=12 evals=24 stored=13
+   lift  deps=decl view=depth drain fwd  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=12 evals=27 stored=13
+   lift  deps=decl view=depth bsp rev  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=12 evals=24 stored=13
+   lift  deps=decl view=depth drain rev  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=12 evals=33 stored=13
+   lift  deps=decl view=latest bsp fwd  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=12 evals=24 stored=13
+   lift  deps=decl view=latest drain fwd  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=12 evals=27 stored=13
+   lift  deps=decl view=latest bsp rev  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=12 evals=24 stored=13
+   lift  deps=decl view=latest drain rev  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=12 evals=33 stored=13
+   lift  deps=all view=depth bsp fwd  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=20 evals=60 stored=13
+   lift  deps=all view=depth drain fwd  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=40 evals=169 stored=13
+   lift  deps=all view=depth bsp rev  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=20 evals=60 stored=13
+   lift  deps=all view=depth drain rev  final c0=(0 1 2) c3=(0 1 2)  =K:#t =B:#t  lifted-fires=40 evals=179 stored=13
+   POWER broken lift (no upward closure)  =K:#t final=K:#t | off-by-one lift (writes depth d)  =K:#f final=K:#t
+
+== F4 climb H=8   Kleene depth 8, final a=8 b=8
+   base  bsp fwd  final a=8 b=8  rounds=9 rounds=K:#t  fires=18
+   base  drain fwd  final a=8 b=8  final=K:#t  fires=11
+   base  bsp rev  final a=8 b=8  rounds=9 rounds=K:#t  fires=18
+   base  drain rev  final a=8 b=8  final=K:#t  fires=11
+   lift  deps=decl view=depth bsp fwd  final a=8 b=8  =K:#t =B:#t  lifted-fires=18 evals=90 stored=18
+   lift  deps=decl view=depth drain fwd  final a=8 b=8  =K:#t =B:#t  lifted-fires=18 evals=126 stored=18
+   lift  deps=decl view=depth bsp rev  final a=8 b=8  =K:#t =B:#t  lifted-fires=18 evals=90 stored=18
+   lift  deps=decl view=depth drain rev  final a=8 b=8  =K:#t =B:#t  lifted-fires=18 evals=126 stored=18
+   lift  deps=decl view=latest bsp fwd  final a=8 b=8  =K:#t =B:#t  lifted-fires=18 evals=90 stored=18
+   lift  deps=decl view=latest drain fwd  final a=8 b=8  =K:#t =B:#t  lifted-fires=18 evals=126 stored=18
+   lift  deps=decl view=latest bsp rev  final a=8 b=8  =K:#t =B:#t  lifted-fires=18 evals=90 stored=18
+   lift  deps=decl view=latest drain rev  final a=8 b=8  =K:#t =B:#t  lifted-fires=18 evals=126 stored=18
+   lift  deps=all view=depth bsp fwd  final a=8 b=8  =K:#t =B:#t  lifted-fires=18 evals=90 stored=18
+   lift  deps=all view=depth drain fwd  final a=8 b=8  =K:#t =B:#t  lifted-fires=34 evals=254 stored=18
+   lift  deps=all view=depth bsp rev  final a=8 b=8  =K:#t =B:#t  lifted-fires=18 evals=90 stored=18
+   lift  deps=all view=depth drain rev  final a=8 b=8  =K:#t =B:#t  lifted-fires=34 evals=254 stored=18
+   POWER broken lift (no upward closure)  =K:#t final=K:#t | off-by-one lift (writes depth d)  =K:#f final=K:#t
+
+== F4 climb H=16   Kleene depth 16, final a=16 b=16
+   base  bsp fwd  final a=16 b=16  rounds=17 rounds=K:#t  fires=34
+   base  drain fwd  final a=16 b=16  final=K:#t  fires=19
+   base  bsp rev  final a=16 b=16  rounds=17 rounds=K:#t  fires=34
+   base  drain rev  final a=16 b=16  final=K:#t  fires=19
+   lift  deps=decl view=depth bsp fwd  final a=16 b=16  =K:#t =B:#t  lifted-fires=34 evals=306 stored=34
+   lift  deps=decl view=depth drain fwd  final a=16 b=16  =K:#t =B:#t  lifted-fires=34 evals=442 stored=34
+   lift  deps=decl view=depth bsp rev  final a=16 b=16  =K:#t =B:#t  lifted-fires=34 evals=306 stored=34
+   lift  deps=decl view=depth drain rev  final a=16 b=16  =K:#t =B:#t  lifted-fires=34 evals=442 stored=34
+   lift  deps=decl view=latest bsp fwd  final a=16 b=16  =K:#t =B:#t  lifted-fires=34 evals=306 stored=34
+   lift  deps=decl view=latest drain fwd  final a=16 b=16  =K:#t =B:#t  lifted-fires=34 evals=442 stored=34
+   lift  deps=decl view=latest bsp rev  final a=16 b=16  =K:#t =B:#t  lifted-fires=34 evals=306 stored=34
+   lift  deps=decl view=latest drain rev  final a=16 b=16  =K:#t =B:#t  lifted-fires=34 evals=442 stored=34
+   lift  deps=all view=depth bsp fwd  final a=16 b=16  =K:#t =B:#t  lifted-fires=34 evals=306 stored=34
+   lift  deps=all view=depth drain fwd  final a=16 b=16  =K:#t =B:#t  lifted-fires=66 evals=922 stored=34
+   lift  deps=all view=depth bsp rev  final a=16 b=16  =K:#t =B:#t  lifted-fires=34 evals=306 stored=34
+   lift  deps=all view=depth drain rev  final a=16 b=16  =K:#t =B:#t  lifted-fires=66 evals=922 stored=34
+   POWER broken lift (no upward closure)  =K:#t final=K:#t | off-by-one lift (writes depth d)  =K:#f final=K:#t
+
+== F4 climb H=32   Kleene depth 32, final a=32 b=32
+   base  bsp fwd  final a=32 b=32  rounds=33 rounds=K:#t  fires=66
+   base  drain fwd  final a=32 b=32  final=K:#t  fires=35
+   base  bsp rev  final a=32 b=32  rounds=33 rounds=K:#t  fires=66
+   base  drain rev  final a=32 b=32  final=K:#t  fires=35
+   lift  deps=decl view=depth bsp fwd  final a=32 b=32  =K:#t =B:#t  lifted-fires=66 evals=1122 stored=66
+   lift  deps=decl view=depth drain fwd  final a=32 b=32  =K:#t =B:#t  lifted-fires=66 evals=1650 stored=66
+   lift  deps=decl view=depth bsp rev  final a=32 b=32  =K:#t =B:#t  lifted-fires=66 evals=1122 stored=66
+   lift  deps=decl view=depth drain rev  final a=32 b=32  =K:#t =B:#t  lifted-fires=66 evals=1650 stored=66
+   lift  deps=decl view=latest bsp fwd  final a=32 b=32  =K:#t =B:#t  lifted-fires=66 evals=1122 stored=66
+   lift  deps=decl view=latest drain fwd  final a=32 b=32  =K:#t =B:#t  lifted-fires=66 evals=1650 stored=66
+   lift  deps=decl view=latest bsp rev  final a=32 b=32  =K:#t =B:#t  lifted-fires=66 evals=1122 stored=66
+   lift  deps=decl view=latest drain rev  final a=32 b=32  =K:#t =B:#t  lifted-fires=66 evals=1650 stored=66
+   lift  deps=all view=depth bsp fwd  final a=32 b=32  =K:#t =B:#t  lifted-fires=66 evals=1122 stored=66
+   lift  deps=all view=depth drain fwd  final a=32 b=32  =K:#t =B:#t  lifted-fires=130 evals=3506 stored=66
+   lift  deps=all view=depth bsp rev  final a=32 b=32  =K:#t =B:#t  lifted-fires=66 evals=1122 stored=66
+   lift  deps=all view=depth drain rev  final a=32 b=32  =K:#t =B:#t  lifted-fires=130 evals=3506 stored=66
+   POWER broken lift (no upward closure)  =K:#t final=K:#t | off-by-one lift (writes depth d)  =K:#f final=K:#t
+
+== F6 diamond   Kleene depth 2, final d=5
+   base  bsp fwd  final d=5  rounds=2 rounds=K:#t  fires=4
+   base  drain fwd  final d=5  final=K:#t  fires=5
+   base  bsp rev  final d=5  rounds=2 rounds=K:#t  fires=4
+   base  drain rev  final d=5  final=K:#t  fires=5
+   lift  deps=decl view=depth bsp fwd  final d=5  =K:#t =B:#t  lifted-fires=4 evals=5 stored=7
+   lift  deps=decl view=depth drain fwd  final d=5  =K:#t =B:#t  lifted-fires=5 evals=7 stored=7
+   lift  deps=decl view=depth bsp rev  final d=5  =K:#t =B:#t  lifted-fires=4 evals=5 stored=7
+   lift  deps=decl view=depth drain rev  final d=5  =K:#t =B:#t  lifted-fires=5 evals=8 stored=7
+   lift  deps=decl view=latest bsp fwd  final d=5  =K:#t =B:#t  lifted-fires=4 evals=5 stored=7
+   lift  deps=decl view=latest drain fwd  final d=5  =K:#t =B:#t  lifted-fires=5 evals=7 stored=7
+   lift  deps=decl view=latest bsp rev  final d=5  =K:#t =B:#t  lifted-fires=4 evals=5 stored=7
+   lift  deps=decl view=latest drain rev  final d=5  =K:#t =B:#t  lifted-fires=5 evals=8 stored=7
+   lift  deps=all view=depth bsp fwd  final d=5  =K:#t =B:#t  lifted-fires=9 evals=18 stored=7
+   lift  deps=all view=depth drain fwd  final d=5  =K:#t =B:#t  lifted-fires=15 evals=40 stored=7
+   lift  deps=all view=depth bsp rev  final d=5  =K:#t =B:#t  lifted-fires=9 evals=18 stored=7
+   lift  deps=all view=depth drain rev  final d=5  =K:#t =B:#t  lifted-fires=12 evals=29 stored=7
+   POWER broken lift (no upward closure)  =K:#t final=K:#t | off-by-one lift (writes depth d)  =K:#f final=K:#t
+
+== F5 E1-undeclared-read   Kleene depth 2, final o=5
+   base  bsp fwd  final o=1  rounds=1 rounds=K:#f  fires=2
+   base  drain fwd  final o=1  final=K:#f  fires=2
+   base  bsp rev  final o=1  rounds=1 rounds=K:#f  fires=2
+   base  drain rev  final o=5  final=K:#t  fires=2
+   lift  deps=decl view=depth bsp fwd  final o=1  =K:#f =B:#t  lifted-fires=2 evals=2 stored=6
+   lift  deps=decl view=depth drain fwd  final o=1  =K:#f =B:#t  lifted-fires=2 evals=2 stored=6
+   lift  deps=decl view=depth bsp rev  final o=1  =K:#f =B:#t  lifted-fires=2 evals=2 stored=6
+   lift  deps=decl view=depth drain rev  final o=1  =K:#f =B:#t  lifted-fires=2 evals=2 stored=6
+   lift  deps=decl view=latest bsp fwd  final o=1  =K:#f =B:#t  lifted-fires=2 evals=2 stored=6
+   lift  deps=decl view=latest drain fwd  final o=1  =K:#f =B:#t  lifted-fires=2 evals=2 stored=6
+   lift  deps=decl view=latest bsp rev  final o=1  =K:#f =B:#t  lifted-fires=2 evals=2 stored=6
+   lift  deps=decl view=latest drain rev  final o=5  =K:#f =B:#f  lifted-fires=2 evals=2 stored=6
+   lift  deps=all view=depth bsp fwd  final o=5  =K:#t =B:#f  lifted-fires=6 evals=12 stored=7
+   lift  deps=all view=depth drain fwd  final o=5  =K:#t =B:#f  lifted-fires=8 evals=19 stored=7
+   lift  deps=all view=depth bsp rev  final o=5  =K:#t =B:#f  lifted-fires=6 evals=12 stored=7
+   lift  deps=all view=depth drain rev  final o=5  =K:#t =B:#f  lifted-fires=8 evals=20 stored=7
+   POWER broken lift (no upward closure)  =K:#f final=K:#f | off-by-one lift (writes depth d)  =K:#f final=K:#f
+
+== F5b E1, undeclared cell changes at the same depth   Kleene depth 2, final o=5
+   base  bsp fwd  final o=5  rounds=2 rounds=K:#t  fires=4
+   base  drain fwd  final o=5  final=K:#t  fires=4
+   base  bsp rev  final o=5  rounds=2 rounds=K:#t  fires=4
+   base  drain rev  final o=1  final=K:#f  fires=4
+   lift  deps=decl view=depth bsp fwd  final o=5  =K:#t =B:#t  lifted-fires=4 evals=5 stored=8
+   lift  deps=decl view=depth drain fwd  final o=5  =K:#t =B:#t  lifted-fires=4 evals=5 stored=8
+   lift  deps=decl view=depth bsp rev  final o=5  =K:#t =B:#t  lifted-fires=4 evals=5 stored=8
+   lift  deps=decl view=depth drain rev  final o=1  =K:#f =B:#f  lifted-fires=4 evals=6 stored=8
+   lift  deps=decl view=latest bsp fwd  final o=5  =K:#f =B:#f  lifted-fires=4 evals=5 stored=8
+   lift  deps=decl view=latest drain fwd  final o=5  =K:#f =B:#f  lifted-fires=4 evals=5 stored=8
+   lift  deps=decl view=latest bsp rev  final o=5  =K:#f =B:#f  lifted-fires=4 evals=5 stored=8
+   lift  deps=decl view=latest drain rev  final o=1  =K:#f =B:#f  lifted-fires=4 evals=6 stored=8
+   lift  deps=all view=depth bsp fwd  final o=5  =K:#t =B:#t  lifted-fires=9 evals=18 stored=8
+   lift  deps=all view=depth drain fwd  final o=5  =K:#t =B:#t  lifted-fires=12 evals=32 stored=8
+   lift  deps=all view=depth bsp rev  final o=5  =K:#t =B:#t  lifted-fires=9 evals=18 stored=8
+   lift  deps=all view=depth drain rev  final o=5  =K:#t =B:#t  lifted-fires=15 evals=41 stored=8
+   POWER broken lift (no upward closure)  =K:#t final=K:#t | off-by-one lift (writes depth d)  =K:#f final=K:#t
+
+== F7 non-join cell, two same-depth writers (Kleene n/a)   Kleene depth 1, final f=b
+   base  bsp fwd  final f=a  rounds=1 rounds=K:#f  fires=2
+   base  drain fwd  final f=a  final=K:#f  fires=2
+   base  bsp rev  final f=b  rounds=1 rounds=K:#t  fires=2
+   base  drain rev  final f=b  final=K:#t  fires=2
+   lift  deps=decl view=depth bsp fwd  final f=a  =K:#f =B:#f  lifted-fires=2 evals=2 stored=4
+   lift  deps=decl view=depth drain fwd  final f=a  =K:#f =B:#f  lifted-fires=2 evals=2 stored=4
+   lift  deps=decl view=depth bsp rev  final f=b  =K:#t =B:#t  lifted-fires=2 evals=2 stored=4
+   lift  deps=decl view=depth drain rev  final f=b  =K:#t =B:#t  lifted-fires=2 evals=2 stored=4
+   lift  deps=decl view=latest bsp fwd  final f=a  =K:#f =B:#f  lifted-fires=2 evals=2 stored=4
+   lift  deps=decl view=latest drain fwd  final f=a  =K:#f =B:#f  lifted-fires=2 evals=2 stored=4
+   lift  deps=decl view=latest bsp rev  final f=b  =K:#t =B:#t  lifted-fires=2 evals=2 stored=4
+   lift  deps=decl view=latest drain rev  final f=b  =K:#t =B:#t  lifted-fires=2 evals=2 stored=4
+   lift  deps=all view=depth bsp fwd  final f=b  =K:#t =B:#t  lifted-fires=1000000 evals=1999998 stored=4
+   lift  deps=all view=depth drain fwd  final f=b  =K:#t =B:#t  lifted-fires=1000000 evals=1999999 stored=4
+   lift  deps=all view=depth bsp rev  final f=a  =K:#f =B:#f  lifted-fires=1000000 evals=1999998 stored=4
+   lift  deps=all view=depth drain rev  final f=a  =K:#f =B:#f  lifted-fires=1000000 evals=1999999 stored=4
+   POWER broken lift (no upward closure)  =K:#f final=K:#f | off-by-one lift (writes depth d)  =K:#f final=K:#f
+

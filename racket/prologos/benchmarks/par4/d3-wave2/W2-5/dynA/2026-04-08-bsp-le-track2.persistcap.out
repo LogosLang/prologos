@@ -1,0 +1,113 @@
+RESULT 0.0: color : _ defined.
+RESULT 0.1: @[{:hue "red"}] : [PVec {:hue String}]
+RESULT 0.2: @[{:item "banana"}] : [PVec {:item String}]
+RESULT 0.3: @[{:item "apple", :hue "red"} {:item "banana", :hue "yellow"} {:item "grape", :hue "purple"} {:item "lime", :hue "green"}] : [PVec {:hue String :item String}]
+RESULT 0.4: double : _ defined.
+RESULT 0.5: @[{:result 42}] : [PVec {:result Int}]
+RESULT 0.6: sign : _ defined.
+RESULT 0.7: @[{:label "positive"}] : [PVec {:label String}]
+RESULT 0.8: @[{:label "zero"}] : [PVec {:label String}]
+RESULT 0.9: edge : _ defined.
+RESULT 0.10: path : _ defined.
+RESULT 0.11: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+RESULT 0.12: @[{:src "d"} {:src "a"} {:src "b"} {:src "c"}] : [PVec {:src String}]
+RESULT 0.13: @[{:x 42}] : _
+RESULT 0.14: @[] : _
+RESULT 0.15: @[{:x 99}] : _
+RESULT 0.16: @[{:x 30}] : _
+RESULT 0.17: @[{:a 9, :b 16, :sum 25}] : [PVec {:a Int :b Int :sum Int}]
+RESULT 0.18: blocked : _ defined.
+RESULT 0.19: reachable : _ defined.
+RESULT 0.20: @[{:dest "b"}] : [PVec {:dest String}]
+RESULT 0.21: @[{:x 10, :y 20, :sum 30}] : [PVec {:sum Int :x Int :y Int}]
+RESULT 0.22: compute : _ defined.
+RESULT 0.23: @[{:sum 8, :prod 15}] : [PVec {:prod Int :sum Int}]
+RESULT 0.24: {:item "apple", :hue "red"} : {:hue String :item String}
+RESULT 0.25: @[{:v1 1}] : _
+RESULT 0.26: @[{:v2 2}] : _
+RESULT 0.27: @[{:v3 3}] : _
+RESULT 0.28: @[{:v4 4}] : _
+RESULT 0.29: @[{:v5 5}] : _
+RESULT 0.30: @[{:v6 6}] : _
+RESULT 0.31: @[{:v7 7}] : _
+RESULT 0.32: @[{:v8 8}] : _
+RESULT 0.33: @[{:v9 9}] : _
+RESULT 0.34: @[{:v10 10}] : _
+STATS leg=persistcap files=1 params=219 rounds=27 wide-rounds(>=8)=0 fires=27 reentrant=0 ms=1344.0
+PARAM current-attribute-map-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 49) executor=#f
+PARAM current-bundle-registry stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((BoundedLattice . #(struct:bundle-entry BoundedLattice (A) ((L… executor=#hasheq()
+PARAM current-bundle-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 32) executor=#f
+PARAM current-capability-constraint-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 24) executor=#f
+PARAM current-capability-registry stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((AppendCap . #(struct:capability-meta prologos::core::capabili… executor=#hasheq()
+PARAM current-capability-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 25) executor=#f
+PARAM current-capability-warnings-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 46) executor=#f
+PARAM current-coercion-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 24) executor=#f
+PARAM current-coercion-warnings-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 44) executor=#f
+PARAM current-command-atms stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#&#(struct:solver-state #(struct:solver-context #(struct:cell-id 20) #… executor=#f
+PARAM current-constraint-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 20) executor=#f
+PARAM current-constraint-status-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 28) executor=#f
+PARAM current-context-assumptions stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#&() executor=#f
+PARAM current-ctor-registry stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((check-failed . #(struct:ctor-meta Reason () (String) (#f) 1))… executor=#hasheq((false . #(struct:ctor-meta Bool () () () 1)) (suc . #(struct:…
+PARAM current-ctor-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 21) executor=#f
+PARAM current-defn-param-names stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((* . (A $Mul-A x y)) (+ . (A $Add-A x y)) (- . (A $Sub-A x y))… executor=#hasheq()
+PARAM current-deprecation-warnings-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 45) executor=#f
+PARAM current-error-descriptor-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 30) executor=#f
+PARAM current-file-module-network-ref stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:module-network-ref #(struct:prop-network #(struct:prop-net-ho… executor=#(struct:module-network-ref #(struct:prop-network #(struct:prop-net-ho…
+PARAM current-form-cell-map stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((0 . #(struct:cell-id 37)) (39 . #(struct:cell-id 38)) (45 . #… executor=#hasheq()
+PARAM current-functor-store stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((AppResult . #(struct:functor-entry AppResult ((A Type 0)) (Ei… executor=#hasheq()
+PARAM current-functor-store-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 27) executor=#f
+PARAM current-hasmethod-cell-map-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 29) executor=#f
+PARAM current-hasmethod-constraint-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 23) executor=#f
+PARAM current-hasmethod-wakeup-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 27) executor=#f
+PARAM current-impl-registry stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((Bool--Eq . #(struct:impl-entry Eq (Bool) Bool--Eq--dict)) (Bo… executor=#hasheq()
+PARAM current-impl-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 30) executor=#f
+PARAM current-level-meta-universe-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 34) executor=#f
+PARAM current-macro-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 43) executor=#f
+PARAM current-module-registry stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((prologos::core . #(struct:module-info prologos::core (id cons… executor=#hasheq()
+PARAM current-module-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 37) executor=#f
+PARAM current-mult-meta-universe-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 33) executor=#f
+PARAM current-narrow-constraints-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 47) executor=#f
+PARAM current-narrow-var-constraints-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 48) executor=#f
+PARAM current-ns-context stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:ns-context examples::bsp-le-track2 #hasheq((char . prologos::… executor=#f
+PARAM current-ns-context-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 38) executor=#f
+PARAM current-param-impl-registry stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((HasTop . (#(struct:param-impl-entry HasTop ((FlatVal A)) (A) … executor=#hasheq()
+PARAM current-param-impl-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 31) executor=#f
+PARAM current-persistent-registry-net-box stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#&#(struct:prop-network #(struct:prop-net-hot ()) #(struct:prop-net-wa… executor=#f
+PARAM current-preparse-registry stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq(($compose . expand-compose-sexp) ($list-literal . expand-list-… executor=#hasheq(($compose . expand-compose-sexp) ($list-literal . expand-list-…
+PARAM current-preparse-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 36) executor=#f
+PARAM current-process-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 40) executor=#f
+PARAM current-prop-meta-info-box stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#&#(struct:champ-root #(struct:champ-node 0 0 #() #f) 0) executor=#f
+PARAM current-propagated-specs stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#<seteq: compare take-while PVec--Buildable--dict all? interval-inters… executor=#<seteq:>
+PARAM current-propagated-specs-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 38) executor=#f
+PARAM current-property-store stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((commutative-add-laws . #(struct:property-entry commutative-ad… executor=#hasheq()
+PARAM current-property-store-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 26) executor=#f
+PARAM current-relation-store stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((color . #(struct:relation-info color 2 (#(struct:variant-info… executor=#hasheq()
+PARAM current-relation-store-version stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=1 executor=0
+PARAM current-schema-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 20) executor=#f
+PARAM current-selection-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 34) executor=#f
+PARAM current-session-meta-universe-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 35) executor=#f
+PARAM current-session-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 35) executor=#f
+PARAM current-spec-store stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((* . #(struct:spec-entry (((Mul A) -> A A -> A)) #f #f #(struc… executor=#hasheq()
+PARAM current-spec-store-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 37) executor=#f
+PARAM current-specialization-registry stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hash(((new-lattice-cell . Interval) . #(struct:specialization-entry n… executor=#hash()
+PARAM current-specialization-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 33) executor=#f
+PARAM current-speculation-failures stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#&() executor=#f
+PARAM current-strategy-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 39) executor=#f
+PARAM current-subtype-registry stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hash(((prologos::core::capabilities::StatCap . IOCap) . #t) ((StdioCa… executor=#hash(((NonZeroRat . Rat) . #t) ((PosRat . NonZeroRat) . #t) ((NegInt …
+PARAM current-subtype-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 23) executor=#f
+PARAM current-trait-cell-map-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 22) executor=#f
+PARAM current-trait-constraint-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 21) executor=#f
+PARAM current-trait-laws stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((Abs . ((- :name "non-negative" (:forall ($brace-params x : A)… executor=#hasheq()
+PARAM current-trait-laws-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 29) executor=#f
+PARAM current-trait-registry stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((Abs . #(struct:trait-meta Abs ((A Type 0)) (#(struct:trait-me… executor=#hasheq()
+PARAM current-trait-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 28) executor=#f
+PARAM current-trait-wakeup-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 26) executor=#f
+PARAM current-tycon-arity-extension stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((Abs . 1) (Add . 1) (AdditiveIdentity . 1) (Buildable . 1) (Di… executor=#hasheq()
+PARAM current-type-meta stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#hasheq((Bool . (true false)) (Datum . (datum-sym datum-kw datum-nat d… executor=#hasheq((Bool . (true false)) (Nat . (zero suc)) (Unit . (unit)))
+PARAM current-type-meta-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 22) executor=#f
+PARAM current-type-meta-universe-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 32) executor=#f
+PARAM current-unsolved-metas-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 31) executor=#f
+PARAM current-user-operators-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 42) executor=#f
+PARAM current-user-precedence-groups-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 41) executor=#f
+PARAM current-wakeup-registry-cell-id stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:cell-id 25) executor=#f
+PARAM current-worldview-hasse-registry-handle stale-eq=27 stale-equal=27 assigned-in-fire=0 submitter=#(struct:hasse-registry-handle #(struct:cell-id 36) worldview #<proced… executor=#f

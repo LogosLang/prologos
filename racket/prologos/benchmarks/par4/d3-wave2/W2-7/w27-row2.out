@@ -1,0 +1,15 @@
+0: atms-s : Solver defined.
+1: dfs-s : Solver defined.
+2: pick : _ defined.
+3: @[{:x 1, :y 1}] : [PVec {:x Int :y Int}]
+4: @[{:x 1, :y 1} {:x 2, :y 2}] : [PVec {:x Int :y Int}]
+5: @[{:x 1} {:x 2} {:x 1}] : [PVec {:x Int}]
+6: @[{:x 1}] : [PVec {:x Int}]
+7: @[{:x 1, :y 2}] : [PVec {:x Int :y Int}]
+8: @[{:x 2, :y 2}] : [PVec {:x Int :y Int}]
+9: @[{:x 2, :y 2}] : [PVec {:x Int :y Int}]
+10: @[{:x 2, :y 2}] : [PVec {:x Int :y Int}]
+11: @[{:x 1, :y 1}] : [PVec {:x Int :y Int}]
+12: @[{:x 1, :y 1}] : [PVec {:x Int :y Int}]
+
+--- 0 errors ---

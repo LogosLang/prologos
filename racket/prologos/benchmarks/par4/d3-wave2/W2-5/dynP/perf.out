@@ -1,0 +1,8 @@
+constraints-adversarial seq #1: PERF cell_allocs=10725 
+constraints-adversarial prod #1: PERF cell_allocs=10725 
+constraints-adversarial seq #2: PERF cell_allocs=10725 
+constraints-adversarial prod #2: PERF cell_allocs=10725 
+type-adversarial seq #1: PERF cell_allocs=10757 
+type-adversarial prod #1: PERF cell_allocs=10757 
+type-adversarial seq #2: PERF cell_allocs=10757 
+type-adversarial prod #2: PERF cell_allocs=10757 

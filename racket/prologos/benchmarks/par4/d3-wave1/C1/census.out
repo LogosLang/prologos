@@ -1,0 +1,57 @@
+HEAD: ae27532f; production .rkt diff vs c1f389ab:
+  (none outside benchmarks)
+
+== 1. production expressions that READ current-source-loc (D.2 §6.5 says 13) ==
+./driver.rkt:681:  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))]
+./propagator.rkt:2289:                            #:srcloc [srcloc (current-source-loc)])
+./propagator.rkt:2372:                                      #:srcloc [srcloc (current-source-loc)])
+./propagator.rkt:2460:                                      #:srcloc [srcloc (current-source-loc)])
+./elaborator.rkt:1149:  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))])
+count:        5
+-- of which inside a parameterize form (elaboration-entry fallback, outside any fire):
+./driver.rkt:681:  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))]
+./elaborator.rkt:1149:  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))])
+-- power: the same pipeline finds a known reader and skips a comment
+./p.rkt:1:x (current-source-loc) y
+-- the data-path precedent: a reader of the propagator record's srcloc
+./propagator.rkt:378:  (parameterize ([current-source-loc (propagator-srcloc prop)])
+./error-explanation.rkt:135:  (define srcloc (propagator-srcloc prop))
+
+== 2. fire-once is implemented by the scheduler ==
+2373:  ;; Flags: scheduler implements fire-once. No closure wrapper.
+1827:(define (net-remove-propagator-from-dependents net pid cid)
+3450:     (let ([fired-set (make-hasheq)])
+3473:                     [pids (filter (lambda (pid) (not (hash-has-key? fired-set pid)))
+3538:                           (hash-set! fired-set pid #t)
+3542:                             (net-remove-propagator-from-dependents net pid cid))]
+fire-once install sites (production):       30
+
+== 3. propagator struct fields (a flags word exists) ==
+368:(struct propagator (inputs outputs fire-fn broadcast-profile flags srcloc) #:transparent)
+361:(define PROP-FIRE-ONCE 1)
+362:(define PROP-EMPTY-INPUTS 2)
+
+== 4. merges minted per cell at runtime ==
+1814:             [domain-merge (if (eq? old-merge 'none) (lambda (o n) n) old-merge)]
+1815:             [new-merge (make-tagged-merge domain-merge)]
+promote-cell-to-tagged production call sites:        6
+55:(define scaffolding-merge-fn-registry (make-hasheq))
+
+== 5. SRE property lattice and the existing capability gating (fail-closed) ==
+(define prop-unknown 'prop-unknown)   ;; ⊥
+(define prop-confirmed 'prop-confirmed)  ;; #t
+(define prop-refuted 'prop-refuted)    ;; #f
+(define prop-contradicted 'prop-contradicted)  ;; ⊤
+263:;; Returns #t only for prop-confirmed. Everything else → #f (capability gating).
+
+== 6. P0 detect.rkt: the measured detector uses a reset flag and counts cons after processing ==
+               (define n (drain! s i fan seed (λ (_) (cset! s i 0 (fx+ (cref s i 0) 1)))))
+               (cond
+                 [(fx> n 0)
+                  (cset! s i 2 0)
+                  (cset! s i 1 (fx+ (cref s i 1) n))
+                  (memory-order-release)
+                  (fxvector-set! consumed (* i PAD) (fx+ (fxvector-ref consumed (* i PAD)) n))
+                  (loop)]
+                 [else (cset! s i 2 1) (memory-order-release)
+                       (unless (unbox done) (loop))]))]

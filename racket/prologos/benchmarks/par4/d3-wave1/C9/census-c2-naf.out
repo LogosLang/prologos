@@ -1,0 +1,4 @@
+C9-CENSUS file=/Users/avanti/.hermes/profiles/logos-language-designer/cache/scratch/d3/C9/c2-naf.prologos rounds=9 fires=34 productive_fires=19 writes=19 distinct_cells_written=4
+  top cell #(struct:cell-id 26): 8 writes (42.1 % of writes), 8 productive (round,propagator) writer pairs (42.1 % of productive fires); attribute-map cell? #f
+  next cells: ((#(struct:cell-id 26) . 8) (#(struct:cell-id 28) . 5) (#(struct:cell-id 31) . 4) (#(struct:cell-id 33) . 2))
+  nested S0: rounds observed with >=2 run-to-quiescence-bsp frames on the stack = 0 of 9 (max depth 1); forks = 6

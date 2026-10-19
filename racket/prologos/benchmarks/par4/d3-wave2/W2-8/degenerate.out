@@ -1,0 +1,6 @@
+grid12: rounds 1 widths (3168) fires 3168 productive 0 cells-changed-by-S0 1 contradiction #f
+gc500: rounds 1 widths (3000) fires 3000 productive 0 cells-changed-by-S0 1 contradiction #f
+wave1000: rounds 999 widths (999 1 1 1 1 1) fires 1997 productive 999 cells-changed-by-S0 1000 contradiction #f
+grid12i: rounds 2 widths (3168 2904) fires 6072 productive 132 cells-changed-by-S0 133 contradiction #f
+gc500i: rounds 2 widths (3000 58) fires 3058 productive 7 cells-changed-by-S0 8 contradiction #f
+grid20i: rounds 2 widths (15200 14440) fires 29640 productive 380 cells-changed-by-S0 381 contradiction #f

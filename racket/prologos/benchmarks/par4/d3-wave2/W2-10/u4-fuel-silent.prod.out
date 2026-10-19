@@ -1,0 +1,13 @@
+0: atms-s : Solver defined.
+1: atms-t0 : Solver defined.
+2: pick : _ defined.
+3: q1 : _ defined.
+4: q2 : _ defined.
+5: q3 : _ defined.
+6: @[{:x 3} {:x 2} {:x 1}] : [PVec {:x Int}]
+7: @[{:x 3} {:x 2} {:x 1}] : [PVec {:x Int}]
+8: @[{:x 3} {:x 2} {:x 1}] : [PVec {:x Int}]
+9: @[{:x 3} {:x 2} {:x 1}] : [PVec {:x Int}]
+10: @[{:x 3} {:x 2} {:x 1}] : [PVec {:x Int}]
+11: @[{:x 3} {:x 2} {:x 1}] : [PVec {:x Int}]
+-- leg prod: 12 results, 164.0 ms | observer: 15 BSP rounds in 12 runs, 28 diffs, 3 runs ending contradicted

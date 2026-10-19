@@ -1,0 +1,24 @@
+SKIP atms-adversarial.prologos no output (exit or timeout)
+bool-logic.prologos                      writes=   22 attr-map=   22 (100.0%) attr-map cells in largest net=2 cells=88 props=50 hubs=[[79, 100]] rr_foreign_write=0.0
+church-folds.prologos                    writes=    0 attr-map=    0 (  0.0%) attr-map cells in largest net=0 cells=None props=None hubs=None rr_foreign_write=None
+constraints-adversarial.prologos         writes=  280 attr-map=  222 ( 79.3%) attr-map cells in largest net=2 cells=141 props=657 hubs=[[79, 1247], [10, 62], [139, 4], [131, 3], [132, 3], [133, 3], [134, 3], [137, 3], [140, 3], [98, 3]] rr_foreign_write=0.112
+dependent-types.prologos                 writes=    0 attr-map=    0 (  0.0%) attr-map cells in largest net=0 cells=None props=None hubs=None rr_foreign_write=None
+higher-order.prologos                    writes=    0 attr-map=    0 (  0.0%) attr-map cells in largest net=0 cells=None props=None hubs=None rr_foreign_write=None
+implicit-args.prologos                   writes=   37 attr-map=   27 ( 73.0%) attr-map cells in largest net=2 cells=85 props=70 hubs=[[79, 130], [10, 10], [83, 3], [84, 3], [82, 2], [80, 1], [81, 1]] rr_foreign_write=0.16
+nat-arithmetic.prologos                  writes=   15 attr-map=   15 (100.0%) attr-map cells in largest net=2 cells=83 props=24 hubs=[[79, 48]] rr_foreign_write=0.0
+pairs-sigma.prologos                     writes=    0 attr-map=    0 (  0.0%) attr-map cells in largest net=0 cells=None props=None hubs=None rr_foreign_write=None
+SKIP parity-adversarial.prologos no output (exit or timeout)
+pattern-matching.prologos                writes=    0 attr-map=    0 (  0.0%) attr-map cells in largest net=0 cells=None props=None hubs=None rr_foreign_write=None
+records-seal-validate.prologos           writes=    8 attr-map=    8 (100.0%) attr-map cells in largest net=2 cells=99 props=41 hubs=[[79, 80], [10, 1], [83, 1]] rr_foreign_write=0.019
+records-typing.prologos                  writes=    0 attr-map=    0 (  0.0%) attr-map cells in largest net=2 cells=105 props=10 hubs=[[79, 20]] rr_foreign_write=0.0
+recursive-types.prologos                 writes=    0 attr-map=    0 (  0.0%) attr-map cells in largest net=0 cells=None props=None hubs=None rr_foreign_write=None
+scheduler-adversarial.prologos           writes=   20 attr-map=   16 ( 80.0%) attr-map cells in largest net=2 cells=83 props=35 hubs=[[79, 65], [80, 4], [10, 4]] rr_foreign_write=0.131
+simple-typed.prologos                    writes=    2 attr-map=    2 (100.0%) attr-map cells in largest net=2 cells=81 props=4 hubs=[[79, 8]] rr_foreign_write=0.0
+solve-adversarial.prologos               writes=    0 attr-map=    0 (  0.0%) attr-map cells in largest net=2 cells=167 props=77 hubs=[[79, 154]] rr_foreign_write=0.0
+solve-scale.prologos                     writes=    0 attr-map=    0 (  0.0%) attr-map cells in largest net=2 cells=89 props=6 hubs=[[79, 12]] rr_foreign_write=0.0
+type-adversarial.prologos                writes=  267 attr-map=  200 ( 74.9%) attr-map cells in largest net=2 cells=145 props=660 hubs=[[79, 1237], [10, 71], [100, 10], [97, 5], [98, 4], [138, 4], [143, 4], [144, 4], [86, 4], [99, 3]] rr_foreign_write=0.099
+TOTAL writes 651
+  attribute-map-merge-fn             512  78.6%
+  meta-solution-merge                101  15.5%
+  merge-set-union                     19   2.9%
+  resolution-stratum-merge            19   2.9%

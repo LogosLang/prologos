@@ -1,0 +1,723 @@
+[
+ {
+  "id": "C1-1",
+  "sev": "blocker",
+  "sec": "D.2 \u00a76.3 (E and the fence), \u00a79 merge-props, D2L-4",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C1-2",
+  "sev": "major",
+  "sec": "D.2 \u00a75 (layering, design sentence), \u00a76.3 (the fence), \u00a76.6 (replay monitor), \u00a710.2 S-9",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C1-3",
+  "sev": "major",
+  "sec": "D.2 \u00a76.6 (fire-once self-clear, D2R-3), \u00a76.4",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C1-4",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 (detection), \u00a79 (idle-epoch, quiescence-detector), \u00a70 row 12; contests D2M-3",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C1-5",
+  "sev": "major",
+  "sec": "D.2 \u00a79 Observations 1\u20132, \u00a70 row 12, \u00a712.1",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C1-6",
+  "sev": "major",
+  "sec": "D.2 \u00a74 (P1b row), \u00a75 (layering), \u00a76.4, \u00a79 (:requires), \u00a714 (P1b row)",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C1-7",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 (owned records), \u00a76.6, \u00a75, \u00a76.8 / \u00a70 row 6 (H-F deferred), \u00a712.3",
+  "cls": "PRECEDENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C1-8",
+  "sev": "major",
+  "sec": "D.2 \u00a75 (Kleene / reference dynamics), \u00a77 (round records), \u00a710.1 RM-2, \u00a716 R-6",
+  "cls": "THEOREM",
+  "conf": "medium"
+ },
+ {
+  "id": "C1-9",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.5 (fire context), \u00a712.2 P2 row, \u00a713, \u00a712.3 (Data Orientation)",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C1-10",
+  "sev": "minor",
+  "sec": "D.2 \u00a715 O-11",
+  "cls": "PRECEDENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C2-1",
+  "sev": "major",
+  "sec": "D.2 \u00a76.6 (BSP inner loop today; P2 gate), \u00a76.1, \u00a712.2 P6, \u00a716 R-2, \u00a72 item 2",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C2-2",
+  "sev": "major",
+  "sec": "D.2 \u00a76.6 ('The Tier-1 flush (:3431-3446) is already DIRECT at K = 1 and stays as it is'), \u00a76.1 (158), D2R-4",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C2-3",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 (Ownership 'Measured adequate: \u2264 10 % foreign writes'), \u00a76.3 row 8 and the fence, \u00a713 row 1, \u00a72 item 3",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C2-4",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 row 1 (worldview, cell-1), D2L-1, \u00a76.5",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C2-5",
+  "sev": "major",
+  "sec": "D.2 \u00a76.5 (fire context), \u00a712.2 P2 row",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C2-6",
+  "sev": "major",
+  "sec": "D.2 \u00a76.1 (158), \u00a76.5 (current-bsp-fire-round?), \u00a710.2 S-4",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C2-7",
+  "sev": "major",
+  "sec": "D.2 \u00a712.2 P6 row, \u00a712.1 last row, \u00a77 (observation), \u00a714 P6 'grep: zero references'",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C2-8",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.1 (157(a))",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C2-9",
+  "sev": "major",
+  "sec": "D.2 \u00a76.6 (fuel row), \u00a78, \u00a710.2 S-6",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C2-10",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.6 (fire-once self-clear), \u00a76.4 (D2P-3), \u00a79 Observation 1",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C2-11",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.6, \u00a76.7, \u00a76.3 rows 3, 4, 7, 8, \u00a712.2",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C2-12",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.3 (the nine S0 non-join cells)",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C2-13",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.1 (DEFERRED 150), \u00a76.2 ('The merge-order census (O-9) stays as the standing co-inductive monitor')",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C3-1",
+  "sev": "major",
+  "sec": "D.2 \u00a75 design sentence; \u00a76.7 Ownership; \u00a72 item 3",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C3-2",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 The fence and the D2P-5 decision rule; \u00a75 'the stratum boundary is the only barrier'; \u00a78 alternation row; \u00a72 item 3 'P0 never measured that share'",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C3-3",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 'E, made sound' and 'The fence'; \u00a79 Observation 1; \u00a70 row 12; self-critique D2L-4",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C3-4",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 Detection; \u00a79 idle-epoch cell and quiescence-detector",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C3-5",
+  "sev": "major",
+  "sec": "D.2 \u00a75 diagram; \u00a76.7 Lanes; \u00a79 Lane type",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C3-6",
+  "sev": "major",
+  "sec": "D.2 \u00a79 scheduler-state cells (ArenaSchedulerNet, :persistent, O-4); \u00a76.6/\u00a76.7 realization; D.1 \u00a714 O-4",
+  "cls": "PRECEDENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C3-7",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.7 Executors; \u00a79 'impl Lattice Nat :as max ; K, epochs, prod/cons counters'; \u00a715 O-11 counter-case; \u00a76.3 D2P-5",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C3-8",
+  "sev": "major",
+  "sec": "D.2 \u00a76.6 replay monitor and P2 gate; \u00a714 P2 row",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C3-9",
+  "sev": "major",
+  "sec": "D.2 \u00a75 design sentence vs \u00a76.6 and \u00a76.7",
+  "cls": "PRECEDENT",
+  "conf": "high"
+ },
+ {
+  "id": "C3-10",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.7 Owned records; \u00a77 epoch records; \u00a710.1 RM-2; \u00a76.6 'the question moves to P3'",
+  "cls": "THEOREM",
+  "conf": "medium"
+ },
+ {
+  "id": "C3-11",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.4 P1b dispositions",
+  "cls": "PRECEDENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C4-1",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 row 3 (tagged cells); \u00a75 design sentence (monotone fires); D2L-1",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C4-2",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 (the fence, 'kept per cell'); \u00a76.7 (ownership; 'a fire's home is the owner of its first declared output'); \u00a713 row 1; \u00a72 item 3; \u00a710.1 P0-8",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C4-3",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 row 8; \u00a79 Observation 2(a); \u00a711 PC-2; \u00a715 O-12",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C4-4",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 row 1; \u00a76.5; \u00a79 Worldview; \u00a711 BC-2",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C4-5",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 ('E, made sound'; the fence); \u00a79 MergeProps; D2L-4",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C4-6",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 row 4; D2L-5; \u00a76.4 (:1699, :2642); R-7",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C4-7",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 row 1 read side (D2L-1); \u00a76.5 last paragraph",
+  "cls": "THEOREM",
+  "conf": "medium"
+ },
+ {
+  "id": "C4-8",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.7 (Lanes, Detection); \u00a79 (Lane, exec-prod/exec-cons, owner-drain, Observation 1)",
+  "cls": "THEOREM",
+  "conf": "medium"
+ },
+ {
+  "id": "C4-9",
+  "sev": "minor",
+  "sec": "D.2 \u00a79 (impl Lattice Nat :as max for K; Assignment; EpochRecord; ArenaSchedulerNet :persistent); \u00a76.3 D2P-5 decision rule; \u00a76.7 gate",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C4-10",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.3 row 6 (ready queue, cell-14)",
+  "cls": "PRECEDENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C4-11",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.3 row 7 (fork-on-union requests, cell-15)",
+  "cls": "THEOREM",
+  "conf": "medium"
+ },
+ {
+  "id": "C4-12",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.3 row 2 (scope-cell-merge, logic-var-merge, atms.rkt:644); R-4",
+  "cls": "PRECEDENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C4-13",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.3, \u00a79 (NTT model), \u00a711",
+  "cls": "TASTE",
+  "conf": "high"
+ },
+ {
+  "id": "C5-1",
+  "sev": "blocker",
+  "sec": "D.2 \u00a76.7 Detection; \u00a79 cell idle-epoch and propagator quiescence-detector; \u00a78 detector row; \u00a75 diagram",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C5-2",
+  "sev": "major",
+  "sec": "D.2 \u00a76.6 (Tier-1 paragraph); self-critique D2R-4; D.1 A.8 item 2",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C5-3",
+  "sev": "major",
+  "sec": "D.2 \u00a75 (Asynchronous iteration, hypotheses H); \u00a76.7 Ownership/Lanes; Stage 1 synthesis T5\u2013T8 row",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C5-4",
+  "sev": "major",
+  "sec": "D.2 \u00a75 (Kleene iteration); \u00a77 round records; D.1 A.8 item 2",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C5-5",
+  "sev": "major",
+  "sec": "D.2 \u00a78 rows 1\u20132; \u00a76.6 fuel row; \u00a710.2 S-6; P0 \u00a75 correction",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C5-6",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 The fence; \u00a78 alternation row; \u00a79 :order S0 <-> S0-fenced; \u00a710.2 S-5, S-9; \u00a76.7 P3 gate; \u00a75 design sentence",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C5-7",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 Late writes; \u00a714 P3 inductive column; \u00a710.2 S-10",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C5-8",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 Contradiction; \u00a710.2 S-7; \u00a77 epoch records",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C5-9",
+  "sev": "major",
+  "sec": "D.2 \u00a76.6 (fire-once self-clear 'called by both schedulers'); \u00a75 'no fire changes topology (G-1)'; \u00a76.7",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C5-10",
+  "sev": "minor",
+  "sec": "D.2 \u00a75 (CALM bullet; design sentence)",
+  "cls": "THEOREM",
+  "conf": "medium"
+ },
+ {
+  "id": "C8-1",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 row 8; \u00a711 PC-2; \u00a715 O-12",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C8-2",
+  "sev": "major",
+  "sec": "D.2 \u00a711 PC-1; \u00a76.5; \u00a712.3 Orthogonality; \u00a715 O-12 'Settles it'",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C8-3",
+  "sev": "major",
+  "sec": "D.2 \u00a76.4 P1b (absence-reading row); \u00a76.3 rows 4-7; \u00a711 PC-1\u2026PC-4; self-critique D2R-5",
+  "cls": "PRECEDENT",
+  "conf": "high"
+ },
+ {
+  "id": "C8-4",
+  "sev": "major",
+  "sec": "D.2 \u00a711 BC-3; \u00a78 ('strata outer loop | unchanged')",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C8-5",
+  "sev": "major",
+  "sec": "D.2 \u00a711 BC-2; \u00a76.3 row 1",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C8-6",
+  "sev": "major",
+  "sec": "D.2 \u00a711 BC-6; \u00a76.7 (executor pool, owned records); \u00a79 scheduler-state cells; \u00a716 R-5",
+  "cls": "PRECEDENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C8-7",
+  "sev": "major",
+  "sec": "D.2 \u00a77 observation contract; \u00a76.6 replay monitor; G-3; DEFERRED 176 (d)",
+  "cls": "THEOREM",
+  "conf": "medium"
+ },
+ {
+  "id": "C8-8",
+  "sev": "major",
+  "sec": "D.2 \u00a711 BC-1; \u00a76.3 (E; join combinators; row 3)",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C8-9",
+  "sev": "minor",
+  "sec": "D.2 \u00a75 design sentence; \u00a76.7 Detection; \u00a79 detector and counters; \u00a711 BC-4",
+  "cls": "PRECEDENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C8-10",
+  "sev": "minor",
+  "sec": "D.2 \u00a711 BC-5; \u00a74 PAR_4.close (doc-truth sweep)",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C8-11",
+  "sev": "minor",
+  "sec": "D.2 \u00a715 O-11 'Settles it'; \u00a77",
+  "cls": "PRECEDENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C8-12",
+  "sev": "minor",
+  "sec": "D.2 \u00a712.2 codebase reality check; \u00a711",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C9-1",
+  "sev": "major",
+  "sec": "D.2 \u00a710.2 S-9; \u00a76.3 'The fence'; \u00a76.6 Gate; \u00a76.7 Gate",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C9-2",
+  "sev": "blocker",
+  "sec": "D.2 \u00a72 item 3; \u00a76.3 row 8 + 'The fence (kept per cell)'; \u00a76.7 Ownership; \u00a713 row 1",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C9-3",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 row 3 (tagged cells) and row 1 'Read side (D2L-1)'; \u00a76.5",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C9-4",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 row 1 (two-phase worldview, D2L-1); \u00a76.5; \u00a711 BC-2",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C9-5",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 row 2 (F1 bands \u2192 flat per key with \u22a4); \u00a716 R-4",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C9-6",
+  "sev": "major",
+  "sec": "D.2 \u00a76.4 'unstable latch' row; \u00a76.6 self-clear (D2R-3); \u00a77 epoch records",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C9-7",
+  "sev": "major",
+  "sec": "D.2 \u00a75 diagram; \u00a76.3 alternation; \u00a76.7 'Late writes', 'Contradiction'; \u00a78 epoch counters; \u00a711 BC-4; \u00a710.2 S-7, S-10",
+  "cls": "THEOREM",
+  "conf": "medium"
+ },
+ {
+  "id": "C9-8",
+  "sev": "major",
+  "sec": "D.2 \u00a76.6 fuel row; \u00a78 rows 1\u20133; \u00a710.2 S-6",
+  "cls": "MEASUREMENT",
+  "conf": "high"
+ },
+ {
+  "id": "C9-9",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.3 row 4 (:usage lean); self-critique D2L-5",
+  "cls": "THEOREM",
+  "conf": "high"
+ },
+ {
+  "id": "C9-10",
+  "sev": "minor",
+  "sec": "D.2 \u00a77 keys; \u00a79 EpochRecord / scheduler cells; \u00a711 BC-6",
+  "cls": "PRECEDENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C9-11",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 'The simpler alternative (D2P-5)' decision rule; \u00a76.2 P0-8; \u00a72 item 3",
+  "cls": "MEASUREMENT",
+  "conf": "medium"
+ },
+ {
+  "id": "C6-1",
+  "sev": "major",
+  "sec": "D.2 \u00a71, \u00a72 item 2, \u00a76.6 gate, \u00a712.2 P6 row",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C6-2",
+  "sev": "blocker",
+  "sec": "D.2 \u00a76.5, \u00a76.7 (Executors), \u00a70 row 8",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C6-3",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 (Owned records, Lanes, Detection, Late writes), \u00a716 R-2, \u00a79 Obs. 4",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C6-4",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 (Contradiction), \u00a78 (detector row), \u00a710.2 S-7",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C6-5",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 (Executors, Gate), \u00a714 P3 row",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C6-6",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.5, \u00a70 row 8, \u00a713 row 3, \u00a716 R-5",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C6-7",
+  "sev": "minor",
+  "sec": "D.2 \u00a710.1 A-12, \u00a76.7 Gate",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C7-1",
+  "sev": "blocker",
+  "sec": "D.2 \u00a70 row 1, \u00a72 items 2\u20133, \u00a76.1 baseline row, \u00a76.6 gate, \u00a710.1 B-P05, \u00a712.2 P6",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C7-2",
+  "sev": "major",
+  "sec": "D.2 \u00a72 item 3, \u00a75 design sentence, \u00a76.7 Ownership, \u00a713 partitioner row, \u00a716 R-1",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C7-3",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 gate and Executors bullet, \u00a714 P3 row, \u00a712.1 scaffolding row",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C7-4",
+  "sev": "major",
+  "sec": "D.2 \u00a76.6 replay monitor and gate, \u00a76.2 last sentence, \u00a77 epoch records, \u00a710.1 RM-1, \u00a714 P2 row",
+  "cls": "THEOREM",
+  "conf": ""
+ },
+ {
+  "id": "C7-5",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 E, made sound, \u00a716 R-3, \u00a714 P1a row",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C7-6",
+  "sev": "major",
+  "sec": "D.2 \u00a76.3 rows 1, 2, 7, 8, 9 co-inductive column, \u00a76.4, \u00a714 P1a and P1b rows, \u00a715 O-13",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C7-7",
+  "sev": "major",
+  "sec": "D.2 \u00a74 tracker, \u00a76.1 baseline row, \u00a76.6 gate, \u00a710.1 B-P05 row, \u00a714 P1a and P1b performance columns",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C7-8",
+  "sev": "minor",
+  "sec": "D.2 \u00a70 row 9, \u00a76.6 fuel row, \u00a78 S0 row, \u00a710.2 S-6",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C7-9",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.3 testing column, \u00a714 testing column",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C7-10",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.5 third bullet, \u00a76.6 fire-once sentence",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C10-1",
+  "sev": "major",
+  "sec": "D.2 \u00a76.7 (Ownership), \u00a70 row 7, \u00a713 a partitioner row, \u00a72 item 3",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C10-2",
+  "sev": "major",
+  "sec": "D.2 \u00a72 item 3, \u00a76.3 (the fence and its decision rule, D2P-5), \u00a713 row 1, O-12",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C10-3",
+  "sev": "major",
+  "sec": "D.2 \u00a72 item 2, \u00a76.6, \u00a713 (no write-path alternative considered)",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C10-4",
+  "sev": "minor",
+  "sec": "D.2 \u00a76.6 (gate), \u00a76.1 (B-P05), \u00a714 P2 row",
+  "cls": "MEASUREMENT",
+  "conf": ""
+ },
+ {
+  "id": "C10-5",
+  "sev": "major",
+  "sec": "D.2 \u00a74 (tracker), \u00a76.3 rows 8-9, \u00a76.4, O-13",
+  "cls": "PRECEDENT",
+  "conf": ""
+ },
+ {
+  "id": "C10-6",
+  "sev": "major",
+  "sec": "D.2 \u00a71 (scope), \u00a74 (P3, P6 rows), \u00a72 items 3-4, \u00a716 R-1/R-2",
+  "cls": "CONJECTURE",
+  "conf": ""
+ }
+]

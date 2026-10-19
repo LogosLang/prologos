@@ -1,0 +1,93 @@
+RESULT 0: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+RESULT 1: const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+RESULT 2: flip : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [x y -> z] y x -> z]]] defined.
+RESULT 3: 42 : Int
+RESULT 4: "hello" : String
+RESULT 5: true : Bool
+RESULT 6: 42 : Int
+RESULT 7: "kept" : String
+RESULT 8: 42 : Int
+RESULT 9: 1 : Int
+RESULT 10: apply : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] x -> y]] defined.
+RESULT 11: compose : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y -> z] [x -> y] x -> z]]] defined.
+RESULT 12: 6 : Int
+RESULT 13: 26 : Int
+RESULT 14: 3 : Int
+RESULT 15: 12 : Int
+RESULT 16: 5 : Int
+RESULT 17: true : Bool
+RESULT 18: true : Bool
+RESULT 19: 19 : Int
+RESULT 20: 21 : Int
+RESULT 21: xs : [prologos::data::list::List Int] defined.
+RESULT 22: '[2 3 4 5 6] : [prologos::data::list::List Int]
+RESULT 23: '[1 2 3 4 5] : [prologos::data::list::List Int]
+RESULT 24: 5N : Nat
+RESULT 25: '[4 6 8 10 12] : [prologos::data::list::List Int]
+RESULT 26: opt : [prologos::data::option::Option Int] defined.
+RESULT 27: ERROR: Unbound variable
+RESULT 28: r : [prologos::data::result::Result Int _] defined.
+RESULT 29: p : [Sigma Int String] defined.
+RESULT 30: 1 : Int
+RESULT 31: "hello" : String
+RESULT 32: np : [Sigma [Sigma Int Int] [Sigma Int Int]] defined.
+RESULT 33: 1 : Int
+RESULT 34: 4 : Int
+RESULT 35: ERROR: Unbound variable
+RESULT 36: ERROR: Unbound variable
+RESULT 37: ERROR: Unbound variable
+RESULT 38: ERROR: defn: expected 'name <type>' in parameter list, got (int+ x 1)
+RESULT 39: ERROR: defn: expected 'name <type>' in parameter list, got (map (#<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:120:40 fn> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:120:44 (x : Int)> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:120:54 (int+ x 10)>) xs)
+RESULT 40: nat-to-int defined (arities: 1, 2).
+RESULT 41: 0 : Int
+RESULT 42: ??__match-fail : Int
+RESULT 43: ??__match-fail : Int
+RESULT 44: v01 : Int defined.
+RESULT 45: v02 : Int defined.
+RESULT 46: v03 : Int defined.
+RESULT 47: v04 : Int defined.
+RESULT 48: v05 : Int defined.
+RESULT 49: v06 : Int defined.
+RESULT 50: v07 : Int defined.
+RESULT 51: v08 : Int defined.
+RESULT 52: v09 : Int defined.
+RESULT 53: v10 : Int defined.
+RESULT 54: v11 : String defined.
+RESULT 55: v12 : String defined.
+RESULT 56: v13 : String defined.
+RESULT 57: v14 : String defined.
+RESULT 58: v15 : String defined.
+RESULT 59: v16 : Bool defined.
+RESULT 60: v17 : Bool defined.
+RESULT 61: v18 : [prologos::data::list::List Int] defined.
+RESULT 62: v19 : [prologos::data::option::Option Int] defined.
+RESULT 63: v20 : [prologos::data::option::Option _] defined.
+RESULT 64: ERROR: Unbound variable
+RESULT 65: ERROR: Unbound variable
+RESULT 66: 12 : Int
+RESULT 67: true : Bool
+RESULT 68: wrap-int : Int -> [prologos::data::option::Option Int] defined.
+RESULT 69: unwrap-or : [prologos::data::option::Option Int] Int -> Int defined.
+RESULT 70: 42 : Int
+RESULT 71: 99 : Int
+RESULT 72: 30 : Int
+RESULT 73: triple : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] x y z -> [Sigma x [Sigma x x]]]]] defined.
+RESULT 74: [pair 1 [pair "hello" true]] : [Sigma Int [Sigma String Bool]]
+RESULT 75: [pair [prologos::data::option::some Int 1] [pair '[1 2] false]] : [Sigma [prologos::data::option::Option Int] [Sigma [prologos::data::list::List Int] Bool]]
+RESULT 76: ERROR: Unbound variable
+RESULT 77: ??__match-fail : Int
+RESULT 78: 0 : Int
+RESULT 79: ??__match-fail : Int
+RESULT 80: ERROR: Unbound variable
+RESULT 81: ERROR: Unbound variable
+RESULT 82: ERROR: Unbound variable
+RESULT 83: ERROR: Unbound variable
+RESULT 84: ERROR: No instance of Eq for [Sigma Int Int]\n  Available instances: Eq Rat, Eq String, Eq Int, Eq Posit8, Eq Ordering, Eq Nat, Eq Posit64, Eq Float64, Eq Posit16, Eq Float32, Eq Posit32, Eq Bool, Eq Char\n  Hint: Define 'impl Eq [Sigma Int Int]' with method 'eq?'.
+RESULT 85: ERROR: No instance of Eq for Option-Int\n  Available instances: Eq Rat, Eq String, Eq Int, Eq Posit8, Eq Ordering, Eq Nat, Eq Posit64, Eq Float64, Eq Posit16, Eq Float32, Eq Posit32, Eq Bool, Eq Char\n  Hint: Define 'impl Eq Option-Int' with method 'eq?'.
+RESULT 86: [?meta2928 [prologos::data::option::none ?meta2933] [prologos::data::option::none ?meta2933]] : Bool
+RESULT 87: ERROR: defn: expected 'name <type>' in parameter list, got (filter (#<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:223:34 fn> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:223:38 (x : Int)> #<syntax:/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos:223:48 (int-lt 20 x)>) xs)
+RESULT 88: ERROR: Unbound variable
+RESULT 89: ERROR: Unbound variable
+RESULT 90: ERROR: Unbound variable
+RESULT 91: ERROR: Unbound variable
+STATS2 leg=fresh rounds=182 fires=1112 control-divergent=0 thread-divergent=0 reentrant=0

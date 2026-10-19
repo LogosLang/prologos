@@ -1,0 +1,6 @@
+(none allocator-wall-ms 76.0 (gcs 116 major 0 gc-wall-ms 4.0 gc-process-cpu-ms 3.0 max-gc-ms 2.125) spinner-max-gap-ms (0.0 0.0 0.0))
+(park allocator-wall-ms 72.0 (gcs 116 major 0 gc-wall-ms 1.0 gc-process-cpu-ms 2.0 max-gc-ms 0.032958984375) spinner-max-gap-ms (0.0 0.0 0.0))
+(spin allocator-wall-ms 84.0 (gcs 117 major 0 gc-wall-ms 5.0 gc-process-cpu-ms 7.0 max-gc-ms 0.245849609375) spinner-max-gap-ms (0.263 0.268 0.27))
+(none allocator-wall-ms 76.0 (gcs 116 major 0 gc-wall-ms 1.0 gc-process-cpu-ms 0.0 max-gc-ms 0.031005859375) spinner-max-gap-ms (0.0 0.0 0.0))
+(park allocator-wall-ms 73.0 (gcs 116 major 0 gc-wall-ms 1.0 gc-process-cpu-ms 1.0 max-gc-ms 0.035888671875) spinner-max-gap-ms (0.0 0.0 0.0))
+(spin allocator-wall-ms 82.0 (gcs 117 major 0 gc-wall-ms 4.0 gc-process-cpu-ms 8.0 max-gc-ms 0.257080078125) spinner-max-gap-ms (0.276 0.278 0.276))

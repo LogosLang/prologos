@@ -1,0 +1,11 @@
+PERF-COUNTERS:{"cell_allocs":193,"constraint_count":0,"constraint_retries":0,"elaborate_steps":41,"inert_dependent_skips":0,"infer_steps":44,"meta_created":6,"meta_solved":6,"prop_allocs":0,"prop_firings":0,"reduce_steps":790,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":75}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":2,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":41,"propagators":6}
+0: factorial : Int -> Int defined.
+1: 120 : Int
+2: '[1 2 3 4] : [prologos::data::list::List Int]
+3: '[2 3 4 5 6 7 8 9 10] : [prologos::data::list::List Int]
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":90,"exec_rounds":13,"exec_wide_rounds":2,"file":"prop-viz-demo.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":7,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"race_unbox_main_prop-net-box":5,"race_unbox_main_registry-net-box":4,"strat":"auto","wall_ms":167.0}

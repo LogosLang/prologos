@@ -1,0 +1,2 @@
+STATS3 file=/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-03-19-punify-acceptance.prologos results=173 rounds=95 fires=187 control-divergent=0 nested=0 stale-params=98 ms=320.0
+DEP current-impl-registry fires=2 stale-rounds=95 fns=...ing-propagators.rkt:861:2×2

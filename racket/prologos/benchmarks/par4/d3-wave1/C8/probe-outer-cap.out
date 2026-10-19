@@ -1,0 +1,9 @@
+N=5  ok: depth reached 5, contradiction #f
+N=15  ok: depth reached 15, contradiction #f
+N=20  ok: depth reached 20, contradiction #f
+N=21  ok: depth reached 21, contradiction #f
+N=22  ok: depth reached 22, contradiction #f
+N=23  ERROR: run-to-quiescence-bsp: stratum handlers: >20 outer iterations — possible infinite loop
+N=24  ERROR: run-to-quiescence-bsp: stratum handlers: >20 outer iterations — possible infinite loop
+N=25  ERROR: run-to-quiescence-bsp: stratum handlers: >20 outer iterations — possible infinite loop
+N=40  ERROR: run-to-quiescence-bsp: stratum handlers: >20 outer iterations — possible infinite loop

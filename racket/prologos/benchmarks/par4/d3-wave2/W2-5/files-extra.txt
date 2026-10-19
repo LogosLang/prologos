@@ -1,0 +1,14 @@
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-03-14-wfle-acceptance.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-04-08-bsp-le-track2.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-05-08-propagator-demo.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-04-17-ppn-track4c-adversarial.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/relational-demo.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/narrowing-demo.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-03-28-sudoku-demo.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-07-31-solve-carrier.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-03-19-punify-acceptance.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-03-21-track8-acceptance.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/par4/d3-wave1/C9/c1-overwrite.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/par4/d3-wave1/C9/c2-naf.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/par4/d3-wave1/C9/c3-naf-nested.prologos
+/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/par4/d3-wave1/C9/c4-varvar.prologos

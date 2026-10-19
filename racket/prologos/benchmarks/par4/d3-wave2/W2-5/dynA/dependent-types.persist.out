@@ -1,0 +1,12 @@
+RESULT 0.0: Vec : [Type 0] defined.
+RESULT 0.1: A : [Type 0] -> benchmarks::comparative::dependent-types::Vec defined.
+RESULT 0.2: n : Nat -> benchmarks::comparative::dependent-types::Vec defined.
+RESULT 0.3: where : benchmarks::comparative::dependent-types::Vec defined.
+RESULT 0.4: ERROR: Unbound variable
+RESULT 0.5: ERROR: Map literal requires an even number of elements (key-value pairs)
+RESULT 0.6: ERROR: Type mismatch
+RESULT 0.7: ERROR: Type mismatch
+RESULT 0.8: ERROR: vcons expects 4 arguments, got 2
+RESULT 0.9: ERROR: vhead expects 3 arguments, got 1
+RESULT 0.10: ERROR: vtail expects 3 arguments, got 1
+STATS leg=persist files=1 params=219 rounds=0 wide-rounds(>=8)=0 fires=0 reentrant=0 ms=2.0

@@ -1,0 +1,6 @@
+executor sequential (#f)
+line-23 per run: (S S B S S B)
+lines 92; a=b #f b=c #f
+executor production (driver.rkt:567)
+line-23 per run: (S S B S S B)
+lines 92; a=b #f b=c #f

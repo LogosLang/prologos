@@ -1,0 +1,41 @@
+PERF-COUNTERS:{"cell_allocs":1512,"constraint_count":0,"constraint_retries":0,"elaborate_steps":376,"inert_dependent_skips":0,"infer_steps":224,"meta_created":4,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":388,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":133,"zonk_steps":410}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":3,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":16,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: a1 : Int -> Int defined.
+1: 10 : Int
+2: a2 : Int -> Int defined.
+3: 5 : Int
+4: a3 : Int -> Int defined.
+5: 10 : Int
+6: a4 : Int -> Int defined.
+7: 12 : Int
+8: a5 : Int -> Int defined.
+9: 12 : Int
+10: b1 : Int -> Int defined.
+11: 103 : Int
+12: b2 : Int defined.
+13: 13 : Int
+14: c1 : Int -> Int defined.
+15: 10 : Int
+16: c2 : Int -> Int defined.
+17: 10 : Int
+18: c3 : Int -> Int defined.
+19: 10 : Int
+20: d1 : Int -> Int defined.
+21: 10 : Int
+22: d2 : Int -> Int defined.
+23: 10 : Int
+24: d3 : Int -> Int defined.
+25: 10 : Int
+26: e1 : Int -> Int defined.
+27: 10 : Int
+28: e2 : Int -> Int defined.
+29: 5 : Int
+30: e3 : Int -> Int defined.
+31: 10 : Int
+32: e4 : Int -> Int defined.
+33: 16 : Int
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":58,"exec_rounds":18,"exec_wide_rounds":1,"file":"2026-07-31-let-blocks.prologos","outer_hist":{"0":17},"outer_max":0,"outer_runs":17,"strat":"auto","wall_ms":169.0}

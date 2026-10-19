@@ -1,0 +1,30 @@
+W27 type-oracle (c4) — universe 83 terms, ground universe 20, |G| = 18
+ARM CENSUS (pm1,pm2,mm1 unsolved; pm3 := Nat): ((trivial . 439) (unify-success . 1368) (fallback . 4132) (ground-clash . 950))
+  fallback BLOCKED (oracle unifiable): 532 ; fallback CLASH: 3600 ; clash share 87.0%
+  blocked by shape: ((meta-union . 320) (mult-meta . 212))
+    shortest blocked [mult-meta]: #(struct:expr-Pi #(struct:mult-meta mm1) #(struct:expr-Nat) #(struct:expr-Nat))  ⊔  #(struct:expr-Pi mw #(struct:expr-Nat) #(struct:expr-Nat))
+    shortest blocked [meta-union]: #(struct:expr-union #(struct:expr-Nat) #(struct:expr-meta pm2 #f))  ⊔  #(struct:expr-Nat)
+    shortest blocked [flex-app]: none
+    shortest blocked [other]: none
+  unify-success pairs the oracle says CANNOT unify: 124   by shape ((other . 124))
+    shortest: #(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat))  ⊔  #(struct:expr-meta pm2 #f)
+  oracle evaluations that raised: 0
+
+POWER (ground universe):
+G0 type-unify-or-top, ground  [400 pairs]
+  erased contradictions: 0   by arm ()   by shape ()
+    shortest erased: none
+  false contradictions: 0   by shape ()
+  C violations 0 ; non-inflationary 0 ; A violations 0/20000
+
+Role B variants:
+V0 type-unify-or-top today  [6889 pairs]
+  erased contradictions: 3724   by arm ((fallback . 3600) (unify-success . 124))   by shape ((meta-union . 1440) (other . 1164) (mult-meta . 1120))
+    shortest erased: #(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat))  ⊔  #(struct:expr-Nat)
+  false contradictions: 16   by shape ((other . 16))
+  C violations 1818 ; non-inflationary 1846 ; A violations 1100/20000
+V2 try-unify-pure fails => ⊤ (fallback deleted)  [6889 pairs]
+  erased contradictions: 124   by arm ((unify-success . 124))   by shape ((other . 124))
+    shortest erased: #(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat))  ⊔  #(struct:expr-meta pm2 #f)
+  false contradictions: 548   by shape ((meta-union . 320) (mult-meta . 212) (other . 16))
+  C violations 166 ; non-inflationary 226 ; A violations 62/20000

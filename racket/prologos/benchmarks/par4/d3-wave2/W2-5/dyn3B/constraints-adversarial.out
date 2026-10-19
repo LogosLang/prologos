@@ -1,0 +1,2 @@
+STATS3 file=/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos results=69 rounds=212 fires=1142 control-divergent=0 nested=0 stale-params=94 ms=1466.0
+DEP current-impl-registry fires=4 stale-rounds=212 fns=...ing-propagators.rkt:861:2×4

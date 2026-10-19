@@ -1,0 +1,23 @@
+PERF-COUNTERS:{"cell_allocs":731,"constraint_count":0,"constraint_retries":0,"elaborate_steps":140,"inert_dependent_skips":0,"infer_steps":360,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":112,"resolution_cycles":0,"solver_backtracks":76,"solver_col_compares":340,"solver_row_scans":294,"solver_unifies":390,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":184}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":3,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: parent : _ defined.
+1: @[{:who "bob"}] : [PVec {:who String}]
+2: @[{:x "alice", :y "bob"} {:x "bob", :y "carol"} {:x "bob", :y "dave"} {:x "carol", :y "eve"}] : [PVec {:x String :y String}]
+3: @[] : [PVec {:child String}]
+4: ancestor : _ defined.
+5: @[{:who "bob"} {:who "carol"} {:who "dave"} {:who "eve"}] : [PVec {:who String}]
+6: @[{:who "carol"} {:who "alice"} {:who "bob"}] : [PVec {:who String}]
+7: append-data : _ defined.
+8: @[{:result "ab"}] : [PVec {:result String}]
+9: course-data : _ defined.
+10: prereq : _ defined.
+11: needs : _ defined.
+12: @[{:req "CS301"} {:req "CS201"} {:req "MA301"} {:req "CS101"} {:req "MA101"}] : [PVec {:req String}]
+13: @[{:req "CS201"} {:req "MA301"} {:req "CS101"} {:req "MA101"}] : [PVec {:req String}]
+14: @[{:code "CS101", :title "Intro to CS"} {:code "CS201", :title "Data Structures"} {:code "CS301", :title "Algorithms"} {:code "CS401", :title "Compilers"}] : [PVec {:code String :title String}]
+15: @[{:req "CS201"} {:req "MA301"}] : [PVec {:req String}]
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":10,"exec_rounds":10,"file":"relational-demo.prologos","forks":0,"routes":{"dfs":5,"tier1":5},"strat":"auto","wall_ms":201.0}

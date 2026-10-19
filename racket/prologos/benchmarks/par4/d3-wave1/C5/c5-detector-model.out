@@ -1,0 +1,29 @@
+C5 (PAR 4 D.3, Theory) — exhaustive interleaving check of D.2 §6.7's quiescence detector.
+S1   D2      states=   668 declares=y  FALSE QUIESCENCE reachable
+       shortest trace: B A A B D D D D D-declare
+       at declaration: A.wl=() A.lane=0 B.wl=('q1',) B.lane=0
+S1   D1      states=   705 declares=y  sound
+S1   ACT     states=   705 declares=y  sound
+S1   D2-ACK  states=   447 declares=y  sound
+S2u  D2      states=   159 declares=y  FALSE QUIESCENCE reachable
+       shortest trace: B A A D D D D D-declare
+       at declaration: A.wl=() A.lane=0 B.wl=('q',) B.lane=0
+S2u  D1      states=   176 declares=y  FALSE QUIESCENCE reachable
+       shortest trace: B A A D D D D D-declare
+       at declaration: A.wl=() A.lane=0 B.wl=('q',) B.lane=0
+S2u  ACT     states=   218 declares=y  FALSE QUIESCENCE reachable
+       shortest trace: B A A D D D D D-declare
+       at declaration: A.wl=() A.lane=0 B.wl=('q',) B.lane=0
+S2u  D2-ACK  states=   159 declares=y  FALSE QUIESCENCE reachable
+       shortest trace: B A A D D D D D-declare
+       at declaration: A.wl=() A.lane=0 B.wl=('q',) B.lane=0
+S2c  D2      states=   532 declares=y  FALSE QUIESCENCE reachable
+       shortest trace: B A A B D D D D D-declare
+       at declaration: A.wl=() A.lane=0 B.wl=('q',) B.lane=0
+S2c  D1      states=   570 declares=y  sound
+S2c  ACT     states=   570 declares=y  sound
+S2c  D2-ACK  states=   373 declares=y  sound
+S3   D2      states=   126 declares=n  NEVER DECLARES (liveness)
+S3   D1      states=   126 declares=n  NEVER DECLARES (liveness)
+S3   ACT     states=   126 declares=n  NEVER DECLARES (liveness)
+S3   D2-ACK  states=   126 declares=n  NEVER DECLARES (liveness)

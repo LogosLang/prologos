@@ -1,0 +1,4 @@
+W27-MERGE-CENSUS test-mult-inference.rkt
+  BSP rounds observed: 13
+  HUB attribute-map (:type facet = Role B): cells 1, S0 writes 14, writes holding an applied meta 0
+  other meta-solution-merge: cells 1, S0 writes 1, writes holding an applied meta 0

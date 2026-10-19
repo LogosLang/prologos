@@ -1,0 +1,30 @@
+PERF-COUNTERS:{"cell_allocs":3083,"constraint_count":0,"constraint_retries":0,"elaborate_steps":468,"inert_dependent_skips":0,"infer_steps":203,"meta_created":62,"meta_solved":60,"prop_allocs":0,"prop_firings":0,"reduce_steps":1143,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":237,"zonk_steps":853}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":1,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":104,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+(list "id : [Pi [x :0 <[Type 0]>] x -> x] defined." "const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined." "flip : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [x y -> z] y x -> z]]] defined." "compose : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y -> z] [x -> y] x -> z]]] defined." "on : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y y -> z] [x -> y] x x -> z]]] defined." "apply : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] x -> y]] defined." "twice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined." "thrice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined." "a1 : Int defined." "a2 : Int defined." "a3 : Int defined." "a4 : Int defined." "a5 : Int defined." "a6 : Int defined." "a7 : Int defined." "a8 : Int defined." "a9 : Int defined." "a10 : Int defined." "deep1 : Int defined." "deep2 : Int defined." "deep3 : Int defined." "d1 : Int defined." "d2 : Bool defined." "d3 : String defined." "d4 : Int defined." "d5 : String defined." (inference-failed-error (srcloc "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos" 85 0 28) "Could not infer type" "[benchmarks::comparative::constraints-adversarial::flip [Type 0] [Type 0] ?bvar1 ?bvar1 -> ?bvar3 benchmarks::comparative::constraints-adversarial::const false 2]") (inference-failed-error (srcloc "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos" 86 0 25) "Could not infer type" "[benchmarks::comparative::constraints-adversarial::compose [Type 0] [Type 0] ?bvar0 -> ?bvar1 benchmarks::comparative::constraints-adversarial::id benchmarks::comparative::constraints-adversarial::id 7]") "d8 : Int defined." (inference-failed-error (srcloc "<unknown>" 0 0 0) "Could not infer type" "[benchmarks::comparative::constraints-adversarial::thrice ?meta2272 benchmarks::comparative::constraints-adversarial::id 0]") "d10 : Int defined." "e1 : Bool defined." "e2 : Bool defined." "e3 : Bool defined." "p1 : Int defined." "p2 : Int defined." "2 : Int" "4 : Int" "6 : Int" "8 : Int" "10 : Int" "12 : Int" "14 : Int" "16 : Int" "18 : Int" "20 : Int" "1 : Int" "4 : Int" "9 : Int" "16 : Int" "25 : Int" "1 : Int" "2 : Int" "3 : Int" "true : Bool" "false : Bool" "1 : Int" "true : Bool" "\"a\" : String" "[fn [x <2>] [fn [y <1>] x]] : ?bvar1 ?bvar1 -> ?bvar3" "[fn [x <false>] [fn [y <true>] x]] : ?bvar1 ?bvar1 -> ?bvar3" "[fn [x <[fn [x <1>] x]>] x] : ?bvar0 -> ?bvar1" "[fn [x <[fn [x <true>] x]>] x] : ?bvar0 -> ?bvar1" "1 : Int" (inference-failed-error (srcloc "<unknown>" 0 0 0) "Could not infer type" "[benchmarks::comparative::constraints-adversarial::thrice ?meta2773 benchmarks::comparative::constraints-adversarial::id 42]") "[fn [x <[fn [x <1>] x]>] [fn [y <[fn [y <2>] y]>] x]] : ?bvar1 ?bvar1 -> ?bvar3" "mix1 : Int defined." "mix2 : Int defined." "mix3 : Int defined.")
+file /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos
+fires 1142  fenced-fires(any output attribute-map) 1010  share 0.8844133099824869
+home histogram (K=8 RR, home = owner of first output): ((1 . 1020) (6 . 23) (5 . 21) (0 . 19) (3 . 17) (7 . 17) (2 . 13) (4 . 12))
+max-home share 0.8931698774080561
+first-output merge (top 6): (("attribute-map-merge-fn" . 1010) ("meta-solution-merge" . 114) ("resolution-stratum-merge" . 8) ("merge-set-union" . 5) ("...s/decision-cell.rkt:582:2" . 5))
+first-output cell (top 6): (("49:attribute-map-merge-fn" . 1010) ("14:resolution-stratum-merge" . 8) ("109:meta-solution-merge" . 7) ("104:meta-solution-merge" . 6) ("103:meta-solution-merge" . 6) ("107:meta-solution-merge" . 6))
+runs with fires 31 (of 31 observed)
+per productive run: (run rounds rounds-with-fenced-fire phase-switches fires fenced-fires)
+  0 25 25 3 135 133
+  21 27 25 4 80 74
+  46 13 13 7 72 64
+  15 12 12 6 70 64
+  50 6 6 4 59 52
+  53 7 7 2 54 50
+  32 8 8 3 48 42
+  35 8 8 3 48 42
+  38 8 8 3 48 42
+  7 8 8 3 48 42
+  41 8 8 3 48 42
+  10 8 8 3 48 42
+totals: rounds 212 rounds-with-fenced 203 phase-switches 82
+
+real	0m0.456s
+user	0m0.396s
+sys	0m0.062s

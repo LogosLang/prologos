@@ -1,0 +1,2 @@
+RESULT 0.0: HARNESS-EXCEPTION: solve: Depth limit exceeded (100)
+STATS leg=fresh files=1 params=219 rounds=26 wide-rounds(>=8)=2 fires=62 reentrant=0 ms=167.0

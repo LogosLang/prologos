@@ -1,0 +1,11 @@
+file type-adversarial.prologos
+first-run(seq) rounds=185 fires=1140 fire=7.21 (in width>=8: 2.32) merge=8.09 work(wall-gc)=37.29 gc=1 | MODEL H-S=1.28 BSP-K8=1.16 H-S+K8=1.55
+warm seq  rounds=185 fires=1140 fire=6.79 (in width>=8: 2.18) merge=7.72 work(wall-gc)=36.6 gc=1 | MODEL H-S=1.27 BSP-K8=1.15 H-S+K8=1.52
+warm thr-per-round rounds=185 fires=1140 fire=23.68 (in width>=8: 16.48) merge=11.16 work(wall-gc)=57.66 gc=5 | MODEL H-S=1.24 BSP-K8=1.49 H-S+K8=2.09
+warm pool-K8 rounds=149 fires=996 fire=7.4 (in width>=8: 4.7) merge=4.9 work(wall-gc)=34.51 gc=1 | MODEL H-S=1.17 BSP-K8=1.2 H-S+K8=1.44
+warm seq  rounds=185 fires=1140 fire=7.31 (in width>=8: 2.37) merge=8.3 work(wall-gc)=38.27 gc=1 | MODEL H-S=1.28 BSP-K8=1.16 H-S+K8=1.54
+warm thr-per-round rounds=185 fires=1140 fire=22.11 (in width>=8: 15.34) merge=11.6 work(wall-gc)=55.27 gc=5 | MODEL H-S=1.27 BSP-K8=1.47 H-S+K8=2.12
+warm pool-K8 rounds=149 fires=996 fire=8.18 (in width>=8: 5.15) merge=5.44 work(wall-gc)=36.2 gc=1 | MODEL H-S=1.18 BSP-K8=1.21 H-S+K8=1.48
+warm seq  rounds=185 fires=1140 fire=6.98 (in width>=8: 2.25) merge=7.88 work(wall-gc)=38.1 gc=0 | MODEL H-S=1.26 BSP-K8=1.15 H-S+K8=1.51
+warm thr-per-round rounds=185 fires=1140 fire=22.47 (in width>=8: 15.36) merge=11.25 work(wall-gc)=53.76 gc=6 | MODEL H-S=1.26 BSP-K8=1.5 H-S+K8=2.19
+warm pool-K8 rounds=149 fires=996 fire=9.04 (in width>=8: 5.97) merge=5.46 work(wall-gc)=40.11 gc=1 | MODEL H-S=1.16 BSP-K8=1.21 H-S+K8=1.45

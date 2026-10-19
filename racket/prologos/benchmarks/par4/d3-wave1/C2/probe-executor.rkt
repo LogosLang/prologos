@@ -1,0 +1,37 @@
+#lang racket/base
+;; C2 probe: is the production BSP executor the parallel-thread one once driver.rkt is loaded?
+;; And on how many threads do fires of a wide round run?
+(require racket/future (file "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/propagator.rkt"))
+(printf "before driver: current-parallel-executor = ~a\n" (current-parallel-executor))
+(dynamic-require '(file "/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/driver.rkt") #f)
+(define ex (current-parallel-executor))
+(printf "after driver:  current-parallel-executor = ~a (procedure? ~a)\n" ex (procedure? ex))
+(printf "processor-count = ~a\n" (processor-count))
+;; Wide round: 16 independent propagators, each records the thread it fires on.
+(define threads (make-hasheq))
+(define lock (make-semaphore 1))
+(define (mk n)
+  (define-values (n1 src) (net-new-cell n 0 max))
+  (values n1 src))
+(define net0 (make-prop-network))
+(define-values (net1 src) (net-new-cell net0 0 max))
+(define-values (net2 outs)
+  (for/fold ([n net1] [acc '()]) ([i 16])
+    (define-values (n* c) (net-new-cell n 0 max))
+    (values n* (cons c acc))))
+(define net3
+  (for/fold ([n net2]) ([c outs])
+    (define-values (n* _p)
+      (net-add-propagator n (list src) (list c)
+        (lambda (nn)
+          (semaphore-wait lock) (hash-set! threads (current-thread) #t) (semaphore-post lock)
+          (net-cell-write nn c (net-cell-read nn src)))))
+    n*))
+(define net4 (run-to-quiescence (net-cell-write net3 src 5)))
+(printf "BSP default (driver executor): distinct fire threads in run = ~a; main thread among them? ~a\n"
+        (hash-count threads) (hash-ref threads (current-thread) #f))
+(hash-clear! threads)
+(parameterize ([current-parallel-executor #f])
+  (run-to-quiescence (net-cell-write net3 src 5)))
+(printf "BSP with executor #f (sequential-fire-all): distinct fire threads = ~a\n" (hash-count threads))
+(printf "values ok: ~a\n" (for/and ([c outs]) (= 5 (net-cell-read net4 c))))

@@ -1,0 +1,8 @@
+one-way hop, two parallel threads (ns):
+  semaphore 15444.6 | fsemaphore 4795.150000000001 | box spin + fences 59.654999999999916
+  semaphore 15184.750000000004 | fsemaphore 4688.999999999998 | box spin + fences 59.58000000000027
+single-thread costs, M=20000000:
+  set-box! fixnum (plain): 0.8267999999999915 ns/op 
+  memory-order-release + set-box! fixnum: 1.5175499999999942 ns/op 
+  unbox + memory-order-acquire: 0.8221500000000105 ns/op 768
+  box-cas! fixnum (uncontended), spurious-failure count: 2.9275499999999965 ns/op (spurious-failures 0)

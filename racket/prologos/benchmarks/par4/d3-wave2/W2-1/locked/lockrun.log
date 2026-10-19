@@ -1,0 +1,11 @@
+(reconstructed from the process log; tee could not open the file because lockrun.sh creates locked/)
+Suite lock: exclusive on /Users/avanti/Library/Caches/prologos/suite.lock
+locked start Sun Oct 18 09:59:10 MST 2026 |  9:59  up  3:37, 10 users, load averages: 3.44 3.22 3.69
+constraints-adversarial: fires 1136 runs 66 wallA 94.0 reps-wall (52 47 47 46 47 48 49) seq-match all #t
+type-adversarial: fires 1140 runs 61 wallA 78.0 reps-wall (48 45 44 44 43 44 45) seq-match all #t
+constraints-adversarial: reps-wall (49 47 46 45 46 45 45) seq-match all #t
+type-adversarial: reps-wall (42 42 43 42 42 42 44) seq-match all #t
+constraints-adversarial: reps-wall (46 45 46 46 47 45 45) seq-match all #t
+type-adversarial: reps-wall (44 42 42 42 43 42 43) seq-match all #t
+locked end Sun Oct 18 09:59:16 MST 2026 |  9:59  up  3:38, 10 users, load averages: 3.65 3.27 3.70
+machine: hw.ncpu 18 (6 performance + 12 efficiency cores)

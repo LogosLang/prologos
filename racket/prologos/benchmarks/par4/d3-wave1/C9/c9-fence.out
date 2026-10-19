@@ -1,0 +1,22 @@
+== A1: S-9 — unfenced F reads fenced T (LWW); out = set of T values F saw (a JOIN, converted)
+  BSP   (replay oracle) T,out:  (w1 (w1 w2))
+  DRAIN (production)    T,out:  (w1 (w1 w2))
+  K1    (DIRECT, no fence) T,out:  (w2 (w2))
+  K>1F  (fence alternation) T,out:  (w2 (w2))
+  converted cell `out`: K>1F vs BSP DIFFER; K>1F vs K1 same
+  fence counters: ((alternations . 1) (direct-fires . 5) (direct-quiescence-detections . 2) (fenced-fires . 2) (subrun-rounds . 1))
+== A1b: S-9 with F installed between the writers (K = 1 sees both values of T)
+  BSP   (replay oracle) T,out:  (late (early late))
+  DRAIN (production)    T,out:  (early (early late))
+  K1    (DIRECT, no fence) T,out:  (late (early late))
+  K>1F  (fence alternation) T,out:  (late (late))
+  converted cell `out`: K>1F vs K1 DIFFER (S-9 expects same); K>1F vs BSP DIFFER; K1 vs BSP same
+== A2: a fire writing both a fenced cell T and an unfenced cell U
+  BSP   T,U,V:  ((t 1) 11 11)
+  K>1F  T,U,V:  ((t 1) 11 11)
+  fence counters: ((alternations . 1) (direct-fires . 2) (direct-quiescence-detections . 2) (fenced-fires . 1) (subrun-rounds . 1))
+== A3: chain crossing the fence d times (half the fires fenced): alternations vs BSP rounds
+  d=1  BSP rounds 2 | K>1F alternations 0, DIRECT-quiescence detections 1, sub-run rounds 1, fenced fires 1, direct fires 1 | u_d BSP=1 K>1F=1
+  d=4  BSP rounds 8 | K>1F alternations 3, DIRECT-quiescence detections 4, sub-run rounds 4, fenced fires 7, direct fires 7 | u_d BSP=1 K>1F=1
+  d=16  BSP rounds 32 | K>1F alternations 15, DIRECT-quiescence detections 16, sub-run rounds 16, fenced fires 31, direct fires 31 | u_d BSP=1 K>1F=1
+  d=64  BSP rounds 128 | K>1F alternations 63, DIRECT-quiescence detections 64, sub-run rounds 64, fenced fires 127, direct fires 127 | u_d BSP=1 K>1F=1

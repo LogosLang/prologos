@@ -1,0 +1,180 @@
+PERF-COUNTERS:{"cell_allocs":7644,"constraint_count":0,"constraint_retries":0,"elaborate_steps":1030,"inert_dependent_skips":0,"infer_steps":1606,"meta_created":22,"meta_solved":16,"prop_allocs":0,"prop_firings":0,"reduce_steps":1300,"resolution_cycles":0,"solver_backtracks":68,"solver_col_compares":164,"solver_row_scans":122,"solver_unifies":513,"trait_resolve_steps":2,"unify_steps":175,"zonk_steps":1341}
+PHASE-TIMINGS:{"elaborate_ms":2,"parse_ms":6,"qtt_ms":0,"reduce_ms":3,"trait_resolve_ms":0,"type_check_ms":8,"zonk_ms":2}
+PROVENANCE-STATS:{"atms_hypothesis_count":78,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":2,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Triple : [Type 0] defined.
+1: A : acceptance::punify::Triple defined.
+2: B : acceptance::punify::Triple defined.
+3: C : acceptance::punify::Triple defined.
+4: := : acceptance::punify::Triple defined.
+5: triple : acceptance::punify::Triple defined.
+6: A : acceptance::punify::Triple defined.
+7: B : acceptance::punify::Triple defined.
+8: C : acceptance::punify::Triple defined.
+9: Tree : [Pi [x :0 <[Type 0]>] [Type 0]] defined.
+10: leaf : [Pi [x :0 <[Type 0]>] x -> [acceptance::punify::Tree x]] defined.
+11: node : [Pi [x :0 <[Type 0]>] [acceptance::punify::Tree x] [acceptance::punify::Tree x] -> [acceptance::punify::Tree x]] defined.
+12: Outer : [Type 0] defined.
+13: A : acceptance::punify::Outer defined.
+14: B : acceptance::punify::Outer defined.
+15: C : acceptance::punify::Outer defined.
+16: := : acceptance::punify::Outer defined.
+17: outer : acceptance::punify::Outer defined.
+18: A : acceptance::punify::Outer defined.
+19: B : acceptance::punify::Outer defined.
+20: C : acceptance::punify::Outer defined.
+21: Inner : [Type 0] defined.
+22: A : acceptance::punify::Inner defined.
+23: B : acceptance::punify::Inner defined.
+24: := : acceptance::punify::Inner defined.
+25: inner : acceptance::punify::Inner defined.
+26: A : acceptance::punify::Inner defined.
+27: B : acceptance::punify::Inner defined.
+28: Matrix : [Type 0] defined.
+29: A : acceptance::punify::Matrix defined.
+30: := : acceptance::punify::Matrix defined.
+31: matrix : acceptance::punify::Matrix defined.
+32: A : acceptance::punify::Matrix defined.
+33: A : acceptance::punify::Matrix defined.
+34: Row : [Type 0] defined.
+35: A : acceptance::punify::Row defined.
+36: B : acceptance::punify::Row defined.
+37: := : acceptance::punify::Row defined.
+38: row : acceptance::punify::Row defined.
+39: A : acceptance::punify::Row defined.
+40: B : acceptance::punify::Row defined.
+41: Edge : [Type 0] defined.
+42: A : acceptance::punify::Edge defined.
+43: := : acceptance::punify::Edge defined.
+44: edge : acceptance::punify::Edge defined.
+45: A : acceptance::punify::Edge defined.
+46: A : acceptance::punify::Edge defined.
+47: Graph : [Type 0] defined.
+48: A : acceptance::punify::Graph defined.
+49: := : acceptance::punify::Graph defined.
+50: graph : acceptance::punify::Graph defined.
+51: A : acceptance::punify::Graph defined.
+52: Env : [Type 0] defined.
+53: K : acceptance::punify::Env defined.
+54: V : acceptance::punify::Env defined.
+55: R : acceptance::punify::Env defined.
+56: := : acceptance::punify::Env defined.
+57: env : acceptance::punify::Env defined.
+58: K : acceptance::punify::Env defined.
+59: V : acceptance::punify::Env defined.
+60: R : acceptance::punify::Env defined.
+61: EvenOdd : [Pi [x :0 <[Type 0]>] [Type 0]] defined.
+62: even : [Pi [x :0 <[Type 0]>] x -> [acceptance::punify::EvenOdd x]] defined.
+63: odd : [Pi [x :0 <[Type 0]>] x -> [acceptance::punify::EvenOdd x]] defined.
+64: Copy : [Type 0] defined.
+65: A : acceptance::punify::Copy defined.
+66: := : acceptance::punify::Copy defined.
+67: copy : acceptance::punify::Copy defined.
+68: A : acceptance::punify::Copy defined.
+69: A : acceptance::punify::Copy defined.
+70: Describable-describe : [Pi [x :0 <[Type 0]>] [x -> String] x -> String] defined.
+71: describe : [Pi [x :0 <[Type 0]>] [x -> String] x -> String] defined.
+72: @[{:y 2, :x 1, :z 3}] : _
+73: @[{:c 3, :a 1, :b 2, :x 1}] : _
+74: @[{:c 3, :a 1, :y 2, :b 2, :x 1}] : _
+75: @[{:a 1, :b 1, :c 1, :x 1, :y 1, :w 1}] : [PVec {:a Int :b Int :c Int :w Int :x Int :y Int}]
+76: @[{:a 2, :y y2, :b 3, :y2 y2, :x 1, :r 1}] : _
+77: @[{:c y, :a 1, :y y, :b x, :x x, :z 1}] : _
+78: @[{:a [leaf 1], :b [inner 1 2], :c [leaf 2], :x 1, :y 2, :z 2}] : [PVec {:a _ :b _ :c _ :x Int :y Int :z Int}]
+79: @[{:original [node [leaf 1] [node [leaf 2] [leaf 3]]], :duplicate [node [leaf 1] [node [leaf 2] [leaf 3]]], :l [leaf 1], :r [node [leaf 2] [leaf 3]]}] : [PVec {:duplicate _ :l _ :original _ :r _}]
+80: @[{:a 10, :b 10, :c 20, :d 20, :x 10, :y 20}] : [PVec {:a Int :b Int :c Int :d Int :x Int :y Int}]
+81: @[{:rest "nil", :val 42, :x "foo", :r 42}] : _
+82: @[{:c x, :a 1, :b 2, :x x}] : _
+83: @[{:y 42, :x 42}] : _
+84: @[{:a 1, :b 2, :c [inner 1 2]}] : [PVec {:a Int :b Int :c _}]
+85: color : _ defined.
+86: @[{:hex "#ff0000"}] : [PVec {:hex String}]
+87: @[{:name "blue"}] : [PVec {:name String}]
+88: link : _ defined.
+89: reachable : _ defined.
+90: @[{:to "b"} {:to "c"} {:to "d"}] : [PVec {:to String}]
+91: @[{:from "c"} {:from "a"} {:from "b"}] : [PVec {:from String}]
+92: same-start : _ defined.
+93: @[{:x "a", :y "a"} {:x "b", :y "b"} {:x "c", :y "c"}] : [PVec {:x String :y String}]
+94: not-linked-to-d : _ defined.
+95: @[{:to "c"}] : [PVec {:to String}]
+96: @[{:from "b"}] : [PVec {:from String}]
+97: @[{:from "a", :to "b"} {:from "b", :to "c"} {:from "c", :to "d"}] : [PVec {:from String :to String}]
+98: classify-sign : _ defined.
+99: @[{:label "positive"}] : [PVec {:label String}]
+100: @[{:label "zero"}] : [PVec {:label String}]
+101: color-hex : _ defined.
+102: @[{:hex "#FF0000"}] : [PVec {:hex String}]
+103: @[{:name "green"}] : [PVec {:name String}]
+104: is-zero : Int -> Bool defined.
+105: true : Bool
+106: false : Bool
+107: 7 : Int
+108: 30 : Int
+109: 7 : Int
+110: 16 : Int
+111: make-adder : Int Int -> Int defined.
+112: add5 : Int -> Int defined.
+113: 15 : Int
+114: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+115: [prologos::data::option::some [prologos::data::list::List Int] '[2 3]] : [prologos::data::option::Option [prologos::data::list::List Int]]
+116: 3N : Nat
+117: my-map : {:age Int :name String} defined.
+118: "alice" : String
+119: 30 : Int
+120: true : Bool
+121: true : Bool
+122: true : Bool
+123: 5 : Int
+124: 5N : Nat
+125: true : Bool
+126: false : Bool
+127: @[{:r 7}] : _
+128: {:r 30} : _
+129: double-check : _ defined.
+130: @[{:r 10}] : [PVec {:r Int}]
+131: tripled : _ defined.
+132: @[{:r 21}] : [PVec {:r Int}]
+133: safe-div : _ defined.
+134: @[{:r 5}] : [PVec {:r Int}]
+135: @[{:r 16}] : _
+136: ERROR: Unbound variable
+137: ERROR: Unbound variable
+138: ERROR: Unbound variable
+139: ERROR: Unbound variable
+140: ERROR: Unbound variable
+141: flip : Bool -> Bool defined.
+142: ERROR: Unbound variable
+143: '[{:b false}] : _
+144: @[{:x 10, :y 15}] : [PVec {:x Int :y Int}]
+145: fav : _ defined.
+146: {:color "blue"} : {:color String}
+147: @[{:x 1}] : _
+148: @[{:y 2}] : _
+149: none : {:color String}
+150: @[{:x 7, :y 14, :z [some 7]}] : [PVec {:x Int :y Int :z _}]
+151: {:a 10, :b 20} : _
+152: factorial-check : _ defined.
+153: @[{:r 1}] : [PVec {:r Int}]
+154: @[{:r 20}] : [PVec {:r Int}]
+155: in-range : _ defined.
+156: @[{}] : _
+157: @[] : _
+158: @[{:x 42}] : _
+159: @[{:x 42}] : _
+160: @[{:a 1, :b 2}] : _
+161: @[{:b 2, :x 1}] : _
+162: @[{:active true, :name "alice", :age 30}] : _
+163: @[{:c 5, :y 2, :w 4, :x 1, :z 3}] : _
+164: @[{:a 1, :b 2, :c 3, :d 3, :e 5, :f 8}] : [PVec {:a Int :b Int :c Int :d Int :e Int :f Int}]
+165: @[{:x 30, :y 30, :z 60}] : [PVec {:x Int :y Int :z Int}]
+166: @[{:a 3, :b 4, :sum 7, :prod 12}] : [PVec {:a Int :b Int :prod Int :sum Int}]
+167: @[{:from "a", :to "c", :via "b"} {:from "b", :to "d", :via "c"}] : [PVec {:from String :to String :via String}]
+168: @[{:a 1, :b 2, :c 2, :d 1}] : [PVec {:a Int :b Int :c Int :d Int}]
+169: @[{:x 42, :y 42}] : [PVec {:x Int :y Int}]
+170: my-add : Nat Nat -> Nat defined.
+171: 7N : Nat
+172: ERROR: Unbound variable
+
+--- 7 errors ---
+W24 {"exec":"prod","exec_fires":187,"exec_rounds":95,"exec_wide_rounds":2,"file":"2026-03-19-punify-acceptance.prologos","forks":0,"routes":{"dfs":28,"tier1":6},"strat":"auto","wall_ms":253.0}

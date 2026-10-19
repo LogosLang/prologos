@@ -1,0 +1,8 @@
+RESULT 0.0: id : Nat -> Nat defined.
+RESULT 0.1: ERROR: Type mismatch
+RESULT 0.2: ERROR: Type mismatch
+RESULT 0.3: add : Nat Nat -> Nat defined.
+RESULT 0.4: mult : Nat Nat -> Nat defined.
+RESULT 0.5: ERROR: Unbound variable
+RESULT 0.6: ERROR: Could not infer type
+STATS leg=fresh files=1 params=219 rounds=2 wide-rounds(>=8)=0 fires=7 reentrant=0 ms=3.0

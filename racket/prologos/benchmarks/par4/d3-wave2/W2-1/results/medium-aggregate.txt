@@ -1,0 +1,17 @@
+medium-tier files: 17 | with BSP S0 fires: 11 | zero: ['church-folds.prologos', 'dependent-types.prologos', 'higher-order.prologos', 'pairs-sigma.prologos', 'pattern-matching.prologos', 'recursive-types.prologos']
+medium tier: S0 fire ms total 1.467 over command ms 127.2 = 0.012
+medium tier time-weighted async bound K=8 CELL+F_CELL 1.04
+medium tier time-weighted async bound K=8 COMP_S+F_COMPs 1.13
+medium tier time-weighted async bound K=8 COMP_S+NONE 1.6
+medium tier time-weighted async bound K=8 PID+NONE 1.63
+  atms-adversarial.prologos  S0 0.141 ms of 29.2 ms (0.005) W/S 1.22  fenced(comp) t 0.00  raised=None
+  bool-logic.prologos        S0 0.266 ms of 3.7 ms (0.072) W/S 2.77  fenced(comp) t 0.87  raised=None
+  implicit-args.prologos     S0 0.395 ms of 3.5 ms (0.112) W/S 1.33  fenced(comp) t 0.84  raised=None
+  nat-arithmetic.prologos    S0 0.187 ms of 2.5 ms (0.074) W/S 1.83  fenced(comp) t 0.90  raised=None
+  parity-adversarial.prologos S0 0.089 ms of 18.2 ms (0.005) W/S 1.78  fenced(comp) t 0.00  raised=solve: Depth limit exceeded (100)
+  records-seal-validate.prologos S0 0.110 ms of 5.5 ms (0.020) W/S 2.24  fenced(comp) t 0.29  raised=None
+  records-typing.prologos    S0 0.014 ms of 5.8 ms (0.002) W/S 1.00  fenced(comp) t 0.00  raised=None
+  scheduler-adversarial.prologos S0 0.160 ms of 6.3 ms (0.025) W/S 2.67  fenced(comp) t 0.84  raised=None
+  simple-typed.prologos      S0 0.026 ms of 2.0 ms (0.013) W/S 1.44  fenced(comp) t 0.77  raised=None
+  solve-adversarial.prologos S0 0.070 ms of 20.6 ms (0.003) W/S 1.00  fenced(comp) t 0.00  raised=None
+  solve-scale.prologos       S0 0.009 ms of 14.9 ms (0.001) W/S 1.00  fenced(comp) t 0.00  raised=None

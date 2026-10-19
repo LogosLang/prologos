@@ -1,0 +1,109 @@
+
+=== Q1: D.2 as written (idle-epoch max-counter, cons at drain, double scan) — reproduction ===
+CASCADE  D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=-                           states=   5456  PREMATURE STALE
+    PREMATURE witness (22 steps): A:drain B(0) ; B:drain A(0) ; A:fire p: send delta->B ; A:prod=1 ; A:drain B(0) ; A:ind=1 ; B:ind=1 ; B:drain A(1) ; B:write cB ; B:cons=1 ; D:read PA=1 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read CB=1 ; D:read IB=1 ; D:read PA=1 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read CB=1 ; D:read IB=1 -> DECLARE (0,)
+      (0.1s)
+CASCADE  D2     TSO SEP fr=counted   bnd=Q   scans=2 fences=-                           states=  23450  PREMATURE STALE
+      (0.4s)
+CASCADE  D2     PSO SEP fr=counted   bnd=Q   scans=2 fences=-                           states=  59654  PREMATURE STALE
+      (1.2s)
+K3       D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=-                           states= 877246  PREMATURE STALE
+    PREMATURE witness (35 steps): A:drain B(0) ; A:drain C(0) ; B:drain A(0) ; A:fire p: send delta->B ; A:prod=1 ; A:drain B(0) ; A:drain C(0) ; A:ind=1 ; B:drain C(0) ; B:ind=1 ; B:drain A(1) ; B:write cB ; B:drain C(0) ; B:cons=1 ; C:drain A(0) ; C:drain B(0) ; C:ind=1 ; D:read PA=1 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read CB=1 ; D:read IB=1 ; D:read PC=0 ; D:read CC=0 ; D:read IC=1 ; D:read PA=1 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read CB=1 ; D:read IB=1 ; D:read PC=0 ; D:read CC=0 ; D:read IC=1 -> DECLARE (0,)
+      (18.9s)
+  D.2 also has no fire requests (Lane = Set [CellId Delta]):
+FREQ     D2     SC  SEP fr=none      bnd=Q   scans=2 fences=-                           states=    508  WRONGFIX STALE
+    WRONGFIX witness (18 steps): A:drain B(0) ; A:fire p: write cA ; A:drain B(0) ; A:ind=1 ; B:drain A(0) ; B:ind=1 ; D:read PA=0 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read CB=0 ; D:read IB=1 ; D:read PA=0 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read CB=0 ; D:read IB=1 -> DECLARE (0,)
+      (0.0s)
+FREQ     D2     SC  SEP fr=uncounted bnd=Q   scans=2 fences=-                           states=    968  PREMATURE STALE
+    PREMATURE witness (19 steps): A:drain B(0) ; A:fire p: write cA ; B:drain A(0) ; B:ind=1 ; A:push r->B (uncounted) ; A:drain B(0) ; A:ind=1 ; D:read PA=0 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read CB=0 ; D:read IB=1 ; D:read PA=0 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read CB=0 ; D:read IB=1 -> DECLARE (0,)
+      (0.0s)
+  D.2 contradiction stop (boundary only on the counters):
+CONTRA   D2     SC  SEP fr=counted   bnd=Q   scans=2 fences=-                           states=   7220  NOT-LIVE
+    NOT-LIVE witness (0 steps to a state that can never reach the boundary): 
+      (0.1s)
+
+=== Q2 power rows: each must FAIL ===
+  (i) uncounted / missing fire requests, every scheme:
+FREQ     D2     SC  SEP fr=uncounted bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    968  PREMATURE STALE
+      (0.0s)
+FREQ     D2     SC  SEP fr=none      bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    508  WRONGFIX STALE
+      (0.0s)
+FREQ     FLAG   SC  SEP fr=uncounted bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    968  PREMATURE STALE
+      (0.0s)
+FREQ     FLAG   SC  SEP fr=none      bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    508  WRONGFIX STALE
+      (0.0s)
+FREQ     ACT    SC  SEP fr=uncounted bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    968  PREMATURE STALE
+      (0.0s)
+FREQ     ACT    SC  SEP fr=none      bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    508  WRONGFIX STALE
+      (0.0s)
+FREQ     QUIET  SC  SEP fr=uncounted bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    968  PREMATURE STALE
+      (0.0s)
+FREQ     QUIET  SC  SEP fr=none      bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    508  WRONGFIX STALE
+      (0.0s)
+FREQ     DEFER  SC  SEP fr=uncounted bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    968  PREMATURE STALE
+      (0.0s)
+FREQ     DEFER  SC  SEP fr=none      bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    508  WRONGFIX STALE
+      (0.0s)
+FREQ     SEEDS  SC  SEP fr=uncounted bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    681  PREMATURE STALE
+    PREMATURE witness (15 steps): A:drain B(0) ; A:drain S(1) ; A:fire p: write cA ; A:push r->B (uncounted) ; A:drain B(0) ; A:drain S(0) ; A:cons=1 ; D:read PA=0 ; D:read CA=1 ; D:read PB=0 ; D:read CB=0 ; D:read PA=0 ; D:read CA=1 ; D:read PB=0 ; D:read CB=0 -> DECLARE (0,)
+      (0.0s)
+FREQ     SEEDS  SC  SEP fr=none      bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=    324  WRONGFIX STALE
+    WRONGFIX witness (14 steps): A:drain B(0) ; A:drain S(1) ; A:fire p: write cA ; A:drain B(0) ; A:drain S(0) ; A:cons=1 ; D:read PA=0 ; D:read CA=1 ; D:read PB=0 ; D:read CB=0 ; D:read PA=0 ; D:read CA=1 ; D:read PB=0 ; D:read CB=0 -> DECLARE (0,)
+      (0.0s)
+FREQ     CREDIT SC  SEP fr=uncounted bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons states=    120  PREMATURE STALE
+      (0.0s)
+FREQ     CREDIT SC  SEP fr=none      bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons states=     44  WRONGFIX STALE
+      (0.0s)
+  (ii) single scan for every counting scheme (credit is single-scan by design):
+BOUNCE   FLAG   SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons states=   3290  PREMATURE STALE
+      (0.0s)
+BOUNCE   ACT    SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons states=   6982  PREMATURE STALE
+      (0.1s)
+BOUNCE   QUIET  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons states=   4600  PREMATURE STALE
+      (0.1s)
+BOUNCE   DEFER  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons states=   4179  PREMATURE STALE
+      (0.0s)
+BOUNCE   SEEDS  SC  SEP fr=counted   bnd=Q   scans=1 fences=- send=prod-lane pub=ind-cons states=   4188  PREMATURE STALE
+    PREMATURE witness (11 steps): A:drain B(0) ; A:drain S(1) ; D:read PA=0 ; A:fire p: prod=1 ; A:send delta->B ; A:drain B(0) ; A:drain S(0) ; A:cons=1 ; D:read CA=1 ; D:read PB=0 ; D:read CB=0 -> DECLARE (0,)
+      (0.0s)
+  (iii) ordering invariants between separate cells (SC, no memory model needed):
+CASCADE  FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=cons-ind states=   5544  PREMATURE STALE
+    PREMATURE witness (22 steps): A:drain B(0) ; A:fire p: prod=1 ; B:drain A(0) ; A:send delta->B ; A:drain B(0) ; A:ind=1 ; B:ind=1 ; B:drain A(1) ; B:write cB ; B:cons=1 ; D:read PA=1 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read CB=1 ; D:read IB=1 ; D:read PA=1 ; D:read CA=0 ; D:read IA=1 ; D:read PB=0 ; D:read CB=1 ; D:read IB=1 -> DECLARE (0,)
+      (0.1s)
+CASCADE  ACT    SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=cons-ind states=   8440  PREMATURE STALE
+    PREMATURE witness (22 steps): A:drain B(0) ; A:fire p: prod=1 ; B:drain A(0) ; A:send delta->B ; A:drain B(0) ; A:ind=2 ; B:ind=2 ; B:drain A(1) ; B:write cB ; B:cons=1 ; D:read PA=1 ; D:read CA=0 ; D:read IA=2 ; D:read PB=0 ; D:read CB=1 ; D:read IB=2 ; D:read PA=1 ; D:read CA=0 ; D:read IA=2 ; D:read PB=0 ; D:read CB=1 ; D:read IB=2 -> DECLARE (0,)
+      (0.1s)
+SENDWRITE SEEDS  SC  SEP fr=counted   bnd=Q   scans=2 fences=-                           states=   2979  PREMATURE STALE
+    PREMATURE witness (18 steps): A:drain B(0) ; A:drain S(1) ; A:fire p: send delta->B ; B:drain A(1) ; B:write cB ; B:drain S(0) ; B:fire q1: write cB2 ; B:drain A(0) ; B:drain S(0) ; B:cons=1 ; D:read PA=0 ; D:read CA=0 ; D:read PB=0 ; D:read CB=1 ; D:read PA=0 ; D:read CA=0 ; D:read PB=0 ; D:read CB=1 -> DECLARE (0,)
+      (0.0s)
+SENDWRITE DEFER  SC  SEP fr=counted   bnd=Q   scans=2 fences=-                           states=   5074  sound+live
+      (0.1s)
+SENDWRITE FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=lane-prod pub=ind-cons states=   5560  sound+live
+      (0.1s)
+  (iv) read order inside a scan (QUIET reads the mark before cons):
+BOUNCE   QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  30630  sound+live
+      (0.4s)
+BOUNCE   FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons states=  19078  sound+live
+      (0.2s)
+BOUNCE   QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=PIC states=  34364  sound+live
+      (0.5s)
+BOUNCE   FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=PIC states=  24846  PREMATURE STALE
+      (0.3s)
+BOUNCE   QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=IPC states=  30060  sound+live
+      (0.4s)
+BOUNCE   FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=IPC states=  21994  sound+live
+      (0.3s)
+BOUNCE   QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ICP states=  35068  sound+live
+      (0.5s)
+BOUNCE   FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=ICP states=  26288  sound+live
+      (0.3s)
+BOUNCE   QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=CPI states=  36010  sound+live
+      (0.5s)
+BOUNCE   FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=CPI states=  22476  sound+live
+      (0.3s)
+BOUNCE   QUIET  SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=CIP states=  31062  sound+live
+      (0.4s)
+BOUNCE   FLAG   SC  SEP fr=counted   bnd=Q   scans=2 fences=- send=prod-lane pub=ind-cons read=CIP states=  19136  sound+live
+      (0.2s)
+
+total 26s

@@ -1,0 +1,10 @@
+aarch64 memory-order probe; each row: writer N ops, reader spins concurrently
+V1 MP fixnums, plain        N=20M: (violations 2472125 reader-iterations 13620271)
+V2 MP fixnums, rel/acq      N=20M: (violations 0 reader-iterations 25030974)
+V3 lane append, plain count N=4M:  (violations 47495 reader-checks 23387829)
+V4 lane append, rel/acq     N=4M:  (violations 0 reader-checks 13669270)
+V1 MP fixnums, plain        N=20M: (violations 4275031 reader-iterations 12973483)
+V2 MP fixnums, rel/acq      N=20M: (violations 0 reader-iterations 24154045)
+V3 lane append, plain count N=4M:  (violations 60962 reader-checks 24676646)
+V4 lane append, rel/acq     N=4M:  (violations 0 reader-checks 13194708)
+V5 CHAMP root publish, plain set-box! N=300k: (violations 0 reader-checks 252182)

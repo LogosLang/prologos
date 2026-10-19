@@ -1,0 +1,45 @@
+ns probes::w2u2
+
+;; W2-10 u2: what a user sees from :timeout (fuel = ms x 1000 fires, relations.rkt:3115-3116)
+;; and :execution (BSP vs the Gauss-Seidel drain, stratified-eval.rkt:301-302), on the ATMS route.
+
+solver atms-s
+  :strategy atms
+
+solver atms-seq
+  :strategy atms
+  :execution sequential
+
+defr edge [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+     "d" "e"
+     "e" "f"
+     "f" "g"
+     "g" "h"
+
+defr path [?from ?to]
+  &> (edge from to)
+  &> (edge from mid) (path mid to)
+
+defr pick [?x]
+  &> (= x 1)
+  &> (= x 2)
+
+defr two [?x]
+  &> (= x 1) (= x 2)
+
+;; Q0 baseline answers
+solve-with atms-s (path "a" dest)
+;; Q1 :execution sequential (the drain) — same answers?
+solve-with atms-seq (path "a" dest)
+;; Q2 :timeout 1 => fuel 1000 fires
+solve-with atms-s {:timeout 1} (path "a" dest)
+;; Q3 :timeout 0 => fuel 0
+solve-with atms-s {:timeout 0} (path "a" dest)
+;; Q4-Q7 the PD-1 rows under both :execution values
+solve-with atms-s (two ?x)
+solve-with atms-seq (two ?x)
+solve-with atms-s (rel [?x] (= ?x 1) (pick ?x))
+solve-with atms-seq (rel [?x] (= ?x 1) (pick ?x))

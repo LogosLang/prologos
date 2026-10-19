@@ -1,0 +1,6 @@
+ns probes::w2u6
+
+;; W2-10 u6: warning order across identical runs (attribute-map harvest iterates a hasheq,
+;; typing-propagators.rkt:3064-3074). Several coercions in ONE command.
+def w := [+ [+ 1 1.5] [+ [+ 2 2.5] [+ [+ 3 3.5] [+ 4 4.5]]]]
+def v := [+ [+ 10 0.5] [+ 20 0.25]]

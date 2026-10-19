@@ -1,0 +1,2 @@
+STATS3 file=/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/examples/2026-07-31-solve-carrier.prologos results=28 rounds=59 fires=290 control-divergent=0 nested=0 stale-params=96 ms=316.0
+DEP current-impl-registry fires=5 stale-rounds=59 fns=...ing-propagators.rkt:861:2×5

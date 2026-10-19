@@ -1,0 +1,3 @@
+before promotion: merge(a) eq? merge(b): #t ; eq? mx: #t
+after promotion:  merge(a) eq? merge(b): #f ; merge(a) eq? mx: #f
+re-promote a (idempotent?): merge unchanged: #t

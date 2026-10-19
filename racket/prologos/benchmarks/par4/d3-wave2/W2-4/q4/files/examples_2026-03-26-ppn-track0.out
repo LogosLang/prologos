@@ -1,0 +1,137 @@
+Hole ??__match-fail : Bool
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta2335
+Context:
+  x : ?meta2334  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":5467,"constraint_count":0,"constraint_retries":0,"elaborate_steps":570,"inert_dependent_skips":0,"infer_steps":722,"meta_created":128,"meta_solved":81,"prop_allocs":0,"prop_firings":0,"reduce_steps":4351,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":2,"unify_steps":310,"zonk_steps":1073}
+PHASE-TIMINGS:{"elaborate_ms":3,"parse_ms":3,"qtt_ms":1,"reduce_ms":5,"trait_resolve_ms":0,"type_check_ms":42,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":32,"atms_nogood_count":6,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":16,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Color : [Type 0] defined.
+1: red : ppn-s25::Color defined.
+2: green : ppn-s25::Color defined.
+3: blue : ppn-s25::Color defined.
+4: Point : [Type 0] defined.
+5: ERROR: Unbound variable
+6: Tree : [Type 0] defined.
+7: leaf : ppn-s25::Tree defined.
+8: ERROR: Unbound variable
+9: a : Int defined.
+10: b : Int defined.
+11: c : Int defined.
+12: n : Nat defined.
+13: m : Nat defined.
+14: p : Bool defined.
+15: greeting : String defined.
+16: ERROR: Unbound variable
+17: len : Int defined.
+18: 7 : Int
+19: 30 : Int
+20: 7 : Int
+21: ERROR: defn: expected 'name <type>' in parameter list, got (int* x 2)
+22: xs : [prologos::data::list::List Int] defined.
+23: ERROR: Could not infer type
+24: ERROR: Unbound variable
+25: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+26: [prologos::data::option::some [prologos::data::list::List Int] '[2 3 4 5]] : [prologos::data::option::Option [prologos::data::list::List Int]]
+27: ERROR: Unbound variable
+28: 15 : Int
+29: ERROR: Could not infer type
+30: m : {:age Int :name String} defined.
+31: "alice" : String
+32: 42 : Int
+33: ERROR: Could not infer type
+34: pv : [PVec Int] defined.
+35: my-id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+36: 42 : Int
+37: "hello" : String
+38: true : Bool
+39: my-const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+40: 42 : Int
+41: apply-twice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+42: 12 : Int
+43: 12 : Int
+44: is-zero defined (arities: 1, 2).
+45: true : Bool
+46: ??__match-fail : Bool
+47: list-head-or-default : [prologos::data::list::List _] _ -> _ defined.
+48: 1 : _
+49: 99 : _
+50: negate : Bool -> Bool defined.
+51: [negate true] : Bool
+52: ERROR: Unbound variable
+53: ERROR: Unbound variable
+54: ERROR: Unbound variable
+55: 3N : Nat
+56: [prologos::data::option::some Int 10] : [prologos::data::option::Option Int]
+57: 5 : Int
+58: 65 : Int
+59: make-adder : Int Int -> Int defined.
+60: add5 : Int -> Int defined.
+61: 15 : Int
+62: 25 : Int
+63: inc : Int -> Int defined.
+64: dbl : Int -> Int defined.
+65: 13 : Int
+66: x : [prologos::data::option::Option Int] defined.
+67: y : [prologos::data::option::Option _] defined.
+68: true : Bool
+69: true : Bool
+70: ok-val : [prologos::data::result::Result Int _] defined.
+71: err-val : [prologos::data::result::Result _ String] defined.
+72: true : Bool
+73: true : Bool
+74: i : Int defined.
+75: r : Rat defined.
+76: ty : [Type 0] defined.
+77: p : [Eq Int 42 42] defined.
+78: q : [Eq Int 42 42] defined.
+79: r : [Eq Int 42 42] defined.
+80: ERROR: Unbound variable
+81: ERROR: Unbound variable
+82: ERROR: Unbound variable
+83: s : String defined.
+84: 5 : Int
+85: ERROR: Unbound variable
+86: ERROR: Unbound variable
+87: ch : Char defined.
+88: 65 : Int
+89: user : {:active Bool :age Int :name String} defined.
+90: "alice" : String
+91: 30 : Int
+92: true : Bool
+93: org : {:lead {:name String :role String}} defined.
+94: ERROR: Unbound variable
+95: fib : Int -> Int defined.
+96: 55 : Int
+97: x : Int defined.
+98: y : Int defined.
+99: 150 : Int
+100: "yes" : String
+101: ERROR: Bare symbol ':' not allowed as map key; use :: for keyword
+102: ERROR: Unbound variable
+103: ERROR: Bare symbol ':' not allowed as map key; use :: for keyword
+104: ERROR: Unbound variable
+105: u : Int | String defined.
+106: v : Int | String defined.
+107: ERROR: Unbound variable
+108: 5 : Int
+109: 65 : Int
+110: 3 : Int
+111: 36 : Int
+112: empty : [prologos::data::list::List Int] defined.
+113: 0N : Nat
+114: single : [prologos::data::list::List Int] defined.
+115: [prologos::data::option::some Int 42] : [prologos::data::option::Option Int]
+116: x-plus-y : Int defined.
+117: is-valid? : Bool defined.
+118: zero-nat : Nat defined.
+119: big-nat : Nat defined.
+120: ERROR: Unbound variable
+121: ERROR: defn: expected 'name <type>' in parameter list, got (int+ x 5)
+
+--- 25 errors ---
+W24 {"exec":"prod","exec_fires":1069,"exec_rounds":196,"exec_wide_rounds":37,"file":"2026-03-26-ppn-track0.prologos","handler_calls":11,"handler_produced_s0":2,"outer_continuations":2,"outer_hist":{"0":77,"1":2},"outer_max":1,"outer_runs":79,"strat":"auto","wall_ms":271.0}

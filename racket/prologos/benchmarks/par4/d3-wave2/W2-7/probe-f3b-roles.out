@@ -1,0 +1,11 @@
+--- Role A: type-lattice-merge ---
+A1 Bool ⊔ Pi(Nat,Nat)            (ground clash)         => #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Pi mw #(struct:expr-Nat) #(struct:expr-Nat)))   [top? #f]
+A2 Bool ⊔ Pi(?m,Nat), ?m unsolved (F3(b) fallback)       => #(struct:expr-Bool)   [top? #f]
+A3 Bool ⊔ Pi(?m,Nat), ?m := Nat   (same args, solved)    => #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Pi mw #(struct:expr-meta pm1 #f) #(struct:expr-Nat)))   [top? #f]
+A4 Pi(?m,Nat) ⊔ Bool, ?m unsolved (swapped)              => #(struct:expr-Bool)   [top? #f]
+--- Role B: type-unify-or-top ---
+B1 Bool ⊔ Pi(Nat,Nat)            (ground clash)         => type-top   [top? #t]
+B2 Bool ⊔ Pi(?m,Nat), ?m unsolved (F3(b) fallback)       => #(struct:expr-Bool)   [top? #f]
+B3 Bool ⊔ Pi(?m,Nat), ?m := Nat   (same args, solved)    => type-top   [top? #t]
+--- power row: the instrument distinguishes top from non-top ---
+P1 Bool ⊔ Bool                                           => #(struct:expr-Bool)   [top? #f]

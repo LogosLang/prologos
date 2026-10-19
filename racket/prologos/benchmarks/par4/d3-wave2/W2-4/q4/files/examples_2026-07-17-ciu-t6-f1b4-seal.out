@@ -1,0 +1,36 @@
+PERF-COUNTERS:{"cell_allocs":1302,"constraint_count":0,"constraint_retries":0,"elaborate_steps":147,"inert_dependent_skips":0,"infer_steps":178,"meta_created":12,"meta_solved":3,"prop_allocs":0,"prop_firings":0,"reduce_steps":764,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":46,"zonk_steps":223}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":3,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":10,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: Person : [Type 0] defined.
+1: Cfg : [Type 0] defined.
+2: Checked : [Type 0] defined.
+3: Locked : [Type 0] defined.
+4: m : {:age Int :name String | _} defined.
+5: {:name "alice", :age 30} : f1b4-seal-acceptance::Person
+6: bad : {:age String :name String | _} defined.
+7: ERROR: Could not infer type
+8: p : f1b4-seal-acceptance::Person defined.
+9: mv : [Map Keyword Int | String] defined.
+10: {:name "alice", :age 30} : f1b4-seal-acceptance::Person
+11: ERROR: Could not infer type
+12: ERROR: panic: Checked: field :age failed check (> _ 0) (sealed definition forced at commit)
+13: cgood : f1b4-seal-acceptance::Checked defined.
+14: 5 : Int
+15: [map-get (panic "Checked: field :age failed check (> _ 0)") :name] : String
+16: c : f1b4-seal-acceptance::Cfg defined.
+17: "localhost" : String
+18: ERROR: schema seal: missing required field :name of f1b4-seal-acceptance::Person
+19: "localhost" : String
+20: partial : {:name String | _} defined.
+21: {:name "gil"} : f1b4-seal-acceptance::Person
+22: cr : {:age Int} defined.
+23: ERROR: schema seal: missing required field :name of f1b4-seal-acceptance::Person (fields without :default must be provided; runtime maps discharge via validate)
+24: d1 : {:a Int | _} defined.
+25: ERROR: Could not infer type
+26: selection NameOnly from Person registered.
+27: u : f1b4-seal-acceptance::NameOnly defined.
+28: u2 : f1b4-seal-acceptance::NameOnly defined.
+
+--- 6 errors ---
+W24 {"exec":"prod","exec_fires":75,"exec_rounds":21,"exec_wide_rounds":2,"file":"2026-07-17-ciu-t6-f1b4-seal.prologos","outer_hist":{"0":15},"outer_max":0,"outer_runs":15,"strat":"auto","wall_ms":31.0}

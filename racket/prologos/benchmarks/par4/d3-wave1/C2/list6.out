@@ -1,0 +1,53 @@
+=== current-source-loc : PRODUCTION
+./driver.rkt:681:  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))]
+./propagator.rkt:40:         "source-location.rkt"  ;; PPN 4C Phase 1.5: current-source-loc for on-network srcloc
+./propagator.rkt:134: fire-propagator                  ;; PPN 4C Phase 1.5: scheduler fire helper — parameterizes current-source-loc
+./propagator.rkt:378:  (parameterize ([current-source-loc (propagator-srcloc prop)])
+./propagator.rkt:2289:                            #:srcloc [srcloc (current-source-loc)])
+./propagator.rkt:2372:                                      #:srcloc [srcloc (current-source-loc)])
+./propagator.rkt:2460:                                      #:srcloc [srcloc (current-source-loc)])
+./propagator.rkt:2775:             (let ([net* (fire-propagator prop net)])  ;; PPN 4C Phase 1.5: wraps with current-source-loc
+./source-location.rkt:24: current-source-loc)
+./source-location.rkt:36:(define current-source-loc (make-parameter #f))
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:162:  (printf "Scenario A — Synthetic E2E baseline (no current-source-loc parameterize)\n")
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:166:  (printf "  current-source-loc at probe entry = ~v\n" (current-source-loc))
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:170:    (printf "  current-source-loc INSIDE current-command-atms parameterize = ~v\n"
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:171:            (current-source-loc))
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:186:  (printf "Scenario B — Synthetic E2E WITH (parameterize ([current-source-loc test-loc]) ...)\n")
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:188:  (printf "Setup: same as A, but with current-source-loc bound to a test srcloc\n")
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:194:                 [current-source-loc test-loc])
+./data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt:195:    (printf "  current-source-loc INSIDE parameterize = ~v\n" (current-source-loc))
+./elaborator.rkt:1149:  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))])
+=== current-source-loc : NON-PRODUCTION (tests/tools/benchmarks)
+./tests/test-source-loc-infrastructure.rkt:27:(test-case "current-source-loc default #f"
+./tests/test-source-loc-infrastructure.rkt:28:  (parameterize ([current-source-loc #f])
+./tests/test-source-loc-infrastructure.rkt:29:    (check-false (current-source-loc))))
+./tests/test-source-loc-infrastructure.rkt:31:(test-case "current-source-loc parameterize sets and restores"
+./tests/test-source-loc-infrastructure.rkt:33:  (parameterize ([current-source-loc loc])
+./tests/test-source-loc-infrastructure.rkt:34:    (check-equal? (current-source-loc) loc))
+./tests/test-source-loc-infrastructure.rkt:36:  (check-false (current-source-loc)))
+./tests/test-source-loc-infrastructure.rkt:38:(test-case "current-source-loc nested parameterize"
+./tests/test-source-loc-infrastructure.rkt:41:  (parameterize ([current-source-loc outer])
+./tests/test-source-loc-infrastructure.rkt:42:    (check-equal? (current-source-loc) outer)
+./tests/test-source-loc-infrastructure.rkt:43:    (parameterize ([current-source-loc inner])
+./tests/test-source-loc-infrastructure.rkt:44:      (check-equal? (current-source-loc) inner))
+./tests/test-source-loc-infrastructure.rkt:46:    (check-equal? (current-source-loc) outer)))
+./tests/test-source-loc-infrastructure.rkt:81:(test-case "fire-propagator sets current-source-loc from propagator struct"
+./tests/test-source-loc-infrastructure.rkt:86:    (set-box! captured-during-fire (current-source-loc))
+./tests/test-source-loc-infrastructure.rkt:94:(test-case "fire-propagator restores current-source-loc after fire"
+./tests/test-source-loc-infrastructure.rkt:99:  (parameterize ([current-source-loc loc-before])
+./tests/test-source-loc-infrastructure.rkt:102:    (check-equal? (current-source-loc) loc-before)))
+./tests/test-source-loc-infrastructure.rkt:107:    (set-box! captured (current-source-loc))
+./tests/test-source-loc-infrastructure.rkt:111:  (parameterize ([current-source-loc #f])
+./tests/test-source-loc-infrastructure.rkt:140:(test-case "W1 default: net-add-propagator default #:srcloc is #f when current-source-loc unbound"
+./tests/test-source-loc-infrastructure.rkt:164:(test-case "W1 default: net-add-propagator inherits (current-source-loc) when bound"
+./tests/test-source-loc-infrastructure.rkt:170:    (parameterize ([current-source-loc loc])
+./tests/test-source-loc-infrastructure.rkt:175:(test-case "W1 default: net-add-fire-once-propagator inherits (current-source-loc) when bound"
+./tests/test-source-loc-infrastructure.rkt:180:    (parameterize ([current-source-loc loc])
+./tests/test-source-loc-infrastructure.rkt:185:(test-case "W1 default: net-add-broadcast-propagator inherits (current-source-loc) when bound"
+./tests/test-source-loc-infrastructure.rkt:191:    (parameterize ([current-source-loc loc])
+./tests/test-source-loc-infrastructure.rkt:199:(test-case "W1 default: explicit #:srcloc kwarg overrides (current-source-loc)"
+./tests/test-source-loc-infrastructure.rkt:207:    (parameterize ([current-source-loc outer-loc])
+./tests/test-source-loc-infrastructure.rkt:211:                "W1: explicit #:srcloc kwarg overrides (current-source-loc) default"))
+./tests/test-union-types-atms.rkt:892:                "all chain steps have srcloc=#f (no current-source-loc parameterize)")))
+./tests/test-union-types-atms.rkt:902:                 [current-source-loc test-loc])

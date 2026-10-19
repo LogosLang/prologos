@@ -1,0 +1,36 @@
+RESULT 0.0: color : _ defined.
+RESULT 0.1: @[{:hue "red"}] : [PVec {:hue String}]
+RESULT 0.2: @[{:item "banana"}] : [PVec {:item String}]
+RESULT 0.3: @[{:item "apple", :hue "red"} {:item "banana", :hue "yellow"} {:item "grape", :hue "purple"} {:item "lime", :hue "green"}] : [PVec {:hue String :item String}]
+RESULT 0.4: double : _ defined.
+RESULT 0.5: @[{:result 42}] : [PVec {:result Int}]
+RESULT 0.6: sign : _ defined.
+RESULT 0.7: @[{:label "positive"}] : [PVec {:label String}]
+RESULT 0.8: @[{:label "zero"}] : [PVec {:label String}]
+RESULT 0.9: edge : _ defined.
+RESULT 0.10: path : _ defined.
+RESULT 0.11: @[{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}] : [PVec {:dest String}]
+RESULT 0.12: @[{:src "d"} {:src "a"} {:src "b"} {:src "c"}] : [PVec {:src String}]
+RESULT 0.13: @[{:x 42}] : _
+RESULT 0.14: @[] : _
+RESULT 0.15: @[{:x 99}] : _
+RESULT 0.16: @[{:x 30}] : _
+RESULT 0.17: @[{:a 9, :b 16, :sum 25}] : [PVec {:a Int :b Int :sum Int}]
+RESULT 0.18: blocked : _ defined.
+RESULT 0.19: reachable : _ defined.
+RESULT 0.20: @[{:dest "b"}] : [PVec {:dest String}]
+RESULT 0.21: @[{:x 10, :y 20, :sum 30}] : [PVec {:sum Int :x Int :y Int}]
+RESULT 0.22: compute : _ defined.
+RESULT 0.23: @[{:sum 8, :prod 15}] : [PVec {:prod Int :sum Int}]
+RESULT 0.24: {:item "apple", :hue "red"} : {:hue String :item String}
+RESULT 0.25: @[{:v1 1}] : _
+RESULT 0.26: @[{:v2 2}] : _
+RESULT 0.27: @[{:v3 3}] : _
+RESULT 0.28: @[{:v4 4}] : _
+RESULT 0.29: @[{:v5 5}] : _
+RESULT 0.30: @[{:v6 6}] : _
+RESULT 0.31: @[{:v7 7}] : _
+RESULT 0.32: @[{:v8 8}] : _
+RESULT 0.33: @[{:v9 9}] : _
+RESULT 0.34: @[{:v10 10}] : _
+STATS leg=prod files=1 params=219 rounds=27 wide-rounds(>=8)=0 fires=27 reentrant=0 ms=178.0

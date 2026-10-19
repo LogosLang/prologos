@@ -1,0 +1,39 @@
+start Sun Oct 18 09:55:17 MST 2026 |  9:55  up  3:34, 10 users, load averages: 3.12 3.34 3.89
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/atms-adversarial.prologos: fires 134 runs 108 unobserved 0 wallA 30.0 reps-wall (30.0 29.0 29.0 29.0 29.0) seq-match (#t #t #t #t #t)
+exit 0 atms-adversarial 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/bool-logic.prologos: fires 78 runs 6 unobserved 0 wallA 4.0 reps-wall (4.0 4.0 4.0 4.0 4.0) seq-match (#t #t #t #t #t)
+exit 0 bool-logic 0s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/church-folds.prologos: fires 0 runs 0 unobserved 0 wallA 2.0 reps-wall (2.0 2.0 2.0 2.0 2.0) seq-match (#t #t #t #t #t)
+exit 0 church-folds 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos: fires 1136 runs 66 unobserved 0 wallA 89.0 reps-wall (49.0 46.0 46.0 48.0 47.0) seq-match (#t #t #t #t #t)
+exit 0 constraints-adversarial 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/dependent-types.prologos: fires 0 runs 0 unobserved 0 wallA 2.0 reps-wall (2.0 2.0 2.0 2.0 2.0) seq-match (#t #t #t #t #t)
+exit 0 dependent-types 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/higher-order.prologos: fires 0 runs 0 unobserved 0 wallA 3.0 reps-wall (2.0 2.0 2.0 3.0 3.0) seq-match (#t #t #t #t #t)
+exit 0 higher-order 0s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/implicit-args.prologos: fires 150 runs 5 unobserved 0 wallA 5.0 reps-wall (4.0 4.0 4.0 3.0 3.0) seq-match (#t #t #t #t #t)
+exit 0 implicit-args 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/nat-arithmetic.prologos: fires 50 runs 3 unobserved 0 wallA 3.0 reps-wall (2.0 3.0 2.0 3.0 3.0) seq-match (#t #t #t #t #t)
+exit 0 nat-arithmetic 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/pairs-sigma.prologos: fires 0 runs 0 unobserved 0 wallA 3.0 reps-wall (3.0 3.0 3.0 3.0 3.0) seq-match (#t #t #t #t #t)
+exit 0 pairs-sigma 0s
+exit 1 parity-adversarial 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/pattern-matching.prologos: fires 0 runs 0 unobserved 0 wallA 3.0 reps-wall (2.0 2.0 2.0 3.0 2.0) seq-match (#t #t #t #t #t)
+exit 0 pattern-matching 0s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/records-seal-validate.prologos: fires 52 runs 18 unobserved 0 wallA 6.0 reps-wall (6.0 5.0 5.0 5.0 5.0) seq-match (#t #t #t #t #t)
+exit 0 records-seal-validate 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/records-typing.prologos: fires 10 runs 10 unobserved 0 wallA 6.0 reps-wall (6.0 11.0 6.0 6.0 6.0) seq-match (#t #t #t #t #t)
+exit 0 records-typing 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/recursive-types.prologos: fires 0 runs 0 unobserved 0 wallA 3.0 reps-wall (3.0 4.0 3.0 3.0 3.0) seq-match (#t #t #t #t #t)
+exit 0 recursive-types 0s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/scheduler-adversarial.prologos: fires 61 runs 3 unobserved 0 wallA 7.0 reps-wall (7.0 6.0 6.0 6.0 6.0) seq-match (#t #t #t #t #t)
+exit 0 scheduler-adversarial 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/simple-typed.prologos: fires 7 runs 1 unobserved 0 wallA 2.0 reps-wall (2.0 2.0 2.0 2.0 2.0) seq-match (#t #t #t #t #t)
+exit 0 simple-typed 0s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/solve-adversarial.prologos: fires 77 runs 77 unobserved 0 wallA 21.0 reps-wall (21.0 21.0 21.0 20.0 21.0) seq-match (#t #t #t #t #t)
+exit 0 solve-adversarial 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/solve-scale.prologos: fires 6 runs 6 unobserved 0 wallA 16.0 reps-wall (15.0 16.0 15.0 15.0 15.0) seq-match (#t #t #t #t #t)
+exit 0 solve-scale 1s
+W2-1 /Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/type-adversarial.prologos: fires 1140 runs 61 unobserved 0 wallA 67.0 reps-wall (42.0 41.0 40.0 40.0 39.0) seq-match (#t #t #t #t #t)
+exit 0 type-adversarial 1s
+end Sun Oct 18 09:55:30 MST 2026 |  9:55  up  3:34, 10 users, load averages: 3.77 3.47 3.92

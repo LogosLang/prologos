@@ -1,0 +1,17 @@
+== B1: labelled read with an ACI (max) domain merge; out = value C read under bit 0
+  read=production  explicit orders (A=0,B=1,C=2) -> out: (((0 1 2) 2) ((0 2 1) 5) ((1 2 0) 2) ((2 1 0) 2)) | BSP 2  DRAIN 2  DRAIN(rev install) 5  => ORDER-DEPENDENT
+  read=base-join  explicit orders (A=0,B=1,C=2) -> out: (((0 1 2) 5) ((0 2 1) 5) ((1 2 0) 5) ((2 1 0) 5)) | BSP 5  DRAIN 5  DRAIN(rev install) 5  => order-independent
+  direct: (tagged-cell-read (tagged-cell-value 5 ((1 . 2))) wv=1 max) = 2 ; base ⊔ entry = 5
+== B2: a reader filtering by the LIVE worldview while an S0 invalidation arrives
+  today (cell-1 replacement, reader reads cell-1): guard-first (1)  reader-first (7)
+  D.2 two-phase, reader=live: guard-first (out 1 live 0)  reader-first (out 7 live 0)
+  D.2 two-phase, reader=static-plain: guard-first (out 7 live 0)  reader-first (out 7 live 0)
+  D.2 two-phase, reader=static-tagged: guard-first (outT-read-at-boundary-under-live 0 = 0 outT-raw #(struct:tagged-cell-value 0 ((1 . 7))))  reader-first (outT-read-at-boundary-under-live 0 = 0 outT-raw #(struct:tagged-cell-value 0 ((1 . 7))))
+== B3: retry after invalidation, grow-only invalidated set (two-phase set, Shapiro 2011)
+  after assume b0: live=1; after invalidate b0: live=0; after re-assume b0: live=0 (b0 can never be live again)
+  a retry needs a FRESH bit: re-assume as b1 -> live=2
+== B4: Q3 of c1-overwrite.prologos — base {x 1}, entry (2 . {x 2}), read under clause-2's worldview 2
+  production read (drops base), today's LWW merge: #hasheq((x . 2))
+  production read (drops base), D.2 row-2 flat merge: #hasheq((x . 2))   <- row 2 never sees the conflict
+  base ⊔ entries, today's LWW merge: #hasheq((x . 2))
+  base ⊔ entries, D.2 row-2 flat merge: #hasheq((x . top))   <- branch 2 inconsistent, as DFS says

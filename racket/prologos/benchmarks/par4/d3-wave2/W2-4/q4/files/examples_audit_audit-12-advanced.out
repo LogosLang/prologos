@@ -1,0 +1,32 @@
+PERF-COUNTERS:{"cell_allocs":1112,"constraint_count":0,"constraint_retries":0,"elaborate_steps":116,"inert_dependent_skips":0,"infer_steps":96,"meta_created":6,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":323,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":14,"zonk_steps":145}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: ERROR: Unbound variable
+1: ERROR: Unbound variable
+2: qx : Nat defined.
+3: ERROR: Could not infer type
+4: OK
+5: OK
+6: Nat
+7: Bool
+8: Nat
+9: 30N : Nat
+10: 5N : Nat
+11: 7N : Nat
+12: 20N : Nat
+13: true : Bool
+14: true : Bool
+15: dep-id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+16: 42N : Nat
+17: true : Bool
+18: 42N : Nat
+19: true : Bool
+20: '[1N 2N 3N] : [prologos::data::list::List Nat]
+21: [Type 0]
+22: [Type 0]
+23: @[1N 2N 3N] : [PVec Nat]
+24: {:a 1N, :b 2N} : [Map Keyword Nat]
+
+--- 3 errors ---
+W24 {"exec":"prod","exec_fires":90,"exec_rounds":22,"exec_wide_rounds":2,"file":"audit-12-advanced.prologos","outer_hist":{"0":13},"outer_max":0,"outer_runs":13,"strat":"auto","wall_ms":143.0}

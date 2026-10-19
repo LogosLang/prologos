@@ -1,0 +1,54 @@
+PERF-COUNTERS:{"cell_allocs":2015,"constraint_count":0,"constraint_retries":0,"elaborate_steps":362,"inert_dependent_skips":0,"infer_steps":997,"meta_created":77,"meta_solved":44,"prop_allocs":0,"prop_firings":0,"reduce_steps":1544,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":2,"unify_steps":150,"zonk_steps":991}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":2,"qtt_ms":1,"reduce_ms":2,"trait_resolve_ms":0,"type_check_ms":6,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":40,"atms_nogood_count":10,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":38,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: user : {:age Int :name String :role String} defined.
+1: "Alice" : String
+2: 30 : Int
+3: ERROR: dot-key `.:name` was retired — spell field access with `.name` (e.g. `m.name`); as a function value use `[fn [m] m.name]`
+4: nested : {:a {:b {:c Int}}} defined.
+5: 42 : Int
+6: xs : [prologos::data::list::List Int] defined.
+7: 10 : Int
+8: 30 : Int
+9: "superadmin" : String
+10: maybe-user : {:name String} defined.
+11: deep-map : {:a {:b {:c Int}}} defined.
+12: 99 : Int
+13: 99 : Int
+14: user2 : {:age Int :email String :name String} defined.
+15: ERROR: a multi-branch path literal `#p(a.{b c})` was retired (CIU T6 Path Selection) — every consumer truncated it to the FIRST branch, and since the `.{` re-mint the brace no longer expands at all. Write a select block instead: `x{a.{b c}}`
+16: scores : [prologos::data::list::List {:x Int :y Int}] defined.
+17: nested-maps : [prologos::data::list::List {:a {:b Int}}] defined.
+18: api-user : {:address-city String :id String :user-name String} defined.
+19: {:userId "1234", :name "Pete"} : [Map Keyword String]
+20: {:address-city "Springfield", :name "Pete"} : [Map Keyword String]
+21: 3 : Int
+22: 42 : Int
+23: m : {:a Int :b Int :c Int} defined.
+24: 1 : Int
+25: 4 : Int
+26: ys : [prologos::data::list::List Int] defined.
+27: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+28: 5N : Nat
+29: '[11 12 13] : [prologos::data::list::List Int]
+30: true : Bool
+31: true : Bool
+32: true : Bool
+33: "hello world" : String
+34: now : String defined.
+35: env : _ -> String defined.
+36: app-config : {:admins [PVec {:name String :role Keyword}] :database {:pool-size Int :url String} :date String :features [PVec Keyword] :name String :server {:host String :port Int :ssl {:cert-path String :enabled Bool}} :version String} defined.
+37: admins : {:admins [PVec {:name String :role Keyword}]} defined.
+38: ERROR: broadcast `.*name` was retired — its replacement is `:name` (e.g. `xs:name`)
+39: movie : {:director String :genres [PVec Keyword] :title String :year Int} defined.
+40: :sci-fi : Keyword
+41: genres : [prologos::data::list::List Keyword] defined.
+42: :sci-fi : Keyword
+43: other-genres : [PVec Keyword] defined.
+44: :comedy : Keyword
+45: xs : ⟨Int ⟨Int [prologos::data::list::List Int]⟩⟩ defined.
+46: vs : ⟨Int ⟨Int [PVec Int]⟩⟩ defined.
+
+--- 3 errors ---
+W24 {"exec":"prod","exec_fires":191,"exec_rounds":48,"exec_wide_rounds":4,"file":"2026-03-20-first-class-paths.prologos","handler_calls":3,"outer_hist":{"0":27},"outer_max":0,"outer_runs":27,"strat":"auto","wall_ms":176.0}

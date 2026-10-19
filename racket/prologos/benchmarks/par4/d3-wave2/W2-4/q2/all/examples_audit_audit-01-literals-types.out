@@ -1,0 +1,48 @@
+PERF-COUNTERS:{"cell_allocs":1823,"constraint_count":0,"constraint_retries":0,"elaborate_steps":72,"inert_dependent_skips":0,"infer_steps":16,"meta_created":7,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":95,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":5,"zonk_steps":99}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: 0N : Nat
+1: 42N : Nat
+2: 100N : Nat
+3: 0N : Nat
+4: 1N : Nat
+5: 2N : Nat
+6: 0 : Int
+7: 42 : Int
+8: -7 : Int
+9: -1 : Int
+10: 100 : Int
+11: 1/2 : Rat
+12: -3/7 : Rat
+13: 5 : Rat
+14: 3.14 : Posit32
+15: 42.0 : Posit32
+16: 0.333333334 : Posit32
+17: 3.14 : Posit32
+18: true : Bool
+19: false : Bool
+20: "hello" : String
+21: "world with spaces" : String
+22: "" : String
+23: "escape: \n \t \\ \"" : String
+24: :foo : Keyword
+25: :bar : Keyword
+26: :hello-world : Keyword
+27: unit : Unit
+28: [prologos::data::list::nil ?meta1955] : [prologos::data::list::List ?meta1955]
+29: nat-val : Nat defined.
+30: int-val : Int defined.
+31: bool-val : Bool defined.
+32: str-val : String defined.
+33: kw-val : Keyword defined.
+34: inf-nat : Nat defined.
+35: inf-int : Int defined.
+36: inf-bool : Bool defined.
+37: inf-str : String defined.
+38: 42N : Nat
+39: true : Bool
+40: "typed" : String
+
+--- 0 errors ---
+W24 {"exec":"prod","exec_fires":26,"exec_rounds":12,"file":"audit-01-literals-types.prologos","perf_fields_worker":"()","perf_incs_in_exec_main":0,"perf_incs_in_exec_worker":0,"race_rounds_any_worker_set":0,"race_rounds_multi_worker_set":0,"strat":"auto","wall_ms":167.0}

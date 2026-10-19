@@ -1,0 +1,255 @@
+== TODAY (production)
+  WRONG   sched-indep  R1 two: x=a, x=b
+      bsp: (((x . b)))
+      drain: (((x . b)))
+      drain-rev: (((x . b)))
+  WRONG   sched-indep  R2 q3: x=a, pick x
+      bsp: (((x . b)) ((x . a)))
+      drain: (((x . b)) ((x . a)))
+      drain-rev: (((x . b)) ((x . a)))
+  WRONG   sched-indep  R3 clash: x=a, y=b, x=y
+      bsp: (((x . a) (y . b)))
+      drain: (((x . a) (y . b)))
+      drain-rev: (((x . a) (y . b)))
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+      bsp: (((x . a) (y . a)))
+      drain: (((x . a) (y . a)))
+      drain-rev: (((x . a) (y . a)))
+  WRONG   sched-indep  R5 cross: pick x, pick y, x=y
+      bsp: (((x . b) (y . a)) ((x . b) (y . b)) ((x . a) (y . a)) ((x . a) (y . b)))
+      drain: (((x . a) (y . a)) ((x . b) (y . a)) ((x . b) (y . b)) ((x . a) (y . a)) ((x . a) (y . b)))
+      drain-rev: (((x . b) (y . a)) ((x . b) (y . b)) ((x . b) (y . b)) ((x . a) (y . a)) ((x . a) (y . b)))
+  WRONG   sched-indep  R6 q3rev: pick x, x=b
+      bsp: (((x . a)) ((x . b)) ((x . a)))
+      drain: (((x . a)) ((x . b)) ((x . a)))
+      drain-rev: (((x . b)) ((x . b)) ((x . a)))
+  WRONG   SCHED-DEP    R7: pick x, y=a, x=y
+      bsp: (((x . a) (y . a)))
+      drain: (((x . a) (y . a)))
+      drain-rev: (((x . b) (y . a)))
+  WRONG   SCHED-DEP    R8: pick x, x=y (y free)
+      bsp: (((x . a) (y . a)))
+      drain: (((x . a) (y . b)))
+      drain-rev: (((x . b) (y . a)))
+== (a) only
+  WRONG   sched-indep  R1 two: x=a, x=b
+      bsp: (((x . b)))
+      drain: (((x . b)))
+      drain-rev: (((x . b)))
+  WRONG   sched-indep  R2 q3: x=a, pick x
+      bsp: (((x . a)) ((x . b)))
+      drain: (((x . a)) ((x . b)))
+      drain-rev: (((x . a)) ((x . b)))
+  WRONG   sched-indep  R3 clash: x=a, y=b, x=y
+      bsp: (((x . a) (y . b)))
+      drain: (((x . a) (y . b)))
+      drain-rev: (((x . a) (y . b)))
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  WRONG   sched-indep  R5 cross: pick x, pick y, x=y
+      bsp: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+      drain: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+      drain-rev: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+  WRONG   sched-indep  R6 q3rev: pick x, x=b
+      bsp: (((x . a)) ((x . b)))
+      drain: (((x . a)) ((x . b)))
+      drain-rev: (((x . a)) ((x . b)))
+  WRONG   sched-indep  R7: pick x, y=a, x=y
+      bsp: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain-rev: (((x . a) (y . y)) ((x . b) (y . y)))
+  WRONG   sched-indep  R8: pick x, x=y (y free)
+      bsp: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain-rev: (((x . a) (y . y)) ((x . b) (y . y)))
+== (a)+row2
+  DFS-OK  sched-indep  R1 two: x=a, x=b
+  DFS-OK  sched-indep  R2 q3: x=a, pick x
+  WRONG   sched-indep  R3 clash: x=a, y=b, x=y
+      bsp: (((x . a) (y . b)))
+      drain: (((x . a) (y . b)))
+      drain-rev: (((x . a) (y . b)))
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  WRONG   sched-indep  R5 cross: pick x, pick y, x=y
+      bsp: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+      drain: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+      drain-rev: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+  WRONG   sched-indep  R6 q3rev: pick x, x=b
+      bsp: (((x . a)) ((x . b)))
+      drain: (((x . a)) ((x . b)))
+      drain-rev: (((x . a)) ((x . b)))
+  WRONG   sched-indep  R7: pick x, y=a, x=y
+      bsp: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain-rev: (((x . a) (y . y)) ((x . b) (y . y)))
+  WRONG   sched-indep  R8: pick x, x=y (y free)
+      bsp: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain-rev: (((x . a) (y . y)) ((x . b) (y . y)))
+== (a)+row2+(e)
+  DFS-OK  sched-indep  R1 two: x=a, x=b
+  DFS-OK  sched-indep  R2 q3: x=a, pick x
+  DFS-OK  sched-indep  R3 clash: x=a, y=b, x=y
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  WRONG   sched-indep  R5 cross: pick x, pick y, x=y
+      bsp: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+      drain: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+      drain-rev: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+  WRONG   sched-indep  R6 q3rev: pick x, x=b
+      bsp: (((x . a)) ((x . b)))
+      drain: (((x . a)) ((x . b)))
+      drain-rev: (((x . a)) ((x . b)))
+  WRONG   sched-indep  R7: pick x, y=a, x=y
+      bsp: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain-rev: (((x . a) (y . y)) ((x . b) (y . y)))
+  WRONG   sched-indep  R8: pick x, x=y (y free)
+      bsp: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain-rev: (((x . a) (y . y)) ((x . b) (y . y)))
+== (a)+row2+(e)+(b), static labels
+  DFS-OK  sched-indep  R1 two: x=a, x=b
+  DFS-OK  sched-indep  R2 q3: x=a, pick x
+  DFS-OK  sched-indep  R3 clash: x=a, y=b, x=y
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  WRONG   sched-indep  R5 cross: pick x, pick y, x=y
+      bsp: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+      drain: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+      drain-rev: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+  DFS-OK  sched-indep  R6 q3rev: pick x, x=b
+  DFS-OK  sched-indep  R7: pick x, y=a, x=y
+  WRONG   sched-indep  R8: pick x, x=y (y free)
+      bsp: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain: (((x . a) (y . y)) ((x . b) (y . y)))
+      drain-rev: (((x . a) (y . y)) ((x . b) (y . y)))
+== FULL (a)+row2+(e)+(b)+(c)
+  DFS-OK  sched-indep  R1 two: x=a, x=b
+  DFS-OK  sched-indep  R2 q3: x=a, pick x
+  DFS-OK  sched-indep  R3 clash: x=a, y=b, x=y
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  DFS-OK  sched-indep  R5 cross: pick x, pick y, x=y
+  DFS-OK  sched-indep  R6 q3rev: pick x, x=b
+  DFS-OK  sched-indep  R7: pick x, y=a, x=y
+  DFS-OK  sched-indep  R8: pick x, x=y (y free)
+== FULL minus (e)
+  DFS-OK  sched-indep  R1 two: x=a, x=b
+  DFS-OK  sched-indep  R2 q3: x=a, pick x
+  WRONG   sched-indep  R3 clash: x=a, y=b, x=y
+      bsp: (((x . a) (y . b)))
+      drain: (((x . a) (y . b)))
+      drain-rev: (((x . a) (y . b)))
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  DFS-OK  sched-indep  R5 cross: pick x, pick y, x=y
+  DFS-OK  sched-indep  R6 q3rev: pick x, x=b
+  DFS-OK  sched-indep  R7: pick x, y=a, x=y
+  DFS-OK  sched-indep  R8: pick x, x=y (y free)
+== FULL minus (a) (prod read)
+  DFS-OK  sched-indep  R1 two: x=a, x=b
+  WRONG   sched-indep  R2 q3: x=a, pick x
+      bsp: (((x . a)) ((x . b)))
+      drain: (((x . a)) ((x . b)))
+      drain-rev: (((x . a)) ((x . b)))
+  DFS-OK  sched-indep  R3 clash: x=a, y=b, x=y
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  DFS-OK  sched-indep  R5 cross: pick x, pick y, x=y
+  WRONG   sched-indep  R6 q3rev: pick x, x=b
+      bsp: (((x . a)) ((x . b)))
+      drain: (((x . a)) ((x . b)))
+      drain-rev: (((x . a)) ((x . b)))
+  WRONG   sched-indep  R7: pick x, y=a, x=y
+      bsp: (((x . a) (y . a)) ((x . b) (y . b)))
+      drain: (((x . a) (y . a)) ((x . b) (y . b)))
+      drain-rev: (((x . a) (y . a)) ((x . b) (y . b)))
+  DFS-OK  sched-indep  R8: pick x, x=y (y free)
+== FULL minus row2 (LWW)
+  WRONG   sched-indep  R1 two: x=a, x=b
+      bsp: (((x . b)))
+      drain: (((x . b)))
+      drain-rev: (((x . b)))
+  WRONG   sched-indep  R2 q3: x=a, pick x
+      bsp: (((x . a)) ((x . b)))
+      drain: (((x . a)) ((x . b)))
+      drain-rev: (((x . a)) ((x . b)))
+  WRONG   sched-indep  R3 clash: x=a, y=b, x=y
+      bsp: (((x . a) (y . b)))
+      drain: (((x . a) (y . b)))
+      drain-rev: (((x . a) (y . b)))
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  WRONG   SCHED-DEP    R5 cross: pick x, pick y, x=y
+      bsp: (((x . a) (y . a)) ((x . a) (y . b)) ((x . b) (y . a)) ((x . b) (y . b)))
+      drain: (((x . a) (y . a)) ((x . b) (y . b)) ((x . a) (y . a)) ((x . b) (y . b)))
+      drain-rev: (((x . a) (y . a)) ((x . a) (y . a)) ((x . b) (y . b)) ((x . b) (y . b)))
+  WRONG   sched-indep  R6 q3rev: pick x, x=b
+      bsp: (((x . a)) ((x . b)))
+      drain: (((x . a)) ((x . b)))
+      drain-rev: (((x . a)) ((x . b)))
+  WRONG   sched-indep  R7: pick x, y=a, x=y
+      bsp: (((x . a) (y . a)) ((x . b) (y . b)))
+      drain: (((x . a) (y . a)) ((x . b) (y . b)))
+      drain-rev: (((x . a) (y . a)) ((x . b) (y . b)))
+  DFS-OK  sched-indep  R8: pick x, x=y (y free)
+== FULL but cell-1 = all bits
+  DFS-OK  sched-indep  R1 two: x=a, x=b
+  DFS-OK  sched-indep  R2 q3: x=a, pick x
+  DFS-OK  sched-indep  R3 clash: x=a, y=b, x=y
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  DFS-OK  sched-indep  R5 cross: pick x, pick y, x=y
+  WRONG   sched-indep  R6 q3rev: pick x, x=b
+      bsp: (((x . a)) ((x . b)))
+      drain: (((x . a)) ((x . b)))
+      drain-rev: (((x . a)) ((x . b)))
+  WRONG   sched-indep  R7: pick x, y=a, x=y
+      bsp: (((x . a) (y . a)) ((x . b) (y . b)))
+      drain: (((x . a) (y . a)) ((x . b) (y . b)))
+      drain-rev: (((x . a) (y . a)) ((x . b) (y . b)))
+  DFS-OK  sched-indep  R8: pick x, x=y (y free)
+== FULL with per-entry lift (additive unify)
+  DFS-OK  sched-indep  R1 two: x=a, x=b
+  DFS-OK  sched-indep  R2 q3: x=a, pick x
+  DFS-OK  sched-indep  R3 clash: x=a, y=b, x=y
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  DFS-OK  sched-indep  R5 cross: pick x, pick y, x=y
+  DFS-OK  sched-indep  R6 q3rev: pick x, x=b
+  DFS-OK  sched-indep  R7: pick x, y=a, x=y
+  DFS-OK  sched-indep  R8: pick x, x=y (y free)
+== per-entry lift with TODAY's unify (not additive)
+  DFS-OK  sched-indep  R1 two: x=a, x=b
+  DFS-OK  sched-indep  R2 q3: x=a, pick x
+  WRONG   sched-indep  R3 clash: x=a, y=b, x=y
+      bsp: (((x . a) (y . b)))
+      drain: (((x . a) (y . b)))
+      drain-rev: (((x . a) (y . b)))
+  DFS-OK  sched-indep  R4 agree: x=a, y=a, x=y
+  DFS-OK  sched-indep  R5 cross: pick x, pick y, x=y
+  DFS-OK  sched-indep  R6 q3rev: pick x, x=b
+  DFS-OK  sched-indep  R7: pick x, y=a, x=y
+  DFS-OK  sched-indep  R8: pick x, x=y (y free)
+
+== SUMMARY (rows matching DFS under all 3 schedules / rows schedule-independent), of 8 rows
+  TODAY (production): (1 6)
+  (a) only: (1 8)
+  (a)+row2: (3 8)
+  (a)+row2+(e): (4 8)
+  (a)+row2+(e)+(b), static labels: (6 8)
+  FULL (a)+row2+(e)+(b)+(c): (8 8)
+  FULL minus (e): (7 8)
+  FULL minus (a) (prod read): (5 8)
+  FULL minus row2 (LWW): (2 7)
+  FULL but cell-1 = all bits: (6 8)
+  FULL with per-entry lift (additive unify): (8 8)
+  per-entry lift with TODAY's unify (not additive): (7 8)
+
+== T1: (b) × Tier-1 dispatch (FULL config; late fire-once write x=c after a first quiescence)
+  bsp: cell-1 = 0 ; worklist before 2nd run = 1 ; unify fires in 2nd run = 0 ; answers (((x . c) (y . y) (z . a)) ((x . c) (y . y) (z . b)))
+  bsp-control-plain: cell-1 = 0 ; worklist before 2nd run = 1 ; unify fires in 2nd run = 2 ; answers (((x . c) (y . c) (z . a)) ((x . c) (y . c) (z . b)))
+  drain: cell-1 = 0 ; worklist before 2nd run = 1 ; unify fires in 2nd run = 8 ; answers (((x . c) (y . c) (z . a)) ((x . c) (y . c) (z . b)))
+  DFS: ((x . c) (y . c) (z . a)) ((x . c) (y . c) (z . b))
+
+== cost of (c): unify evaluations per row under the drain (closure-evaluated vs per-entry lift)
+  R1 two: x=a, x=b: closure 0, per-entry 0
+  R2 q3: x=a, pick x: closure 0, per-entry 0
+  R3 clash: x=a, y=b, x=y: closure 3, per-entry 3
+  R4 agree: x=a, y=a, x=y: closure 1, per-entry 1
+  R5 cross: pick x, pick y, x=y: closure 341, per-entry 29
+  R6 q3rev: pick x, x=b: closure 0, per-entry 0
+  R7: pick x, y=a, x=y: closure 26, per-entry 16
+  R8: pick x, x=y (y free): closure 21, per-entry 11

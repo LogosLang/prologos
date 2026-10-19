@@ -1,0 +1,93 @@
+=== current-tree-reduce-threshold : PRODUCTION
+./propagator.rkt:245: current-tree-reduce-threshold
+./propagator.rkt:2231:(define current-tree-reduce-threshold (make-parameter 256))
+./propagator.rkt:3180:                     ",\"threshold\":" (par4-json-str (current-tree-reduce-threshold))
+./propagator.rkt:3505:                     [tree-threshold (current-tree-reduce-threshold)]
+=== current-tree-reduce-threshold : NON-PRODUCTION (tests/tools/benchmarks)
+./benchmarks/par4/demos-threshold.rkt:5:(require (only-in "../../propagator.rkt" current-tree-reduce-threshold)
+./benchmarks/par4/demos-threshold.rkt:10:(parameterize ([current-tree-reduce-threshold v])
+=== merge-fire-results : PRODUCTION
+./propagator.rkt:246: merge-fire-results
+./propagator.rkt:3220:(define (merge-fire-results a b)
+./propagator.rkt:3260:                                       (channel-put ch (merge-fire-results (car pair) (cdr pair)))))
+./propagator.rkt:3279:                           (merge-fire-results (car pair) (cdr pair))
+=== merge-fire-results : NON-PRODUCTION (tests/tools/benchmarks)
+=== tree-reduce-fire-results : PRODUCTION
+./propagator.rkt:247: tree-reduce-fire-results
+./propagator.rkt:3150:      (define comb (tree-reduce-fire-results all-results #f))
+./propagator.rkt:3242:(define (tree-reduce-fire-results results [parallel? #f])
+./propagator.rkt:3507:                                 (let ([combined (tree-reduce-fire-results all-writes #t)])
+./propagator.rkt:3975:          (define combined (tree-reduce-fire-results all-fire-results #f))
+=== tree-reduce-fire-results : NON-PRODUCTION (tests/tools/benchmarks)
+./benchmarks/micro/bench-tree-reduce.rkt:93:    (let ([combined (tree-reduce-fire-results fire-results #f)])
+./benchmarks/micro/bench-tree-reduce.rkt:98:    (let ([combined (tree-reduce-fire-results fire-results #t)])
+./benchmarks/micro/bench-tree-reduce.rkt:152:    (define combined (tree-reduce-fire-results results #f))
+=== bulk-merge-writes : PRODUCTION
+./propagator.rkt:156: bulk-merge-writes
+./propagator.rkt:2957:               "D-S.3 invariant: mid-fire cell ~a carries a cell-domains entry (bulk-merge-writes would drop it)" cid))
+./propagator.rkt:2990:(define (bulk-merge-writes net all-results)
+./propagator.rkt:3148:      (define flat (bulk-merge-writes base all-results))
+./propagator.rkt:3149:      (define flat2 (bulk-merge-writes base all-results))
+./propagator.rkt:3151:      (define tree (if comb (bulk-merge-writes base (list comb)) base))
+./propagator.rkt:3152:      (define rev (bulk-merge-writes base (reverse all-results)))
+./propagator.rkt:3509:                                       (bulk-merge-writes snapshot+fuel (list combined))
+./propagator.rkt:3511:                                 (bulk-merge-writes snapshot+fuel all-writes))]
+=== bulk-merge-writes : NON-PRODUCTION (tests/tools/benchmarks)
+./benchmarks/micro/bench-tree-reduce.rkt:89:    (bulk-merge-writes snapshot fire-results))
+./benchmarks/micro/bench-tree-reduce.rkt:94:      (if combined (bulk-merge-writes snapshot (list combined)) snapshot)))
+./benchmarks/micro/bench-tree-reduce.rkt:99:      (if combined (bulk-merge-writes snapshot (list combined)) snapshot)))
+./benchmarks/micro/bench-tree-reduce.rkt:142:    (bulk-merge-writes snapshot results))
+./benchmarks/micro/bench-tree-reduce.rkt:147:    (bulk-merge-writes snapshot results))
+./benchmarks/micro/bench-tree-reduce.rkt:153:    (if combined (bulk-merge-writes snapshot (list combined)) snapshot))
+=== collect-deferred-propagators : PRODUCTION
+./propagator.rkt:3202:(define (collect-deferred-propagators all-results)
+./propagator.rkt:3516:                     [deferred-props (collect-deferred-propagators all-writes)]
+=== collect-deferred-propagators : NON-PRODUCTION (tests/tools/benchmarks)
+=== fire-result-new-propagators : PRODUCTION
+./propagator.rkt:2998:                  (fire-result-new-propagators result)
+./propagator.rkt:3205:              [prop-spec (in-list (fire-result-new-propagators result))]
+./propagator.rkt:3231:      (append (fire-result-new-propagators a) (fire-result-new-propagators b))
+=== fire-result-new-propagators : NON-PRODUCTION (tests/tools/benchmarks)
+=== fire-result-new-cells : PRODUCTION
+./propagator.rkt:2997:                  (fire-result-new-cells result)
+./propagator.rkt:3111:           (for ([c (in-list (fire-result-new-cells r))]) (hash-set! s (car c) #t))]
+./propagator.rkt:3139:  (define n-new (for/sum ([r (in-list frs)]) (if (null? (fire-result-new-cells r)) 0 1)))
+./propagator.rkt:3229:      (append (fire-result-new-cells a) (fire-result-new-cells b))
+./propagator.rkt:3536:                                    (pair? (fire-result-new-cells result))))
+=== fire-result-new-cells : NON-PRODUCTION (tests/tools/benchmarks)
+=== fire-result-undeclared-writes : PRODUCTION
+./propagator.rkt:3000:                  (fire-result-undeclared-writes result))
+./propagator.rkt:3110:           (for ([w (in-list (fire-result-undeclared-writes r))]) (hash-set! s (car w) #t))
+./propagator.rkt:3138:  (define n-und (for/sum ([r (in-list frs)]) (if (null? (fire-result-undeclared-writes r)) 0 1)))
+./propagator.rkt:3235:      (append (fire-result-undeclared-writes a) (fire-result-undeclared-writes b)))]))
+=== fire-result-undeclared-writes : NON-PRODUCTION (tests/tools/benchmarks)
+=== fire-result : PRODUCTION
+./propagator.rkt:2874:(struct fire-result (value-writes new-cells new-propagators contradiction undeclared-writes) #:transparent)
+./propagator.rkt:2983:  (fire-result value-writes new-cells new-propagators new-contradiction undeclared-writes))
+./propagator.rkt:3225:     (fire-result
+=== fire-result : NON-PRODUCTION (tests/tools/benchmarks)
+=== current-bsp-fire-round? : PRODUCTION
+./sre-core.rkt:2469:     (if (current-bsp-fire-round?)
+./sre-core.rkt:2689:        (if (current-bsp-fire-round?)
+./sre-core.rkt:2712:           (if (current-bsp-fire-round?)
+./sre-core.rkt:2804:        (if (current-bsp-fire-round?)
+./sre-core.rkt:2817:        (if (current-bsp-fire-round?)
+./narrowing.rkt:296:             (if (current-bsp-fire-round?)
+./narrowing.rkt:348:        (if (current-bsp-fire-round?)
+./propagator.rkt:206: current-bsp-fire-round?
+./propagator.rkt:2202:(define current-bsp-fire-round? (make-parameter #f))
+./propagator.rkt:2343:     [hot (if (current-bsp-fire-round?)
+./propagator.rkt:2517:     [hot (if (current-bsp-fire-round?)
+./propagator.rkt:2884:    (parameterize ([current-bsp-fire-round? #t]
+./elaborator-network.rkt:897:     (if (current-bsp-fire-round?)
+./constraint-propagators.rkt:288:         (if (current-bsp-fire-round?)
+=== current-bsp-fire-round? : NON-PRODUCTION (tests/tools/benchmarks)
+=== current-cell-id-namespace : PRODUCTION
+./propagator.rkt:244: current-cell-id-namespace
+./propagator.rkt:1326:  (define ns (current-cell-id-namespace))
+./propagator.rkt:1371:  (define ns (current-cell-id-namespace))
+./propagator.rkt:1452:  (define ns (current-cell-id-namespace))
+./propagator.rkt:1498:  (define ns (current-cell-id-namespace))
+./propagator.rkt:2222:(define current-cell-id-namespace (make-parameter 0))
+./propagator.rkt:2885:                   [current-cell-id-namespace namespace-idx])
+=== current-cell-id-namespace : NON-PRODUCTION (tests/tools/benchmarks)

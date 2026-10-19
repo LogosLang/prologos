@@ -1,0 +1,12 @@
+fire-once + empty inputs (Tier-1 path):
+  worklist before run: (#(struct:prop-id 1)) (worldview cell-1 = 0)
+  after run: A = 7, B = 0, worklist = ()
+  after a SECOND run-to-quiescence: B = 0
+control: plain propagator, empty inputs (Tier-2 path):
+  worklist before run: (#(struct:prop-id 1)) (worldview cell-1 = 0)
+  after run: A = 7, B = 7, worklist = ()
+  after a SECOND run-to-quiescence: B = 7
+drain (current-use-bsp-scheduler? #f), fire-once:
+  worklist before run: (#(struct:prop-id 1)) (worldview cell-1 = 0)
+  after run: A = 7, B = 7, worklist = ()
+  after a SECOND run-to-quiescence: B = 7

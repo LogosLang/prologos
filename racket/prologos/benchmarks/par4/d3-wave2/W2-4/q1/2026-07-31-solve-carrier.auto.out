@@ -1,0 +1,35 @@
+PERF-COUNTERS:{"cell_allocs":1260,"constraint_count":0,"constraint_retries":0,"elaborate_steps":164,"inert_dependent_skips":0,"infer_steps":300,"meta_created":22,"meta_solved":17,"prop_allocs":0,"prop_firings":0,"reduce_steps":877,"resolution_cycles":0,"solver_backtracks":3,"solver_col_compares":114,"solver_row_scans":59,"solver_unifies":19,"trait_resolve_steps":5,"unify_steps":18,"zonk_steps":352}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":2,"trait_resolve_ms":0,"type_check_ms":7,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: quest : _ defined.
+1: @[{:t "Rescue the cat", :g "Alice", :r 50} {:t "Map the catacombs", :g "Bob", :r 200} {:t "Debug the compiler", :g "Alice", :r 9000}] : [PVec {:g String :r Int :t String}]
+2: @[{:t "Rescue the cat", :r 50} {:t "Debug the compiler", :r 9000}] : [PVec {:r Int :t String}]
+3: quests : [PVec {:g String :r Int :t String}] defined.
+4: alice-quests : [PVec {:r Int :t String}] defined.
+5: @[50 200 9000] : [PVec Int]
+6: @["Rescue the cat" "Debug the compiler"] : [PVec String]
+7: 3 : Int
+8: [prologos::data::option::some {:g String :r Int :t String} {:g "Alice", :t "Rescue the cat", :r 50}] : [prologos::data::option::Option {:g String :r Int :t String}]
+9: '[{:t "Rescue the cat", :r 50} {:t "Debug the compiler", :r 9000}] : [prologos::data::list::List {:r Int :t String}]
+10: @[50 200 9000] : [PVec Int]
+11: @[{:g "Bob", :t "Map the catacombs", :r 200} {:g "Alice", :t "Debug the compiler", :r 9000}] : [PVec {:g String :r Int :t String}]
+12: 3N : Nat
+13: twice : _ defined.
+14: @[{:n 1} {:n 1} {:n 2}] : [PVec {:n Int}]
+15: @[] : [PVec {:r Int :t String}]
+16: {:t "Map the catacombs", :r 200} : {:r Int :t String}
+17: none : {:r Int :t String}
+18: @[{:t "Map the catacombs", :r 200, :provenance {:depth 0N, :clause-id :quest/3-1, :derivation {:rule :quest/3-1, :goal :quest, :children nil, :args '["Map the catacombs" "Bob" 200]}}}] : [PVec {:r Int :t String | _}]
+19: val : _ defined.
+20: @[{:k :a, :v 1} {:k :b, :v "two"}] : [PVec {:k Keyword :v Int | String}]
+21: only-a : [PVec {:v Int | String}] defined.
+22: @[{:v 1}] : [PVec {:v Int}]
+23: @[{:t "Map the catacombs", :r 200}] : [PVec {:r Int :t String}]
+24: @[{:t "Map the catacombs", :r 200}] : [PVec {:r Int :t String}]
+25: 1 : Int
+26: 2 : Int
+27: ERROR: quest is a relation, not a function — a query is written (quest …). At command position or on a `def`/`let` binding RHS that carries an implicit solve; elsewhere write `solve (quest …)` explicitly.
+
+--- 1 errors ---
+W24 {"exec":"prod","exec_fires":290,"exec_rounds":59,"exec_wide_rounds":8,"file":"2026-07-31-solve-carrier.prologos","forks":0,"routes":{"dfs":2,"tier1":13},"strat":"auto","wall_ms":183.0}

@@ -1,0 +1,4 @@
+C9-CENSUS file=/Users/avanti/dev/projects/logos/prologos/.claude/worktrees/par4-arena-executors/racket/prologos/benchmarks/comparative/constraints-adversarial.prologos rounds=214 fires=1136 productive_fires=280 writes=280 distinct_cells_written=30
+  top cell #(struct:cell-id 49): 224 writes (80.0 % of writes), 224 productive (round,propagator) writer pairs (80.0 % of productive fires); attribute-map cell? #t
+  next cells: ((#(struct:cell-id 49) . 224) (#(struct:cell-id 39) . 4) (#(struct:cell-id 14) . 4) (#(struct:cell-id 103) . 3))
+  nested S0: rounds observed with >=2 run-to-quiescence-bsp frames on the stack = 0 of 214 (max depth 1); forks = 0

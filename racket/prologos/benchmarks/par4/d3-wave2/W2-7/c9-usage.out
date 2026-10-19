@@ -1,0 +1,8 @@
+== G1: monotone on m0<m1<mw (all 81 pairs of pairs): + #t  · #t  ⊔ #t
+   ⊔ is the max of the chain (mult-join a b = max): #t ; + is NOT idempotent: m1+m1 = mw
+== G2: linear x (declared m1)
+  three children, fire-computed total (foldl add-usage, typing-propagators.rkt:1796): (mw)  compatible(m1,·)=#f
+  same three usages if they MET IN THE CELL under the lean's max merge: (m1)  compatible=#t  (under-count)
+  today's merge on a re-write of the same total (add-usage old new): (mw) (the equal? guard at typing-propagators.rkt:466 hides it)
+  sibling branches b1 uses x, b2 does not: join-branches (linear-per-path gate) = #f ; max/mult-join = (m1) (affine leak)
+  sibling branches both use x once: join-branches = (m1) ; add-usage = (mw) (over-count)

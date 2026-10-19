@@ -1,0 +1,70 @@
+0: id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+1: const : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] x y -> x]] defined.
+2: flip : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [x y -> z] y x -> z]]] defined.
+3: compose : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y -> z] [x -> y] x -> z]]] defined.
+4: on : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [Pi [z :0 <[Type 0]>] [y y -> z] [x -> y] x x -> z]]] defined.
+5: apply : [Pi [x :0 <[Type 0]>] [Pi [y :0 <[Type 0]>] [x -> y] x -> y]] defined.
+6: twice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+7: thrice : [Pi [x :0 <[Type 0]>] [x -> x] x -> x] defined.
+8: a1 : Int defined.
+9: a2 : Int defined.
+10: a3 : Int defined.
+11: a4 : Int defined.
+12: a5 : Int defined.
+13: a6 : Int defined.
+14: a7 : Int defined.
+15: a8 : Int defined.
+16: a9 : Int defined.
+17: a10 : Int defined.
+18: deep1 : Int defined.
+19: deep2 : Int defined.
+20: deep3 : Int defined.
+21: d1 : Int defined.
+22: d2 : Bool defined.
+23: d3 : String defined.
+24: d4 : Int defined.
+25: d5 : String defined.
+26: ERROR@?: Could not infer type
+27: ERROR@?: Could not infer type
+28: d8 : Int defined.
+29: ERROR@?: Could not infer type
+30: d10 : Int defined.
+31: e1 : Bool defined.
+32: e2 : Bool defined.
+33: e3 : Bool defined.
+34: p1 : Int defined.
+35: p2 : Int defined.
+36: Int
+37: Int
+38: Int
+39: Int
+40: Int
+41: Int
+42: Int
+43: Int
+44: Int
+45: Int
+46: Int
+47: Int
+48: Int
+49: Int
+50: Int
+51: Int
+52: Int
+53: Int
+54: Bool
+55: Bool
+56: Int
+57: Bool
+58: String
+59: ?bvar1 ?bvar1 -> ?bvar3
+60: ?bvar1 ?bvar1 -> ?bvar3
+61: ?bvar0 -> ?bvar1
+62: ?bvar0 -> ?bvar1
+63: Int
+64: ERROR@?: Could not infer type
+65: ?bvar1 ?bvar1 -> ?bvar3
+66: mix1 : Int defined.
+67: mix2 : Int defined.
+68: mix3 : Int defined.
+-- leg prod: 69 results, 248.0 ms | observer: 212 BSP rounds in 66 runs, 280 diffs, 0 runs ending contradicted

@@ -1,0 +1,101 @@
+C4 type-oracle — universe 83 terms, ground universe 20 terms
+
+ARM CENSUS (type-unify-or-top under pm1,pm2,mm1 unsolved; pm3 := Nat)
+  trivial: 439
+  unify-success: 1368
+  fallback: 4132
+  ground-clash: 950
+  fallback pairs that are genuinely BLOCKED (oracle unifiable): 532
+  fallback pairs that are CLASHES (no solution unifies)       : 3600
+  unify-success pairs the oracle says CANNOT unify (non-linear metas): 124
+    shortest blocked : #(struct:expr-union #(struct:expr-Nat) #(struct:expr-meta pm2 #f))  ⊔  #(struct:expr-Nat)
+    shortest clash   : #(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat))  ⊔  #(struct:expr-Nat)
+    shortest succ-but-clash: #(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat))  ⊔  #(struct:expr-meta pm2 #f)  -> #(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat))
+  blocked fallback pairs by shape: ((mult-meta . 212) (union . 320) (other . 0))
+    shortest 'other' blocked: none
+
+WITNESS (same head, deep rigid clash Nat vs Unit):
+  Pi(?pm1,Nat) ⊔ Pi(Bool,Unit) = #(struct:expr-Pi mw #(struct:expr-Bool) #(struct:expr-Unit))   [oracle unifiable? #f]
+  D.2 literal split (heads differ => top) on it: #(struct:expr-Pi mw #(struct:expr-Bool) #(struct:expr-Unit))
+  Pi(?pm1,?pm1) ⊔ Pi(Bool,Nat) = #(struct:expr-Pi mw #(struct:expr-Bool) #(struct:expr-Nat))   [oracle unifiable? #f]  (try-unify-pure treats each meta occurrence as a fresh wildcard)
+
+ROLE A vs ROLE B on ground atoms: type-lattice-merge(Nat,Bool) = #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat)) ; type-unify-or-top(Nat,Bool) = type-top
+UNION SHAPE: (?pm1 | ?pm2) = (Nat | Bool) has 14 ground solutions over G: ((#(struct:expr-Nat) #(struct:expr-Bool)) (#(struct:expr-Nat) #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat))) (#(struct:expr-Nat) #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat))) (#(struct:expr-Bool) #(struct:expr-Nat)) (#(struct:expr-Bool) #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat))) (#(struct:expr-Bool) #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat))) (#(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat)) #(struct:expr-Nat)) (#(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat)) #(struct:expr-Bool)) (#(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat)) #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat))) (#(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat)) #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat))) (#(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat)) #(struct:expr-Nat)) (#(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat)) #(struct:expr-Bool)) (#(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat)) #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat))) (#(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat)) #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat))))
+  today's merge returns: #(struct:expr-union #(struct:expr-Bool) #(struct:expr-Nat))
+  Role A on Bool ⊔ Pi(?pm1,Nat) (a rigid head clash): type-lattice-merge = #(struct:expr-Bool)
+
+POWER ROW (ground universe; the oracle and today's merge should agree):
+G0 type-unify-or-top on GROUND terms  [400 pairs]
+  erased contradictions (oracle: NOT unifiable, result != top): 0
+  false contradictions  (oracle: unifiable, result = top)      : 0
+  C violations: 0
+  non-inflationary (r⊔x != r or r⊔y != r): 0
+  A violations: 0/20000 random triples
+
+VARIANTS on the meta universe:
+V0 type-unify-or-top today  [6889 pairs]
+  erased contradictions (oracle: NOT unifiable, result != top): 3724  e.g. x=#(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat)) y=#(struct:expr-Nat) -> #(struct:expr-Nat)
+  false contradictions  (oracle: unifiable, result = top)      : 16  e.g. x=#(struct:expr-union #(struct:expr-Nat) #(struct:expr-meta pm3 #f)) y=#(struct:expr-Nat) -> type-top
+  C violations: 1818  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  non-inflationary (r⊔x != r or r⊔y != r): 1846  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  A violations: 1100/20000 random triples
+V1 D.2 literal split: fallback + top-level heads differ => top  [6889 pairs]
+  erased contradictions (oracle: NOT unifiable, result != top): 1196  e.g. x=#(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat)) y=#(struct:expr-meta pm2 #f) -> #(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat))
+  false contradictions  (oracle: unifiable, result = top)      : 180  e.g. x=#(struct:expr-union #(struct:expr-Nat) #(struct:expr-meta pm3 #f)) y=#(struct:expr-Nat) -> type-top
+  C violations: 774  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  non-inflationary (r⊔x != r or r⊔y != r): 802  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  A violations: 348/20000 random triples
+V2 fallback deleted: try-unify-pure fails => top  [6889 pairs]
+  erased contradictions (oracle: NOT unifiable, result != top): 124  e.g. x=#(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat)) y=#(struct:expr-meta pm2 #f) -> #(struct:expr-Pi mw #(struct:expr-meta pm2 #f) #(struct:expr-Nat))
+  false contradictions  (oracle: unifiable, result = top)      : 548  e.g. x=#(struct:expr-union #(struct:expr-Nat) #(struct:expr-meta pm3 #f)) y=#(struct:expr-Nat) -> type-top
+  C violations: 166  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  non-inflationary (r⊔x != r or r⊔y != r): 226  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  A violations: 72/20000 random triples
+  V2 C violations by kind: ((meta-vs-meta . 2) (mult-meta . 0) (union . 64) (bare-meta-vs-term . 0) (other . 100))
+  V2 erased contradictions by kind: ((meta-vs-meta . 0) (mult-meta . 0) (union . 0) (bare-meta-vs-term . 44) (other . 80))
+  V2 false contradictions by kind: ((meta-vs-meta . 0) (mult-meta . 212) (union . 336) (bare-meta-vs-term . 0) (other . 0))
+  V0 false contradictions by kind: ((meta-vs-meta . 0) (mult-meta . 0) (union . 16) (bare-meta-vs-term . 0) (other . 0))
+V3 fallback => top unless a mult-meta or a union is involved (top-level)  [6889 pairs]
+  erased contradictions (oracle: NOT unifiable, result != top): 3164  e.g. x=#(struct:expr-union #(struct:expr-Unit) #(struct:expr-meta pm2 #f)) y=#(struct:expr-Nat) -> #(struct:expr-Nat)
+  false contradictions  (oracle: unifiable, result = top)      : 16  e.g. x=#(struct:expr-union #(struct:expr-Nat) #(struct:expr-meta pm3 #f)) y=#(struct:expr-Nat) -> type-top
+  C violations: 1738  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  non-inflationary (r⊔x != r or r⊔y != r): 1766  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  A violations: 1465/20000 random triples
+  V3 erased contradictions by kind: ((meta-vs-meta . 0) (mult-meta . 1120) (union . 1920) (bare-meta-vs-term . 44) (other . 80))
+V4 fallback => top unless an unsolved mult-meta or a meta-holding union occurs (blocked-capable shapes)  [6889 pairs]
+  erased contradictions (oracle: NOT unifiable, result != top): 2684  e.g. x=#(struct:expr-union #(struct:expr-Unit) #(struct:expr-meta pm2 #f)) y=#(struct:expr-Nat) -> #(struct:expr-Nat)
+  false contradictions  (oracle: unifiable, result = top)      : 16  e.g. x=#(struct:expr-union #(struct:expr-Nat) #(struct:expr-meta pm3 #f)) y=#(struct:expr-Nat) -> type-top
+  C violations: 1738  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  non-inflationary (r⊔x != r or r⊔y != r): 1766  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  A violations: 1894/20000 random triples
+  V4 erased contradictions by kind: ((meta-vs-meta . 0) (mult-meta . 1120) (union . 1440) (bare-meta-vs-term . 44) (other . 80))
+  V4 false contradictions by kind: ((meta-vs-meta . 0) (mult-meta . 0) (union . 16) (bare-meta-vs-term . 0) (other . 0))
+V5 mult-metas as wildcards; meta-holding unions keep the fallback; every other fallback hit => top  [6889 pairs]
+  erased contradictions (oracle: NOT unifiable, result != top): 1876  e.g. x=#(struct:expr-union #(struct:expr-Unit) #(struct:expr-meta pm2 #f)) y=#(struct:expr-Nat) -> #(struct:expr-Nat)
+  false contradictions  (oracle: unifiable, result = top)      : 16  e.g. x=#(struct:expr-union #(struct:expr-Nat) #(struct:expr-meta pm3 #f)) y=#(struct:expr-Nat) -> type-top
+  C violations: 1306  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  non-inflationary (r⊔x != r or r⊔y != r): 1334  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  A violations: 2342/20000 random triples
+  V5 erased contradictions by kind: ((meta-vs-meta . 0) (mult-meta . 312) (union . 1440) (bare-meta-vs-term . 44) (other . 80))
+  V5 false contradictions by kind: ((meta-vs-meta . 0) (mult-meta . 0) (union . 16) (bare-meta-vs-term . 0) (other . 0))
+  V5 C violations by kind: ((meta-vs-meta . 2) (mult-meta . 324) (union . 880) (bare-meta-vs-term . 0) (other . 100))
+
+ROLE A (type-lattice-merge), oracle columns not meaningful (clash => union by design):
+GA0 type-lattice-merge on GROUND terms (power row)  [400 pairs]
+  erased contradictions (oracle: NOT unifiable, result != top): 300  e.g. x=#(struct:expr-Unit) y=#(struct:expr-Nat) -> #(struct:expr-union #(struct:expr-Nat) #(struct:expr-Unit))
+  false contradictions  (oracle: unifiable, result = top)      : 0
+  C violations: 0
+  non-inflationary (r⊔x != r or r⊔y != r): 0
+  A violations: 0/20000 random triples
+VA0 type-lattice-merge today  [6889 pairs]
+  erased contradictions (oracle: NOT unifiable, result != top): 4658  e.g. x=#(struct:expr-Unit) y=#(struct:expr-Nat) -> #(struct:expr-union #(struct:expr-Nat) #(struct:expr-Unit))
+  false contradictions  (oracle: unifiable, result = top)      : 0
+  C violations: 1818  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  non-inflationary (r⊔x != r or r⊔y != r): 1822  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  A violations: 1016/20000 random triples
+VA1 type-lattice-merge, fallback => build-union-type  [6889 pairs]
+  erased contradictions (oracle: NOT unifiable, result != top): 4658  e.g. x=#(struct:expr-Unit) y=#(struct:expr-Nat) -> #(struct:expr-union #(struct:expr-Nat) #(struct:expr-Unit))
+  false contradictions  (oracle: unifiable, result = top)      : 0
+  C violations: 198  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  non-inflationary (r⊔x != r or r⊔y != r): 270  e.g. x=#(struct:expr-meta pm2 #f) y=#(struct:expr-meta pm1 #f) -> #(struct:expr-meta pm1 #f)
+  A violations: 4518/20000 random triples
