@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 186**
+> ### **NEXT FREE: 187**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
