@@ -9230,8 +9230,8 @@ the cause in the first case.
 
 **Mechanism** (read in code, not traced): the only writer of the relation store is the `defr` arm of
 `process-command` (`racket/prologos/driver.rkt:1037-1038`), into the process-global parameter `current-relation-store`
-(`racket/prologos/relations.rkt:822`). `load-module`'s parameterize list scopes some twenty registries per module and
-not this one (`driver.rkt:3167-3200`), so a source load writes straight into the caller's store, bypassing exports.
+(`racket/prologos/relations.rkt:822`). `load-module`'s parameterize list ~~scopes some twenty registries per module~~ **rebinds 35 parameters per module (registries, stores, the module network; corrected 2026-10-20)** and
+not this one (`driver.rkt:3167-~~3200~~3231`), so a source load writes straight into the caller's store, bypassing exports.
 Nothing in `pnet-serialize.rkt` carries relation state, so a cache hit restores the module's environment (where `edge`
 is evidently some binding, hence the message) without its relation. The CIU T6 → Rel charter named the concern in July
 as an entry gate, *"the two-context/relation-registry audit (incl. relations from cached `.pnet` bodies)"* (this file,
