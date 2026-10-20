@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 203**
+> ### **NEXT FREE: 204**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -9213,3 +9213,38 @@ the cause in the first case.
 **Fix shape**: report the offending field(s), as `validate` already does, at the `def` and `the` doors. Not traced.
 
 **When**: low cost, any time. **Owner**: CIU (the seal's diagnostics).
+
+### 203. ⬜ A RELATION DEFINED IN A REQUIRED MODULE IS LOST ON A `.pnet` CACHE HIT, AND ON A SOURCE LOAD IT IGNORES THE NAMESPACE — `solve (edge ?x ?y)` against `rel2xmod::facts`'s `defr edge` answers both rows when the module is elaborated from source, and fails with *"edge is bound as a value, not a relation"* once the module's `.pnet` exists; the importer reaches `edge` without naming it in `:refer`
+
+**Found by** REL 2's Stage-2 audit, probe `docs/tracking/tracks/REL/REL_2/research/stage2/xmod/` (`xmod.sh` → `xmod.out`; on branch `rel2-fact-store`,
+`6d1c4f7c`; main's code `07424c3b`). One process per leg; only the cache state varies.
+
+**Observations** (measured; printed result indices per leg):
+- cache off: `0: 42 : Int` (control, an ordinary `def` from the same module), `1: @[{:x 1, :y 2} {:x 2, :y 3}]`;
+- cache on, cold (the module's `.pnet` deleted first): the same two lines; the leg writes `facts.pnet`;
+- cache on, warm: `0: 42 : Int`, then `1: ERROR: … solve: edge is bound as a value, not a relation — application is
+  written [edge …]; parens make a relational goal (define a relation with defr)`. A relation defined in the user file
+  itself answers on every leg (`3:`).
+- `user.prologos` refers only `answer`, yet `edge` answers on the cold legs: relations are not scoped by the
+  namespace's exports. `user-refer.prologos` (`:refer [answer edge]`) answers the same.
+
+**Mechanism** (read in code, not traced): the only writer of the relation store is the `defr` arm of
+`process-command` (`racket/prologos/driver.rkt:1037-1038`), into the process-global parameter `current-relation-store`
+(`racket/prologos/relations.rkt:822`). `load-module`'s parameterize list scopes some twenty registries per module and
+not this one (`driver.rkt:3167-3200`), so a source load writes straight into the caller's store, bypassing exports.
+Nothing in `pnet-serialize.rkt` carries relation state, so a cache hit restores the module's environment (where `edge`
+is evidently some binding, hence the message) without its relation. The CIU T6 → Rel charter named the concern in July
+as an entry gate, *"the two-context/relation-registry audit (incl. relations from cached `.pnet` bodies)"* (this file,
+§ *CIU T6 → Rel: typed solution rows*, item (c)); this is its first measurement.
+
+**Why filed**: a relation's existence depends on build-cache state, and the failure names the wrong cause. Library
+code holds no `defr` today (REL 2 acyclicity census AY-10), which is why nothing has hit it; G-6's imports would
+(a relation defined by `:from` in a data module, queried from another).
+
+**Fix shape** (a decision for the scope half): relations become module-scoped state, serialized with the module and
+exported like other definitions. Where the store lives (a cell per relation, PM Track 12's parameters-to-cells
+migration, or REL 2's store) is REL 2's open question Q_B. Tests: the three legs as pins, plus the `:refer` variant.
+
+**When**: before any library module defines a relation, and before REL 2's `:from`.
+
+**Owner**: Rel Track 2 (store residency and scope), with PM Track 12 for the module-loading half; the owner places it.
