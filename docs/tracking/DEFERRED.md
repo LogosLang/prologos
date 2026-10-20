@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 194**
+> ### **NEXT FREE: 203**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -706,6 +706,18 @@ schemas, s4 for selections). AUTO-discharge stays deferred to the blame-latch
 era — gate: the §3b blame-latch citation verified concrete at F1b.5-p0 (else
 re-anchor; an invented placeholder gate is forbidden). s4 does NOT close this
 entry (auto-discharge is the deferred half).
+
+**✏ 2026-10-20 (REL 2 Stage-1 validation grid, findings VG-1, VG-2, VG-4; reproducers for the lines above).** The
+three doors onto one schema disagree on 6 of 13 defect rows (`docs/tracking/tracks/REL/REL_2/research/census/2026-10-20_REL_2_STAGE1_VALIDATION_GRID_DRAFT.md`
+§3; (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)):
+- `:check` is not run on `defr : Schema` rows: `defr g10 : Pos` (`:check (> _ 0)`) with `|| "Heat" -5` stores `-5`
+  (`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-grid-defr.out` `39:`, `40:`), while `validate` and `def` refuse it.
+- `validate` checks nothing under a schema-typed field, not even that the value is a Map:
+  `[validate Who {:name "Ann" :addr 5}]` → `ok` (`vg-grid-validate.out` `19:`); a bad inner field → `ok` (`17:`).
+  The static doors catch both. The witness tag for a schema-named field is `'any` (`racket/prologos/typing-core.rkt:563-564`).
+- A field with `:default`, absent from a `||` row, is refused by count at `defr` (`vg-grid-defr.out` `33:`), while
+  `validate` and `def` fill it.
+REL 2's bulk import (`defr R : S :from src`) would inherit all three unless every door shares one checker.
 
 ## CIU T6: the cross-module schema channel — staleness + cache-hit registration (probe-found at F1b.5-p0, 2026-07-17)
 
@@ -4241,6 +4253,12 @@ target — what each SHOULD produce wants a ruling before either is changed.
 
 Found while scoping member 4; not investigated further.
 
+**Addendum 2026-10-20 (REL 2 Stage-1 form census, finding FM-24).** The typing half has changed: the column now types
+`Int`, not `Goal` (`@[] : [PVec {:q Int}]`, `docs/tracking/tracks/REL/REL_2/research/census/forms/fm12-anon-rel.out` `0:`). The empty answer remains on five
+spellings (command position, `|`-separated, explicit `solve`, kept with `def`, arity 2: `0:`–`4:`, `9:`), with 0 errors.
+The rule-bodied twins answer (`(rel [?q] &> (= q 2))` → `@[{:q 2}]`, `5:`; an anonymous rule over a named fact relation,
+`8:`). (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)
+
 ### 75. ⬜ Q_U19 route 2 — `xs:{name}^alias` is UNGUIDED, and it needs a GROUPER-SIDE adjacency mint (D4.P4d slice 4d; attempted and REVERTED)
 
 `xs:{name}^alias` and `xs:{name}^` report a bare `Unbound variable` — the caret
@@ -7052,6 +7070,18 @@ PAR 4 P0 harness. Two defects: (a) the depth-limit error is not converted to a p
 (b) the benchmark's query exceeds the DFS depth limit. **When**: before the next comparative
 A/B. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
 
+**Addendum 2026-10-20 (REL 2 Stage-1 counters; the A.2b section's gate is the second half).** The depth limit is the
+ceiling on transitive closure today. `defr tc [?x ?z] &> (edge x z) &> (edge x y) (tc y z)` over a chain of L edges
+(`docs/tracking/tracks/REL/REL_2/research/counters/fact-scale-e2e.out`, lines 152–183, (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)):
+- under the default `:auto` the query routes to DFS (the A.2b body-local gate, § *Rel T1 A.2b DFS-routing scaffolding*
+  above); at L = 10, 30, 50 it answers correctly while reading 1 120 / 27 960 / 127 600 rows for all pairs (Θ(L³)); at
+  L = 100 and 300 the WHOLE FILE aborts with `solve: Depth limit exceeded (100)`, single-source queries included;
+- forced `:strategy atms` answers silently with the base case only: L of L(L+1)/2 pairs, 1 of L single-source answers
+  (lines 156, 174, 180), which is the incompleteness the A.2b gate exists to avoid.
+So no route answers TC over a chain of 100 or more edges. Part (a) of this entry (convert the error to a per-command
+error) would at least keep the rest of the file. The semi-naive route REL 2's Stage-1 survey proposes (synthesis SV-2)
+was measured on the propagator network in `docs/tracking/tracks/REL/REL_2/research/counters/tc-delta-carrier.out` (L up to 1000, correct closure).
+
 ### 154. ⬜ THE DETERMINISTIC COUNTERS ARE BLIND TO PROPAGATOR WORK UNDER THE PRODUCTION SCHEDULER — `prop_firings` counts only the sequential drain (`propagator.rkt:2758`), and `perf-inc-prop-alloc!` is NEVER CALLED (`prop_allocs` ≡ 0)
 
 `solve-adversarial` under BSP: `cell_allocs` 4 079, `prop_firings` 0, `prop_allocs` 0. The
@@ -7060,6 +7090,19 @@ see the propagator network at all. **Fix shape**: count fires in `fire-and-colle
 (BSP) as well as the drain; call `perf-inc-prop-alloc!` in `net-add-propagator`; add
 `bsp_rounds`. PAR 4 needs these as phase-gate counters (P0 record §6). **When**: with PAR 4 P1
 at the latest. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+**Addendum 2026-10-20 (REL 2 Stage-1; re-grounding findings RG-58 and RG-61).** Two more instruments see less than
+their names say, both measured (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical):
+- `solver_row_scans` at the Tier-2 install counts only the rows that pass the viability filter
+  (`racket/prologos/relations.rkt:2610-2615`, the increment at `:2614` sits after `#:when`). A point query on a
+  two-variant store reads `solver_row_scans` = 1 while its wall time grows linearly: 92 / 82 / 97 ns per row at
+  1 000 / 10 000 / 100 000 rows (`docs/tracking/tracks/REL/REL_2/research/counters/install-walk.{rkt,out}`). The July artifact's "rows=N+1 → 1" (D.2.d)
+  measured the counter's position, not the walk.
+- The route counter `par4-solve-routes` records the dispatch decision (`racket/prologos/stratified-eval.rkt:296`),
+  not the engine: an all-ground query routed `atms` is handed to DFS (`relations.rkt:3108-3109`) with 0 cells
+  (`docs/tracking/tracks/REL/REL_2/research/regrounding/rg-unify-probe.out` row C3). A route census needs the counter paired with cell allocations.
+REL 2 used the BSP observer (`current-bsp-observer`, `propagator.rkt:576`) for rounds, fires, propagators and cells
+(`docs/tracking/tracks/REL/REL_2/research/counters/fact-scale-counters.{rkt,out}`).
 
 ### 155. ✅ **DISCHARGED `51a24f4f`** (SW-25: runs write `data/benchmarks/runs/`; two writers, not one) — RUNNING A MICRO-BENCHMARK DIRTIES THE TREE — `bench-parallel-demos.rkt` rewrites the TRACKED `data/benchmarks/parallel-demo-results.json` (PAR 2's recorded result, `ce4cde52`)
 
@@ -8274,6 +8317,17 @@ fast-path."* `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS
   guards (`:2215`, `:2261`).
 - Non-ground `||` rows are accepted silently today: **192**.
 
+**Addendum 2026-10-20 (REL 2 Stage-1 acyclicity census, finding AY-9; a fourth shape).** A NAF after TWO generator
+variables answers wrongly under the default `solve`; with one generator it is right
+(`docs/tracking/tracks/REL/REL_2/research/census/acyclicity/ay-naf-route.{prologos,out}`, file lines, (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)):
+- `(val x) (val y) (not (= x y))`: default `@[]` (line 10), forced atms `@[]` (12), depth-first two rows (11);
+- `(val x) (val y) (not (bad x y))`, NAF over a base relation: default `@[{:a 2, :b b} {:a 1, :b b}]` with `b`
+  unbound (14), forced atms the same (16), depth-first three rows (15);
+- control, one generator: `@[{:a 2}]` on all three routes (18–20).
+By reading: `naf-per-binding-mask` declines when the generator count is not 1 (`racket/prologos/relations.rkt:187`), and
+the fallback is wrong. `:auto` takes ATMS because the relation's clause carries a `not`. One corpus rule has this shape,
+`racket/prologos/examples/2026-03-18-track7-acceptance.prologos:536`, and its query is commented out (`:540`).
+
 ### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
 
 **Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
@@ -8615,6 +8669,12 @@ heavy-file profiles were taken on the degraded elaboration. Re-measured fresh: w
 (`racket driver.rkt a b`, `driver.rkt:3967`) degrades every file after the first that shares imports with an earlier
 one; that consequence is from reading, not measured.
 
+**Addendum 2026-10-20 (REL 2 Stage-1 form census, finding FM-23): a WS user file with the prelude.**
+`require [prologos::core::csv …]` fails with `E2001: Required capability ReadCap not available in scope` when
+`racket/prologos/data/cache/pnet/prologos/core/csv.pnet` is absent, twice in a row, and passes once a no-prelude load
+has written that cache (`docs/tracking/tracks/REL/REL_2/research/census/forms/fm08-cache-sequence.{sh,out}`, steps 0–5; `fm08-csv.cold1.out` `0:` against
+`fm08-csv.warm.out` `0:`; (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)). The script deletes the cache before and after, so it replays from the cold state.
+
 ### 187. ⬜ THE DIRECT-FACT FAST PATH IGNORES A REPEATED QUERY VARIABLE, UNDER EVERY STRATEGY — `solve (e2 ?a ?a)` over the single fact `(2, 3)` answers `@[{:a 3, :a 3}]` instead of `@[]`; `(e3 ?a ?b ?a)` returns both `(1 2 1)` and `(1 2 3)`
 
 **Found by** BSP-LE 3's Stage-1 differential: the generated workload, program census-f2 `p27`, in all four of its
@@ -8825,6 +8885,12 @@ differential) is 187/188.
   191 is latent in the corpus: `racket/prologos/lib/examples/foray.prologos:505-507` (`defr movies : VHS`) holds three
   `false` fact rows. The only query grounds that column (`:1247`), but `solve (movies r title year)` would print `none`.
 
+**Addendum 2026-10-20 (REL 2 Stage-1 isomorphism family).** The `none` value poisons downstream functional code. A
+fast-path `solve` result kept with `def`, then filtered on its Bool column, prints an unreduced term as the value, with
+0 errors, on 4 of 10 queries: every query that tests the flag, `true` included (`docs/tracking/tracks/REL/REL_2/research/iso/iso.out` lines 259–268, class
+`STUCK`; (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)). **Control**: the same table kept from a `solve` through the strategy dispatch (form `pvd`) agrees with
+the oracle on all 10 (lines 269–278).
+
 ### 192. ⬜ A NON-GROUND TERM IN A `||` FACT ROW IS ACCEPTED SILENTLY, AND ITS COLUMN PRINTS `unknown` — `defr n2 [?x ?y] || 1 ?y` then `solve (n2 ?a ?b)` prints `@[{:a 1, :b unknown} {:a 2, :b 3}] : [PVec {:a Int :b Int}]`, and `solve (n2 1 5)` prints `@[]`
 
 **Found by** BSP-LE 3's decision BL-7 (owner, 2026-10-19: *"Ground fact rows are data, principally … Our `defr` with
@@ -8863,6 +8929,13 @@ default `solve`, main's code. Line numbers below are the `.out`'s printed indice
 **Owner**: Rel Track 2. Registration and ingest are its files (kickoff
 `docs/tracking/tracks/REL/REL_2/handoffs/2026-10-19_REL_2_KICKOFF.md` §3.1, branch `rel2-fact-store`). The `driver.rkt`
 gate is PAR 4's file, so it is requested by note.
+
+**Addendum 2026-10-20 (REL 2 Stage-1 validation grid VG-3, re-grounding RG-55, form census FM-18).**
+- A schema does not stop it: `defr g5 : Film` with `?y` as a value is accepted and prints `:y unknown` typed `Int`
+  (`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-grid-defr.out` `21:`, `22:`); a bare name too (`23:`); `validate` and `def` cannot even
+  receive one (`vg-grid-validate.out` `13:`, `vg-grid-def.out` `15:`). The fix must refuse under a schema as well.
+- A name that DOES resolve, a constructor, is stored exactly like this entry's `y`: filed as 195. The fix has to
+  resolve constructors before it can refuse unresolved names. (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)
 
 ### 193. ⬜ THE WS READER IS STILL QUADRATIC IN FILE LENGTH — `pos->line-col` (`parse-reader.rkt:2500-2506`) rescans the source from position 0 for every token: a 10 000-row fact block spends 85 % of its load there, and a 100 000-row block takes 468 s to load while its `defr` command takes 0.9 s
 
@@ -8905,3 +8978,238 @@ blind spot of its kind, after PARSE T1's dead `parse_ms`.
 **When**: any time. Before REL 2's Pre-0 benchmark at 100K rows (its D.1), if that benchmark loads literal blocks.
 
 **Owner**: the reader's (`parse-reader.rkt`); not REL 2, which does not edit it. The owner places it.
+
+### 194. ⬜ GROUND ROW VALUES OF SIX KINDS COME BACK FROM `solve` AS `unknown`, AND FUNCTIONAL CODE RECEIVES `unknown` — a Rat, Posit32 or Char column, a record, a PVec or a nested schema'd record: `solve` prints `@[{:v unknown} {:v unknown}] : [PVec {:v Rat}]`, and a kept result's `rr[0].v` is `unknown : Rat`
+
+**Found by** REL 2's Stage-1 tabular-form census (charge C, finding FM-17,
+`docs/tracking/tracks/REL/REL_2/research/census/2026-10-20_REL_2_STAGE1_FORMS_CENSUS_DRAFT.md`), probe `docs/tracking/tracks/REL/REL_2/research/census/forms/fm14-row-terms.{prologos,out}`
+(on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical). Indices are the `.out`'s printed result numbers.
+
+**Observations** (measured):
+- Rat, Posit32 and Char columns print every value as `unknown` under the right column type (`26:`, `28:`, `30:`).
+- So do a record column typed `{:x Int :y Int}` (`10:`), a PVec column (`17:`) and a nested schema'd record typed `Pt` (`21:`).
+- The same through the `rel` dispatch (`41:`) and through DFS as a rule subgoal (`47:`).
+- Kept with `def`, the VALUE is `unknown`: `rr[0].v` prints `unknown : Rat` (`43:`), `r3[0].r` prints `unknown : {:x Int :y Int}` (`45:`). 0 errors.
+- **Controls**: the store holds the Rat, since a select by it matches, `(kr2 ?k 1/2)` → `@[{:k "a"}]` (`40:`). Int, String,
+  Nat, Keyword and `true` columns round-trip (`fm01-positional.out`, `fm02-schemad.out`).
+
+**Mechanism** (read in code): `ground->prologos-expr` (`racket/prologos/reduction.rkt:331-355`) recognizes Racket
+keywords, symbols, lists, strings, booleans and integers, plus a fixed set of AST nodes (`:351-353`). Anything else
+becomes `(expr-fvar 'unknown)` (`:355`). `expr-rat`, `expr-posit32`, `expr-char` and `expr-rrb` are not in the set.
+For record values: CONJECTURE that a map literal in a row reaches this function as an unreduced literal node rather
+than `expr-champ` (which is in the set); not traced. A select BY a record value also fails (`12:`); not traced.
+Distinct from 192 (these rows are ground) and from 191 (another arm of the same answer path).
+
+**Fix shape**: the answer marshal is total over the stored value domain: a closed stored term is returned as itself, and
+a fallback exists only for a position that is genuinely unbound (192's fix removes those from rows). A round-trip test
+per value kind, using the probe's fixtures. In REL 2 this is the store's read surface (one value domain, one normal
+form at ingest), not a printer fix.
+
+**When**: before REL 2's bulk import (`:from` sources carry every one of these kinds); low cost before that.
+
+**Owner**: Rel Track 2. The site is next to 191's in `reduction.rkt`'s answer builder, so BSP-LE 3 (which lands 191's
+fix under decision BL-2) is asked by note to leave a seam or take these kinds too.
+
+### 195. ⬜ A CONSTRUCTOR NAME IN A `||` ROW OR A RELATIONAL GOAL IS A LOGIC VARIABLE — enum, `Option` and `none` values can be neither stored nor selected: `|| "a" Eng` prints `unknown`, `solve (emp ?n Eng)` binds a fresh variable `:Eng`, `[some 1]` is stored as `[?some 1]` and never matches an equal query, and `solve (k10d ?n none)` returns every row
+
+**Found by** three REL 2 Stage-1 charges independently (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical):
+re-grounding RG-55/RG-56 (`docs/tracking/tracks/REL/REL_2/research/regrounding/rg-fact-side-controls.{prologos,out}`, `rg-unify-probe.out` part B), the
+form census FM-18 (`docs/tracking/tracks/REL/REL_2/research/census/forms/fm14-row-terms.out`) and the validation grid VG-10
+(`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-controls2.out`, `vg-grid-defr.out`). Indices are printed result numbers.
+
+**Observations** (measured):
+- Rows: four spellings of a constructor value, bare `red`, `(the Color red)`, `[the Color red]` and the qualified
+  name, all print `:k unknown` (`rg-fact-side-controls.out` `10:`–`13:`; Int control `15:`). The stored terms are
+  `(expr-logic-var red free)` and `(expr-ann (expr-logic-var red free) (expr-logic-var Color free))`
+  (`rg-unify-probe.out` rows B-cbare, B-cthe).
+- A user enum, `data Dept := Eng | Mkt` then `|| "a" Eng`, prints `:d unknown` with column type `_` (`fm14` `49:`).
+- Goals: `solve (emp ?n Eng)` → `@[{:n "a", :Eng unknown} {:n "b", :Eng unknown}]` (`fm14` `50:`). A goal asking for a
+  constructor no row holds returns every row (`rg-fact-side-controls.out` `38:`). `solve (k10d ?n none)` →
+  `@[{:n "Ann", :none unknown} {:n "Bob", :none "x"}]` (`vg-controls2.out` `26:`).
+- Compounds: `[some 1]` in a row prints `[?some 1]` with column type `<error>` and 0 errors (`fm14` `4:`;
+  `rg-fact-side-controls.out` `19:`). Asking for it returns `@[]` (`20:`) where the Int control hits (`25:`).
+- Under a schema, an `Option String` field refuses the well-typed `[some "A"]`:
+  `field :nick expects [prologos::data::option::Option String], got [?some "A"]` (`vg-grid-defr.out` `37:`), while
+  `validate` and `def` accept the same record.
+
+**Mechanism** (read in code): `defr` bodies, rows included, elaborate with `current-relational-fallback? #t`
+(`racket/prologos/elaborator.rkt:3873-3874`). Under it every bare name becomes a free logic variable before global
+resolution, *"even if they happen to be bound in the global env"* (`:804-826`). The comment's escape for a global,
+*"use `[...]` (functional expression) or `is`"* (`:808-809`), does not hold in rows: `[the Color red]` is stored with
+both names as logic variables. A rule body's `[some 1]` elaborates to `(expr-goal-app some …)` and a row's to
+`(expr-app (expr-logic-var some free) …)`, so the two never compare `equal?` (`rg-unify-probe.out` B-op, B-opw).
+
+**Relation to 192**: 192's fix shape refuses *"a bare name that resolves to no definition"*. A constructor does
+resolve, and it is stored exactly like 192's `y`. The fix therefore has to decide what a constructor means in a row,
+and in a goal, before it can tell the two apart.
+
+**Fix shape** (a decision): in a row, a name that resolves to a constructor (or any closed global value) is that
+value; the goal side agrees; bare unresolved names stay variables in rule bodies, where they are the relation's
+parameters. Tests: the probe fixtures beside their Int controls.
+
+**When**: with 192's fix, and before REL 2's bulk import (enum and Option columns arrive from CSV, JSON and SQLite).
+
+**Owner**: Rel Track 2 (the decision and row ingest). The elaborator arm is shared; its change is requested by note.
+
+### 196. ⬜ THE DIRECT-FACT FAST PATH TAKES A SYMBOL LITERAL FOR A QUERY VARIABLE OF THE SAME NAME — `solve (sy (symbol-lit n) ?n)` returns both rows of `defr sy [?k ?n] || (symbol-lit alice) 1 / (symbol-lit carol) 2`, under every strategy
+
+**Found by** REL 2's Stage-1 re-grounding (charge R, finding RG-57,
+`docs/tracking/tracks/REL/REL_2/research/regrounding/2026-10-20_REL_2_STAGE1_REGROUNDING_DRAFT.md`), probe
+`docs/tracking/tracks/REL/REL_2/research/regrounding/rg-fact-side-controls.{prologos,out}` (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): `solve (sy (symbol-lit n) ?n)` → `@[{:n 1} {:n 2}]` (`30:`); the
+same under `solve-with dfs-s` (`32:`) and `solve-with atms-s` (`33:`), because the fast path runs before strategy
+dispatch (`racket/prologos/stratified-eval.rkt:242-245`). **Controls**: the same query through a rule wrapper gives
+`@[]` (`31:`), and renaming the query variable to `?m` gives `@[]` (`34:`).
+
+**Mechanism** (read in code): `normalize-solver-value` turns an `expr-symbol` into a raw Racket symbol
+(`racket/prologos/relations.rkt:404`). The fast path then takes any raw symbol that is a member of `query-vars` as that
+variable and binds it (`:3044-3046`). It is the query-side twin of the fact-side hazard RG-54 records for raw-symbol
+test stores.
+
+**Fix shape**: decide variable-ness from the goal's term kind (`expr-logic-var` positions), never from a normalized
+value's name. Test: the probe's two rows and controls.
+
+**When**: low cost, any time. BSP-LE 3's BL-2 fix (DEFERRED 191) edits the same lines (`:3042-3048`) at its checkpoint
+2, so the two belong in one change.
+
+**Owner**: BSP-LE 3 (the fast path's current editor), else Rel Track 2, whose read surface replaces the fast path.
+
+### 197. ⬜ ANY LINE IN A `defr` BODY WITHOUT A SENTINEL BECOMES A RULE CLAUSE — `:from fl`, `:source "f.csv"`, the vision doc's own `:tabled false`, `:frobnicate 42` and a `:-` body all register silently; every query then fails with `Unknown relation: :from` (or `:tabled`, `:`), and a relation with `||` rows AND such a line loses its rows
+
+**Found by** three REL 2 Stage-1 charges (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical): the form census FM-20
+(`docs/tracking/tracks/REL/REL_2/research/census/forms/fm04-from.out`, `fm05-source.out`), re-grounding RG-60 (`docs/tracking/tracks/REL/REL_2/research/regrounding/rg-tabled.out`) and the
+acyclicity census DC-2/DC-3 (`docs/tracking/tracks/REL/REL_2/research/census/acyclicity/ay-colon-dash.out`, `sudoku-demo-run.out`). Predicted earlier by
+the REL 2 ledger's plan note RN-3 and the §0 probe (`docs/tracking/tracks/REL/REL_2/research/s0/rel2-s0.out` `14:`).
+
+**Observations** (measured; printed result indices unless a file line is named):
+- Unschema'd: `defr f3 [?t ?y ?s]` / `:from fl` prints `f3 : _ defined.` (`fm04` `5:`); `solve` gives
+  `ERROR: solve: Unknown relation: :from` (`6:`). `:frobnicate 42` the same (`9:`, `10:`). With `||` rows plus a
+  `:from` line, the query errors and the rows are lost (`15:`, `16:`). `:source` the same (`fm05` `3:`, `4:`).
+- Schema'd: refused with a message about a construct the user did not write: *"a schema-typed relation must be
+  facts-only (fully-ground rows); it has rule clauses (&>)"* (`fm04` `3:`, `4:`).
+- The vision's example `:tabled false` (`docs/tracking/principles/RELATIONAL_LANGUAGE_VISION.org:347-350`) registers
+  (`rg-tabled.out` `1:`), then `ERROR: solve: Unknown relation: :tabled` (`3:`, `7:`); controls without the line
+  answer (`4:`, `8:`).
+- A body starting with `:-` registers, and every query fails with `ERROR: solve: Unknown relation: :`
+  (`ay-colon-dash.out` file lines 7–9; control with `&>`, lines 10–13). `racket/prologos/examples/2026-03-28-sudoku-demo.prologos`
+  has four such relations and cannot run (`sudoku-demo-run.out` lines 5–10; its query also fails *"solve expects 1
+  argument, got 16"*).
+
+**Mechanism** (read in code): a `defr` body with no `||` or `&>` sentinel falls into the implicit-`&>` arm, which
+parses every token as a relational goal (`racket/prologos/parser.rkt:7660-7668`). A keyword head is a goal on a relation
+named by the keyword.
+
+**Fix shape**: refuse a body line whose head is a keyword or `:-` with a message naming it (and, for `:-`, pointing at
+`&>`); reserve `:from` and `:source` for REL 2's import arm; implement or un-document `:tabled` (July artifact §9.5;
+RG-48). Tests: the four probes.
+
+**When**: low cost, any time; at the latest with REL 2's `:from` arm, which would otherwise inherit the silent clause.
+
+**Owner**: Rel Track 2 (the `defr` body grammar and the import arm).
+
+### 198. ⬜ A `:check` THAT PANICS IS BURIED SILENTLY — `[map [validate Risky _] rows]` returns a list holding `(panic "boom")` with 0 errors; `def k9 : Risky := …` commits and reads back as a stuck `[reduce (panic "boom") | ok x -> x | …]`; only a bare top-level `validate` reports `ERROR: panic: boom`
+
+**Found by** REL 2's Stage-1 validation grid (charge V, finding VG-8,
+`docs/tracking/tracks/REL/REL_2/research/census/2026-10-20_REL_2_STAGE1_VALIDATION_GRID_DRAFT.md` §6), probes
+`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-coerce-channel.{prologos,out}` and `vg-controls2.{prologos,out}` (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): the list
+`'[[ok {:n 1, :t "a"}] (panic "boom") [ok {:n 2, :t "c"}]]` (`vg-coerce-channel.out` `29:`; control without the row,
+clean, `31:`); the `def` door `k9 : Risky defined.` then the stuck term (`vg-controls2.out` `12:`, `13:`); the
+constructor door the same (`15:`); the bare `validate` reports the panic (`10:`). A `:check` on a `||` row never runs
+(`vg-coerce-channel.out` `32:`; that is the deep-walker charter's line on fact-row validation).
+
+**Mechanism** (read in code): by CIU T6's decision D27.3, a panic in a `:check` IS the `validate` node's result
+(`racket/prologos/reduction.rkt:2687-2688`). Its consumers do not propagate it: `seal-forcing-error` reports only when
+the forced normal form is itself `expr-panic?` (`racket/prologos/driver.rkt:287-295`), and the `expect-valid` match on a
+panic scrutinee stays stuck. CONJECTURE: no strictness arm makes `reduce` of a panic subject the panic.
+
+**Fix shape**: make panic strict wherever a value is demanded (a `reduce`/match on a panic subject is that panic), so
+D27.3's result surfaces at every door; test the three doors and the `map`.
+
+**Why it matters beyond CIU**: an across-rows error channel for bulk import (REL 2's open decision FS-2) assumes a
+total per-row validator; today a panicking row is silently a value.
+
+**When**: before REL 2's `:from` calls `validate` per row.
+
+**Owner**: CIU (the validator's consumers) or whoever owns `reduce` strictness; REL 2 depends on it.
+
+### 199. ⬜ A ONE-TOKEN CONTINUATION LINE RE-CHUNKS `||` ROWS SILENTLY — `|| "John" "Smith" "Jr"` then `"Jane"` on the next line, under arity 2, is accepted as the two rows `{:f "John", :l "Smith"} {:f "Jr", :l "Jane"}`, with or without a schema
+
+**Found by** REL 2's Stage-1 validation grid (charge V, finding VG-9), probe
+`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-controls.{prologos,out}` (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): schema'd `k3` (`17:`, `18:`) and unschema'd `k3c` (`21:`, `22:`)
+both accept and re-chunk. **Control**: with two tokens on the second line the block is refused, *"3 terms do not fill
+rows of arity 2 — separate rows with `|` or newlines"* (`19:`). The grid's `g4` on `Film` is the same shift
+(`vg-grid-defr.out` `17:`, `18:`).
+
+**Mechanism** (read in code): a token that is not a pair is a flat term whatever its line
+(`racket/prologos/parser.rkt:7573-7578`), and flat terms are chunked by arity (`:7206-7213`). The message promises that
+newlines separate rows.
+
+**Fix shape**: once a block uses newline rows, a line is a row, and a line whose term count is not the arity is
+refused with its line number. The same parser grouping is where dictionary rows (REL 2 form census FM-19,
+`parser.rkt:7529`, `:7573-7580`) need a fix, so the two land together.
+
+**When**: low cost, any time; with REL 2's dictionary rows at the latest.
+
+**Owner**: Rel Track 2 (`||` row grouping).
+
+### 200. ⬜ AN `Int` CONSTANT DOES NOT SELECT A `Nat` VALUE ADMITTED UNDER AN `Int` COLUMN — `defr c1 : Film` with `|| "Heat" 1995N` is accepted and prints `:y 1995N` typed `Int`, and `solve (c1 "Heat" 1995)` gives `@[]`
+
+**Found by** REL 2's Stage-1 validation grid (charge V, finding VG-6), probes
+`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-coerce-channel.{prologos,out}` and `vg-controls2.{prologos,out}` (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): `@[{:t "Heat", :y 1995N}] : [PVec {:t String :y Int}]` then
+`@[] : _` (`vg-coerce-channel.out` `5:`, `6:`). `validate` and `def` accept the Nat under `Int` too (`7:`, `8:`), and
+`1995N : Int` (`10:`). An `Int` under a `Rat` column is stored as `3` (`11:`, `12:`). **Controls**, one variable each:
+Nat row with a Nat constant `@[{}] : _` (`vg-controls2.out` `2:`); Int row with an Int constant `@[{}]` (`4:`); Int row
+with a Nat constant `@[]` (`5:`). Seen once and not controlled: `[= 1995N 1995]` prints a stuck `reduce` term typed
+`Bool` (`7:`).
+
+**Mechanism** (by reading): the checks accept `Nat` where `Int` is declared (subsumption) without converting the value,
+and the matchers compare representations (`equal?` on the stored AST; the fast path's `normalize-solver-value`,
+`racket/prologos/relations.rkt:401-406`, has no `Nat` arm). One column then holds two key spaces.
+
+**Fix shape** (a decision, REL 2's open decision FS-2 on coercion): convert to the declared type at admission, or make
+the store's equality and index numeric-aware. Test: the probe rows.
+
+**When**: before REL 2's bulk import, which admits numbers from text sources.
+
+**Owner**: Rel Track 2.
+
+### 201. ⬜ A RECORD TYPE IN A `spec` IS ACCEPTED AND THEN SATISFIED BY NOTHING — `spec t3f {:title String} -> String` prints `t3f : {:title String} -> String defined.`, and applying it to a record with exactly that field fails: *"argument of type {:title String} does not match the expected parameter type {:title String}"*
+
+**Found by** REL 2's Stage-1 validation grid (charge V, finding VG-11), probe
+`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-openness-types.{prologos,out}` (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): `7:` and `8:`. The same record type as a `def` annotation is
+refused, *"Expression is not a valid type"* (`5:`); the open-row display spelling `{:title String | _}` is a reader
+error (`6:`).
+
+**Mechanism** (read in code, partly): `syntax.rkt:680` says record types are *"internal-only: inferred + displayed, NOT
+parsed"*, and `parser.rkt` builds no `expr-Record` (`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-census.out` §D). Why the `spec` path
+accepts the spelling was not traced.
+
+**Fix shape**: refuse a record type in a `spec` with the `def` door's message until record types are writable. Whether
+they become writable is a design question REL 2 meets: a `solve` result's row type is printed but cannot be written
+(form census FM-21), which bounds REL 2's open decision FS-4 (importing a `solve` result).
+
+**When**: low cost, any time.
+
+**Owner**: the type checker's owner (spec elaboration); REL 2 asks.
+
+### 202. ⬜ TWO RECORD-SCHEMA DIAGNOSTICS NAME NOTHING — `def d3c : FilmC := {…}` with one extra key says only `ERROR: Type mismatch` (while `validate` names `:director` as `unexpected-field`), and sealing an open row into a `:closed` schema says only `ERROR: Could not infer type`
+
+**Found by** REL 2's Stage-1 validation grid (charge V, finding VG-14) (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): `docs/tracking/tracks/REL/REL_2/research/census/validation/vg-grid-def.out` `13:` against
+`vg-grid-validate.out` `11:`; `vg-openness-types.out` `17:` (control `18:`: the same record with exactly the schema's
+fields seals). The `:closed` control with exactly its fields is accepted (`vg-controls.out` `28:`), so the extra key is
+the cause in the first case.
+
+**Fix shape**: report the offending field(s), as `validate` already does, at the `def` and `the` doors. Not traced.
+
+**When**: low cost, any time. **Owner**: CIU (the seal's diagnostics).
