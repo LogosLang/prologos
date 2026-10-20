@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 193**
+> ### **NEXT FREE: 194**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -8863,3 +8863,45 @@ default `solve`, main's code. Line numbers below are the `.out`'s printed indice
 **Owner**: Rel Track 2. Registration and ingest are its files (kickoff
 `docs/tracking/tracks/REL/REL_2/handoffs/2026-10-19_REL_2_KICKOFF.md` §3.1, branch `rel2-fact-store`). The `driver.rkt`
 gate is PAR 4's file, so it is requested by note.
+
+### 193. ⬜ THE WS READER IS STILL QUADRATIC IN FILE LENGTH — `pos->line-col` (`parse-reader.rkt:2500-2506`) rescans the source from position 0 for every token: a 10 000-row fact block spends 85 % of its load there, and a 100 000-row block takes 468 s to load while its `defr` command takes 0.9 s
+
+**Found by** REL 2's Stage-1 counters, the production-shaped leg: `docs/tracking/tracks/REL/REL_2/research/counters/`
+`fact-scale-e2e.out` (registration table) and `reader-profile.{rkt,out}`, on branch `rel2-fact-store` (`b051acf3`),
+main's code (`07424c3b`). The corpus is `racket/prologos/tools/gen-fact-corpus.rkt`'s.
+
+**Observations** (measured; single runs under ambient load, not under the suite lock):
+
+| `data` rows | file bytes | whole file | the `data` defr command |
+|---:|---:|---:|---:|
+| 1 000 | 21 385 | 249 ms | 7.7 ms |
+| 10 000 | 236 957 | 4 785 ms | 79.6 ms |
+| 100 000 | 2 662 672 | 467 855 ms | 915.5 ms |
+
+- Sampling profile (2 ms): `pos->line-col` is 13 % of the samples at 1 000 rows, 69 % at 3 000 and 85 % at 10 000
+  (3 530 of 4 162 ms). Between 3 000 and 10 000 rows its time grows 11.7× for 3.3× the rows (quadratic: 11.1×).
+- **Control**: the same 10 000-row file with every fact-row line turned into a `;` comment (236 593 bytes, the same
+  characters, almost no tokens) loads in 54 ms against 4 660 ms. The cost is per token, not per byte.
+- `parse_ms` reports 194 ms for the 10 000-row file. The quadratic sits in the preparse reader path
+  (`read-all-syntax-ws`, `racket/prologos/driver.rkt:2841`), which no phase timer covers.
+
+**Mechanism** (read in code): `pos->line-col` counts newlines from index 0 up to `pos`
+(`racket/prologos/parse-reader.rkt:2500-2506`). It runs once per token in `token-entry->stx` (`:2622`) and in the
+compat token builder (`:2427`), and at about twenty sites in `:4397-4671`. Tokens × mean position is Θ(n²) in the file
+length. PARSE T1 (`0e34bc15`, 2026-08-15, record `docs/tracking/2026-08-15_1218_WS_PARSE_CUBIC.md`) fixed the same
+shape in the tree path: `find-content-line-for-pos` binary-searches the vector `compute-line-starts` builds
+(`parse-reader.rkt:1926`, `:1955`). This path was not covered. Its test files were 28 KB at most, where this loop is
+smaller (an estimate, not measured).
+
+**Why filed**: a literal `||` block is the only way to put rows into a relation from a `.prologos` file today, and the
+REL 2 goal (owner guidance G-6: 100K–1M rows at interactive latency) cannot load that way. Every large source file pays
+it, not only fact blocks.
+
+**Fix shape**: build the line-start vector once per source string (`compute-line-starts` exists) and binary-search it
+in `pos->line-col`, or carry line and column through the tokenizer. Keep the old loop as the differential oracle, as
+PARSE T1 did (`racket/prologos/tests/test-parse-reader.rkt`). Give the preparse reader a phase timer: this is the second
+blind spot of its kind, after PARSE T1's dead `parse_ms`.
+
+**When**: any time. Before REL 2's Pre-0 benchmark at 100K rows (its D.1), if that benchmark loads literal blocks.
+
+**Owner**: the reader's (`parse-reader.rkt`); not REL 2, which does not edit it. The owner places it.
