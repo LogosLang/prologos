@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 204**
+> ### **NEXT FREE: 205**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -9248,3 +9248,70 @@ migration, or REL 2's store) is REL 2's open question Q_B. Tests: the three legs
 **When**: before any library module defines a relation, and before REL 2's `:from`.
 
 **Owner**: Rel Track 2 (store residency and scope), with PM Track 12 for the module-loading half; the owner places it.
+
+**Addendum 2026-10-24 — the owner placed it (REL 2 decisions FS-7 and Q_B), and the probe gained five legs** (`be79f051`
+on `rel2-fact-store`, same directory; main's code unchanged since `07424c3b`).
+- **The decisions, verbatim** (owner, 2026-10-24 08:42): *"FS-7: Fully Qualified Namespaces is an important design
+  criterium of the project. This should almost not be a question."* and *"Q_B: Reasonable line to draw. Let's provide
+  a kickoff to start PM 12 module loading in a new worktree and session."* The line Q_B approves: **REL 2 owns the
+  relation store's value, its cell and its merge; PM Track 12 owns the module-load plumbing** (per-module scope,
+  `.pnet` serialization and restore, name resolution). Ledgered in REL 2's decision ledger (branch `rel2-fact-store`,
+  § *FS-7 and Q_B decided*).
+- **New observations** (`xmod.out`, leg `user-collide`, one process per cache state):
+  - a relation is never reachable by a qualified name: `solve (rel2xmod::facts::edge ?x ?y)` and even the importer's
+    own `solve (rel2xmod::collide::edge ?x ?y)` fail with *"Unknown relation: … — its defr failed to register (see
+    the earlier error)"*, though no error occurred (cache off and cold; warm: *"… is bound as a value, not a
+    relation"*);
+  - the bare `edge` answers the imported rows until a local `defr edge` replaces them, silently (`4:` → `6:`).
+- **Mechanism of the new legs** (read in code, not traced): the `defr` arm binds the relation's env value under the
+  bare name and the FQN (`driver.rkt:1015-1019`), while the store is keyed by `expr-defr-name`, the bare name
+  (`relations.rkt:831`). A qualified goal finds the env binding, misses the store, and `raise-unknown-relation-error`
+  (`relations.rkt:1458-1474`) reads an env-bound `expr-defr` as a registration a gate rejected.
+- **Fix shape, completed**: the store is keyed by FQN and a goal's relation name goes through the same resolution as
+  any name (FS-7); the module scope and `.pnet` half is PM 12's. Pins: the `user-collide` legs as well.
+- **Owner** (replacing the line above): **PM Track 12** (kickoff on branch `pm12-module-loading`, opened 2026-10-24),
+  with REL 2 for the store's key type and value. The `:refer` half is general, not relational: **DEFERRED 204**.
+
+### 204. ⬜ ⭐ `:refer` DOES NOT LIMIT WHAT AN IMPORTER SEES — every definition of every loaded module is reachable by its bare name, and when two modules define the same bare name the importer silently gets whichever loaded last
+
+**Found by** REL 2 while gathering the evidence for decision FS-7 (fully qualified names), probe
+`docs/tracking/tracks/REL/REL_2/research/stage2/xmod/` (`xmod.sh` → `xmod.out`; on branch `rel2-fact-store`, `be79f051`;
+main's code `07424c3b`, no `.rkt` change on main since). One `process-file` per leg.
+
+**Observations** (measured):
+- `user-collide.prologos` requires `rel2xmod::facts :refer [answer]`; the module also defines `def other : Int := 7`.
+  Bare `other` prints `2: 7 : Int` with the cache off, cold and warm.
+- `user-prelude.prologos` (with the prelude, which requires `prologos::data::char :as char :refer []`,
+  `racket/prologos/namespace.rkt:729`): `char::numeric?`, bare `numeric?` and bare `from-code` all print their foreign
+  bindings (`0:`–`2:`).
+- `user-ambig.prologos` requires `rel2xmod::facts` (`other := 7`) then `rel2xmod::facts2` (`other := 8`), both
+  `:refer []`: bare `other` prints `2: 8 : Int`. `user-ambig-rev.prologos`, the same with the order reversed, prints
+  `2: 7 : Int`. The qualified names print 7 and 8 in both (controls). No error, no warning.
+
+**Mechanism** (read in code, not traced): the definition arm registers every definition under its bare name
+(`driver.rkt:1015`, `global-env-add name …`) as well as under its FQN (`:1016-1019`). Name lookup in the elaborator
+tries the own-namespace FQN (`elaborator.rkt:846-853`), then `resolve-name` (`namespace.rkt:580-611`: alias, refer
+map, refer-all namespaces, own namespace), and then **falls back to the bare name** (`elaborator.rkt:865-869`), which
+finds whatever module wrote that bare key last. `resolve-name`'s legacy mode (no `ns`, `namespace.rkt:583`) returns the
+symbol unchanged, so files without `ns` (sexp tests) may depend on the bare entries.
+
+**Why it matters**:
+- Fully qualified names are a design criterion of the project (owner, 2026-10-24, REL 2 FS-7, quoted in 203's
+  addendum). `PATTERNS_AND_CONVENTIONS.org` § *Modules and Namespaces* (`:18-22`) promises selective import with
+  `:refer` and *"qualified access prevents collision"* (`:35`); the prelude's `:as char :refer []` is written for
+  exactly that.
+- A silent, load-order-dependent binding is a wrong-answer class. It is the definition-level twin of the spec store's
+  bare key (160; the issue #66 entry, § *Spec-store bare-name keying*, `:1015`), whose owner note asks for specs
+  *"fully qualified to its namespace"* (`:7378`), and of 203's relation store.
+
+**Fix shape**: the global environment is keyed by FQN only, and resolution is the one route from a spelling to a
+definition. A module's bare names are visible inside that module and wherever `:refer` or `:refer-all` brings them;
+an ambiguous bare name (two refer-all sources) is an error naming both FQNs. **Blast radius unmeasured**: before any
+change, census the programs, tests and library modules that resolve a name only through the fallback (count hits of
+`elaborator.rkt:865-869` over the suite and the library, separated by `ns`/no-`ns`). The monotone-migration rule
+applies: today's meaning of a bare name that two modules define depends on load order, so making it an error removes
+no meaning a program could rely on; the singly-defined, unreferred case does have one, and the census sizes it.
+
+**When**: with PM Track 12's name-resolution work; before REL 2's FQN-keyed store lands (203).
+
+**Owner**: PM Track 12 (the module system; placed by the owner's Q_B decision, 2026-10-24).
