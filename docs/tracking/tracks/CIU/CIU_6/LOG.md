@@ -591,3 +591,21 @@ are in [`../README.md`](../README.md).
   - JD-1…7 (what `.*` becomes; `x:*-`; the block waypoint; near-miss messages; full ravel; ε in PF; the
     `selection` form) are ledgered with leans.
 - **Next**: the owner decides J (and takes or defers the JDs). 1b-vi close item 2 (the grammar) proceeds.
+
+### Q_U63 DECIDED J (ravel is `x:*`) and JD-1…7 decided at their leans, as a batch — docs commit on the branch (2026-11-02)
+- **Why / decision**: the owner (2026-11-02 12:06) — *"OK to take the leans in a batch. Let's proceed accordingly."* —
+  after the 2026-10-19 lean ("I'm liking J. It reads well to me.").
+- **What**: [Q_U63](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63) is marked DECIDED with the decision stated;
+  the JD header is DECIDED.
+  - [Q_U26](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) gets a "spelling superseded" callout; its
+    meaning stands.
+  - Q_U40's unmeasured `vv:{0 1}*` → `⟨1 2 3 4⟩` line is struck with a correction callout (RV-1).
+  - The P4e tracker row and §5.P4e's ravel bullet name `x:*`.
+  - **P4e-2 is re-scoped**: the `.*` retirement (`.*` becomes a guided refusal naming `x:*`), plus the `:*`
+    production, ε as `(@bcast ε)`, the JD-2…4 messages and waypoint, the laws, and DEFERRED 185's reader seats.
+  - Spec departures (§2.1 and §3.5) are proposed, not applied.
+- **Re-grounding after a two-week gap**: main moved 23 commits, all `DEFERRED.md` / dailies (REL 2, PM, BSP-LE 3).
+  No code changed, so the code gate carries over. Nothing new is addressed to CIU 6. DEFERRED 198 (CIU-owned, filed
+  by REL 2: a panicking `:check` printed as a value) is the buried-panic class fixed for selection at `55b7df16`; it
+  gets a cross-reference on main.
+- **Next**: 1b-vi close item 2, the star family in the tree-sitter grammar (DEFERRED 144, with 179 and 180).

@@ -34,7 +34,7 @@ rulings, censuses and test delta live in its own section.
 | **P4a** | **Totality + strategy-independent repairs** (no new surface) — the `select-step-kind` classifier routed through **THIRTEEN** dispatch sites in **FIVE** files (the design said 4, the first census said 8; the adversarial verify found 5 more, incl. two LEAF classifiers that run UPSTREAM of the guards and a render site the identifier-grep structurally could not see) · the whole-node-abort fixtures · the `select-reduce` subject re-whnf hoist (a CONTRACT fix — measured no perf delta) · the `whnf-trivial?` container-VALUE arms (1822 ns/call, 9.5×, by interleaved microbench; ≈−0.1% of wall) · the P2 bench baseline ESTABLISHED (none had ever been recorded) | ✅ | [§5.P4a](#p4a) · battery 204 → **224** |
 | **P4c** | **The `:` gate + the ω wrapper + PVec broadcast** — ⭐ **Q_U16 RULED** (Q_U8 was NOT implementable; the binder unwrap moves to the reader post-pass, so the mint stays uniform and BOTH surfaces survive) · **Q_U16b**: `users:0` IS a legal ω step | 🔄 | [§5.P4c](#p4c) · P4c-1 ✅ `182f1678` · P4c-2 ✅ `68cdaae7` ([inverted default](#p4c-2-inverted)) · [P4c-3](#p4c-3) ✅ `d477772c` · [P4c-4a](#p4c-4a) ✅ `f31237fd` · [P4c-4b](#p4c-4b) ✅ `6b22515d` (end to end) · **[P4c-4c](#p4c-4c-close) ✅ `ae26f540`** — broadcast is REACHABLE: PVec ω value semantics + **G2** + the preparse seam guard. ⭐ The verify caught a BLOCKING whole-file abort every gate was blind to; owner ruled the structural fix ([close](#p4c-4c-close)) · [Q_U18](#q-u18) ✅ · DEFERRED 43 ✅ · 48 RULED uniform · P4c-5 ⬜ |
 | **P4d** | **The carriers** — Map/keyword-row · het tuple · PVec-of-union · closed-schema subjects · the Q_U9 refusal's message split · corpus re-fate · **Q_U19 ✅ RULED (A)** | ✅ | [§5.P4d](#p4d) · slices **0 ✅ 1 ✅ 2 ✅ 3 ✅ 4a ✅ 4a' ✅ 4b ✅ 4c ✅ 4d-1 ✅ 4d-2 ✅ 5 ✅ 6 ✅** — broadcast is LIVE over PVec · Map · keyword-row · het tuple · union · closed schema. ⭐ The CLOSE's own audit found a whole-file abort in slice 3's code (slice 5) and Q1 re-opened as a live defect (slice 6). All THREE owner questions discharged: Q1 ruled+implemented · [Q2](#q-u22) answered (fix → DEFERRED 88) · Q3 answered (broadcast → 58 re-scoped; contract → 89) |
-| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat and rebinds to **ravel**; `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · RE-SCOPED 2026-08-08 ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ attempt 1 REVERTED `d0ac2a58` ([DEFERRED 101](DEFERRED.md)); attempt 3 opens from [the census](#star-census) ([Q_U30](#q-u30)/[Q_U31](#q-u31), prereq [102](DEFERRED.md) ✅ `41458174`) · PREP ✅ `f63612e7`+`ae67419f` ([Q_U32](#q-u32)) · **slice A SHIPPED** `e7a49228`, **slice B REVERTED** `0e007864`: [§5.P4e-0-a3](#p4e-0-a3) · ⭐ **P4e-1a ✅ COMPLETE** `9cac0099` — the mint has its CONSUMER. [Q_U36](#q-u36) positive-list fuse + [Q_U37](#q-u37) territory-scoped refusal; 3 slices (attempt 1 of the last REVERTED); suite 10143/488/0, battery 476: [§5.P4e-1a](#p4e-1a) · **P4e-1b 🔄 SEMANTICS FULLY RULED, not implemented** (audit `wf_4b91ca25-73a`) — [Q_U38](#q-u38) collision REFUSED (conservative on the `'dyn` tail; gate moves to typing) · [Q_U39](#q-u39) closer-adjacent `*_` mint SPLIT OUT · ⭐⭐ [Q_U40](#q-u40)–[Q_U48](#q-u48). ⭐ **The flatten is LIVE at depth ≤ 1** (1b-iii shipped, `d5934397`); depth ≥ 2 is shielded pending [Q_U47](#q-u47)'s landing rule, now ruled. Semantics + slicing: [§5.P4e-1b](#p4e-1b) · remaining slices C1 · C2 · iv · v: [§5.P4e-1b-sequencing](#p4e-1b-sequencing) |
+| **P4e** | **The `*` family · disclose `<`/`:<` · branch-initial `:`** — ⭐ **`*` is SORT-GENERIC** (deletes the layer the preceding step created: `:diags*` mapcat, `database*` splat). `.*` retires as row-splat; ~~rebinds to **ravel**~~ ravel is **`x:*`** ([Q_U63](#q-u63) = J, 2026-11-02); `*_` adds provenance keys; branch-initial `:` admits the **ordinal² transpose** | 🔄 | [§5.P4e](#p4e) · RE-SCOPED 2026-08-08 ([Q_U23](#q-u23)–[Q_U29](#q-u29)) · ⛔ attempt 1 REVERTED `d0ac2a58` ([DEFERRED 101](DEFERRED.md)); attempt 3 opens from [the census](#star-census) ([Q_U30](#q-u30)/[Q_U31](#q-u31), prereq [102](DEFERRED.md) ✅ `41458174`) · PREP ✅ `f63612e7`+`ae67419f` ([Q_U32](#q-u32)) · **slice A SHIPPED** `e7a49228`, **slice B REVERTED** `0e007864`: [§5.P4e-0-a3](#p4e-0-a3) · ⭐ **P4e-1a ✅ COMPLETE** `9cac0099` — the mint has its CONSUMER. [Q_U36](#q-u36) positive-list fuse + [Q_U37](#q-u37) territory-scoped refusal; 3 slices (attempt 1 of the last REVERTED); suite 10143/488/0, battery 476: [§5.P4e-1a](#p4e-1a) · **P4e-1b 🔄 SEMANTICS FULLY RULED, not implemented** (audit `wf_4b91ca25-73a`) — [Q_U38](#q-u38) collision REFUSED (conservative on the `'dyn` tail; gate moves to typing) · [Q_U39](#q-u39) closer-adjacent `*_` mint SPLIT OUT · ⭐⭐ [Q_U40](#q-u40)–[Q_U48](#q-u48). ⭐ **The flatten is LIVE at depth ≤ 1** (1b-iii shipped, `d5934397`); depth ≥ 2 is shielded pending [Q_U47](#q-u47)'s landing rule, now ruled. Semantics + slicing: [§5.P4e-1b](#p4e-1b) · remaining slices C1 · C2 · iv · v: [§5.P4e-1b-sequencing](#p4e-1b-sequencing) |
 | **P4c-5** | **The `.*name` retirement + FULL residue disposal** — the last P4c residue, sequenced AFTER P4e | ⬜ | [§5.P4c-5](#p4c-5) · ⚠ **row ADDED at the P4d close 2026-08-08** — previously visible only as a `P4c-5 ⬜` fragment inside P4c's Notes cell |
 | **PF** | **Path first-classness** (substrate; **P5's prerequisite**) — ⭐ **Q_U17 RULED B2**: a Path segment is a first-class `Step` value. Reify the closed six-kind union as a `data Step` ADT on the `Datum` pattern; `Path` stays GROUND; `segments : Path -> [List Step]`. Repairs the dead `path-segments` in the SAME change | ⬜ | [§5.PF](#pf) · [Q_U17](#q-u17) · panel `wf_68178bd3-eea` |
 | **P5** | **Ruling B + factoring** — B2 keywise / B3 same-spine merge, L2 normal form, guided errors printing the factored spelling | ⬜ | [§5.P5](#p5) · L1–L5 law battery · ⚠ B3 needs [PF](#pf) |
@@ -1810,6 +1810,9 @@ items of the hold-point, ruled before P4a opened:
   we can reclaim the `.*` spelling as ravel, then?"].** `values.*` →
   `@[1 2 3 4 5 6 7 8 9]`; APL's `,`. Whole-container join, the sibling of
   Q_U23's per-step `*`.
+  > ⚠ **SPELLING SUPERSEDED 2026-11-02 by [Q_U63](#q-u63) = J** (owner). Ravel is `x:*`, the identity
+  > broadcast then the join; `.*` is not reclaimed and gets a guided refusal naming `x:*` (JD-1). The
+  > MEANING decided here (a one-level whole-container join) stands. The text below is kept as decided.
   **Why NOT `xs*`** (the owner's first spelling, withdrawn on the measurement):
   `*`-suffixed identifiers are an established convention here — ⚠ **`int*` alone
   appears 148 times** (HEAD-pinned `git grep -o 'int\*' HEAD -- '*.prologos'`;
@@ -2342,9 +2345,14 @@ items of the hold-point, ruled before P4a opened:
     §3.6 rule 2 recursing.
   · `m{a b}*` → `{:x 1, :y 2}` · `cfg{database}*` ≡ `cfg.database` (n=1 is an
     identity, exactly as `{p^}` is an honest 1-tuple at n=1 per §3.3).
-  · `vv:{0 1}*` → `⟨1 2 3 4⟩` — **a matrix RAVEL falls out with no special
-    case**; ordinal/keyless layers concatenate and so **can never collide**, so
+  · ~~`vv:{0 1}*` → `⟨1 2 3 4⟩` — **a matrix RAVEL falls out with no special
+    case**~~; ordinal/keyless layers concatenate and so **can never collide**, so
     Q_U38's refusal structurally never fires on them.
+    > ⚠ **CORRECTION (2026-11-02; finding RV-1 of [Q_U63](#q-u63), probe research/P4e-2/probe-p4e2-a
+    > line 12).** The `vv:{0 1}*` line was an expectation written as a measurement. Measured, it is
+    > refused: "`*` (flatten) is not implemented yet for tuple elements under a broadcast … the
+    > concatenated arity is (tuple arity × the container's runtime length), which no static type
+    > carries". The ravel itself is spelled `vv:*` under Q_U63 = J.
   **⭐ THE EQUATIONAL LAW IT PRODUCES** (call it **L★**), in the family of §3.6's
   `{p:a p:b} ⟶ p:{a b}`:
   > **`x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*`** — distributing the star over every branch
@@ -3880,10 +3888,25 @@ items of the hold-point, ruled before P4a opened:
   - **DC-7** (P5, non-blocking) — the normal form between `x{N.{X} M.{X}}` and `x{N M}:{X}` (DC-3), and
     L★'s side condition at an ordinal head (DC-2, DEFERRED 115).
 
-- <a id="q-u63"></a>**Q_U63 — DOES RAVEL `.*` ADD EXPRESSIVITY, OR ONLY NOTATION? [⏳ OWNER LEAN J
-  (2026-10-19 — "I'm liking J. It reads well to me."), joint with mine; under critique ([JC-n](#q-u63-jc)),
-  sub-decisions [JD-n](#q-u63-jc) posed. Opened 2026-10-19 at the owner's request: "On 2. I want to open up whether this syntax/spelling offers any true
-  increase in expressivity?"]** P4e-2's premise is [Q_U26](#q-u26) (decided 2026-08-08): "`values.*` →
+- <a id="q-u63"></a>**Q_U63 — DOES RAVEL `.*` ADD EXPRESSIVITY, OR ONLY NOTATION? [✅ DECIDED J
+  2026-11-02, owner — "OK to take the leans in a batch. Let's proceed accordingly." — after the lean
+  of 2026-10-19 ("I'm liking J. It reads well to me."), critiqued ([JC-n](#q-u63-jc)). The seven
+  sub-decisions JD-1…7 are decided at their leans in the same answer. Opened 2026-10-19 at the
+  owner's request: "On 2. I want to open up whether this syntax/spelling offers any true increase in
+  expressivity?"]**
+
+  **DECIDED — J: ravel is `x:*`, a broadcast of the identity, then the join.** It is built from `:`
+  and `*` under [Q_U40](#q-u40)'s rule. The parser builds `(@bcast ε)` with ε an explicit identity
+  step, so the broadcast's one-step invariant (`syntax.rkt:891`) holds. Its meaning on every
+  container is the broadcast's followed by the existing join (JC-2): `m:*` joins a Map's values,
+  `x.N:*` flattens element N, `x:*:*` is rank-3 full ravel, and `x:*_` carries provenance. It
+  supersedes [Q_U26](#q-u26)'s SPELLING (`.*` is not reclaimed); Q_U26's meaning stands.
+  **Implementation: P4e-2** (re-scoped below; the 1b-vi close comes first). It covers the `:*`
+  production, ε, the JD-2…4 messages and the laws listed under the critique. **Spec departures,
+  proposed to the owner, not applied:** §2.1's `.*` row (already superseded as row-splat by Q_U23)
+  becomes "no operator; a guided refusal naming `x:*`", and §3.5 gains join at the focus, `x:*`.
+
+  **The question as posed.** P4e-2's premise is [Q_U26](#q-u26) (decided 2026-08-08): "`values.*` →
   `@[1 2 3 4 5 6 7 8 9]`; APL's `,`. Whole-container join, the sibling of Q_U23's per-step `*`." This
   question asks whether that operator lets a program say something it cannot say today. Probes:
   research/P4e-2/probe-p4e2-a (24 lines) and -b (12 lines), at `55b7df16`; `a:N` / `b:N` = their lines.
@@ -4078,8 +4101,8 @@ items of the hold-point, ruled before P4a opened:
   - naturality of join: `x:*:k` ≡ `x{0 … n−1}*:k` (c:21);
   - the functor identity `x:ε ≡ x`, in the IR.
 
-  **Sub-decisions inside J (JD-n), each with a lean. PENDING, posed one at a time at P4e-2 unless the
-  owner takes them now:**
+  **Sub-decisions inside J (JD-n). ✅ ALL SEVEN DECIDED 2026-11-02 AT THEIR LEANS, as a batch (owner:
+  "OK to take the leans in a batch."). Each "Lean" below is the decision:**
   - **JD-1 — what `x.*` becomes.** Lean: a guided refusal naming `x:*` (and `x:name` for `.*name`, as
     P4c-5 planned). Not kept as sugar: two spellings of one operator is the shape Q_U23 retired `.*`
     for.
@@ -6239,8 +6262,8 @@ rulings; this records what the audit established and the staged shape.
     nominal-join collision routes to the landed strict-merge waypoint
   - **`*_`** (Q_U24), landing WITH bare `*` — ⚠ its provenance rule is `^-_`'s,
     NOT `^_`'s
-  - **bare `.*` = ravel** (Q_U26) — needs the grouping fix; `values.*` shatters
-    at HEAD
+  - ~~**bare `.*` = ravel** (Q_U26) — needs the grouping fix; `values.*` shatters
+    at HEAD~~ → **ravel is `x:*`** ([Q_U63](#q-u63) = J, 2026-11-02); `.*` becomes a guided refusal
   - **branch-initial `:`** for the ordinal² transpose (Q_U25) — `values{:0 :1 :2}`;
     ⚠ lifts a [Q_U7](#q-u7) v1 refusal, and ⚠ **must REPLACE, not delete, the
     `"block keys are written bare"` diagnostic**
@@ -11799,7 +11822,7 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-v-B2b — the reader MINT** ✅ `940c9c88` | Widen the gate's lexeme conjunct to EXACT table membership; route the emit through the same lookup ([DEFERRED 129](DEFERRED.md)); [DEFERRED 130](DEFERRED.md)'s two refusal messages ride along. **MINIMAL by ruling** — reader-only, so the three live bands cannot regress. Preconditions the grounding found: the battery's `p4e-star-type` / `p4e-last-star-type` helpers are exact-lexeme `"*"` and structurally blind to `*_` ([DEFERRED 133](DEFERRED.md)), and the DEFERRED-108 snapshot needs a deliberate re-baseline. | Scoped by [Q_U53](#q-u53) part 1: the miss-case is ruled out at the GATE, not handled at the emit. Record: [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b) · shipped: [§5.P4e-1b-v-B2b-shipped](#p4e-1b-v-b2b-shipped) |
 | **1b-v-C — the FOLD** ✅ `24fc1be4` (pins) · `a492bbb7` | `split-star-lexeme`'s suffix dispatch AND the printer's cont→lexeme delegate to the family table, so the four bands and every star label share ONE semantic authority; site 3 (`form-deps`) DERIVED, site 4 (the matrix) PINNED. Behaviour-preserving on every input. | [Q_U53](#q-u53) part 2 + [Q_U54](#q-u54) (the printer folds too; site 3 derived, site 4 pinned). Record: [§5.P4e-1b-v-C](#p4e-1b-v-c) |
 | **1b-vi — the star-COLLAPSE slice** 🔄 (**opened 2026-10-13**, CIU 6 branch `ciu6-path-selection`; grounding: [audit](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md); [Q_U55](#q-u55) ✅ A — refuse, `^-` aligned; [Q_U56](#q-u56) ✅ (a) — `*->` guided in selection territory; [Q_U57](#q-u57) ✅ P — `*-_` names the whole collapsed path; [Q_U58](#q-u58) ✅ M + slicing A→B→C→D; **implementing — tracker [§5.P4e-1b-vi](#p4e-1b-vi)**) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
-| **P4e-2** | the `.*` retirement inventory + [Q_U26](#q-u26) ravel | unchanged |
+| **P4e-2** | the `.*` retirement inventory (`.*` → a guided refusal naming `x:*`, JD-1) + ravel as **`x:*`** ([Q_U63](#q-u63) = J): the `:*` production, ε as `(@bcast ε)`, the JD-2…4 messages and waypoint, the laws; plus DEFERRED 185's reader seats | ⚠ RE-SCOPED 2026-11-02 by Q_U63 |
 
 **⚠ TWO HOLES C2 OPENS, AND THEY ARE C2's TO CLOSE** — both found by the
 grounding audit, neither in any prior record:
