@@ -10310,6 +10310,7 @@ scaffolding for the slicing, not a permanent mechanism.
 | **gate** ✅ `83fe4fb4` | main merged in clean (`9d0dea51`; one shared file, main's 3 hunks exactly); full suite at `9d0dea51`: **10 426 / 502 files, all pass**, reconciled file by file against main's 10 394 (+8 `test-path-selection`, +24 `-acceptance` — exactly the branch's two test files); **checkpoint merge to main `83fe4fb4`**, its tree byte-identical to the gated tree; clean merge tree 697 / 697 + acceptance 112 / 112. NEXT: [Q_U62](#q-u62) (pending), then the 1b-vi close (the `pre` column and `1bvi-stage` retire, above) | ✅ |
 | **F** ✅ `3fcb720a` | [Q_U62 = B pinned; SB-1 / SB-2 under B](#p4e-1b-vi-f): B made a contract (50 `sub-block` laws + 12 hand rows); the dup refusal stops offering `^` where an element heads several branches (it kept the BRANCHES apart, a 4-tuple) and offers grouping where it resolves; the all-ordinal L4 offers grouping where spellable; S's scope stated in Q_U61; acceptance M18. Every remedy run per family (probe-1bvi-ai). SB-4 found (pre-existing; filed with SB-3 as DEFERRED 185, main `e751736c`). | battery + acceptance **701 / 701**; `run-file --check` 116 / 116; mutations F1–F7 each red on their own rows (F6 / F7, S+ at either twin seat: 64 / 63) |
 | **close-1** ✅ `a9788c0a` · `55b7df16` | [DEFERRED 185 at the close](#p4e-1b-vi-close): a star right after an ordinal head gets Q_U46's one refusal at both seats (SB-3, block band); the all-ordinal L4 offers only the remedies every passing head can spell (SB-4). Plus a buried panic found opening P4e-2 (RV-2): `ot2{2}*` printed the runtime miss as a value; a panic subject now propagates. Reader seats of SB-3 → P4e-2 (DEFERRED 185 addendum). | battery + acceptance **701 / 701**; red steps run against the OLD code (exactly the G rows); mutations G1–G4 + the panic arm each red on their own rows |
+| **close-2** ✅ `04e3c5c5` | [the star family in the editor grammar, with 179 / 180](#p4e-1b-vi-close-2): `flatten_step` reads `*_` / `*-` / `*-_` as one token (DEFERRED 144); Q_U56's `*->` text reaches the closer, dot and broadcast seats from `parse-list` (179); the arrival instrument compares the lexeme (180). Ordinal-headed branches tried and NOT shipped (foray churn, DEFERRED 205). FOUND: the corpus gate has failed since `3fcb720a` (MISSING 75 > 71, M18) — a decision for the owner before the checkpoint. | battery + acceptance + hygiene **702 / 702**; 60 / 60 tree tests; grammar A/B 0 better / 0 worse / 142; stage H red on the old parser; mutations M1–M4 and the 180 mutation each red on their own rows |
 
 Per-phase completion, in order (DESIGN_METHODOLOGY Stage 4): tests → commit → this tracker
 → the track LOG (dailies: a pointer) → proceed.
@@ -10988,6 +10989,107 @@ struck accordingly. SB-4 is wider too: "keep a key before each star" is unspella
 | (b) complete | every remedy of the two arms run on its population | the class is "advice chosen by shape flags": a remedy renderer that runs its own suggestion would close it (filed with 185) |
 | (c) vision-advancing | one meaning, one message, at two seats | the reader seats still split the meaning across bands until P4e-2 |
 | (d) drift risks | the struck SB-3 claim was mine, written from the record, not measured | each new claim here cites a probe line |
+
+<a id="p4e-1b-vi-close-2"></a>
+##### §5.P4e-1b-vi CLOSE — item 2: the star family in the editor grammar, with 179 and 180  (`04e3c5c5`, 2026-11-02)
+
+The owner approved this item with the rest of the close (["Ok to proceed on 1"](#p4e-1b-vi-close), then "proceed
+accordingly" on 2026-11-02). Measurements: [`tsg-close2.txt`](tracks/CIU/CIU_6/research/P4e-1b-vi/close/tsg-close2.txt) (§1–5 below cite its sections),
+[`probe-179`](tracks/CIU/CIU_6/research/P4e-1b-vi/close/probe-179.prologos) (`.out` at `04e3c5c5`, `.pre-fix.out` at `cc520b1d`; lines are output
+numbers), [`probe-957`](tracks/CIU/CIU_6/research/P4e-1b-vi/close/probe-957.prologos).
+
+**[DEFERRED 144](DEFERRED.md) (the grammar's `flatten_step` was a bare `*`), fixed.**
+- **Before.** `flatten_step` was the string token `'*'`. At the closer seat, `app-config{database}*_`
+  (acceptance file L509) parsed as an APPLICATION of the path to the identifier `_`, and `*-` / `*-_` (L574,
+  L577) as an application to the operator `-`. These parses have no ERROR and no MISSING node, so no
+  count-based gate could see them; only a tree test can.
+- **After.** `token.immediate(prec(1, /\*[-_]*/))`: one token for the whole family. It is a superset on purpose,
+  per [Q_U53](#q-u53)'s containment rule. The fused band (`x{a*_ b}`) needed nothing, because `*`, `-` and `_`
+  continue an identifier there, as they do in the compiler.
+- **The precedence is load-bearing.** `operator` contains the string `'*'`, and tree-sitter breaks a same-length
+  tie in favour of a string. Without `prec(1, …)` the existing corpus test 54 (`record.orders:items*:sku`)
+  failed (tsg §1). The `:` token at `grammar.js:657` has the same remedy.
+- **Evidence.**
+  - Three new corpus trees (closer `*_`, `*-`, and `*-_` after a broadcast and after a group) are red on the
+    old grammar and green now. A `{0.5}` decimal control passes on both. 60 / 60 (tsg §1).
+  - Per-file A/B: 0 better, 0 WORSE, 142 unchanged (tsg §2). That is expected, since the old trees were wrong
+    without being errors.
+  - The `(flatten_step) @operator` capture now covers `*_`, `*-` and `*-_` whole. Before, it painted the `*`
+    alone (tsg §4).
+  - No wasm was built (emsdk was off PATH under the scratch HOME), so VS Code's copy updates at the owner's
+    next `./install.sh`.
+
+**Ordinal-headed branches: tried, not shipped (filed as [DEFERRED 205](DEFERRED.md)).** The grammar has no select
+branch that starts with an ordinal (`{0.server^.ssl* name}`, P3c's `(@ord N)` head). So the acceptance file's
+ordinal lines are ERRORs, and M18's `{0.{…}}` makes the parser invent an identifier (4 MISSING: L638, L642 ×2,
+L650, all added by `3fcb720a`).
+- A rule for them fixes the acceptance file (E43/M4 → E35/M0). But in every one of seven formulations it makes
+  `foray.prologos` worse (E87/M3 → E84/M4), with one 251-line ERROR from L957 (tsg §5).
+- L957, `users:<{0.userName^}`, is not valid Prologos: the compiler answers `Unbound variable` for it
+  ([probe-957](tracks/CIU/CIU_6/research/P4e-1b-vi/close/probe-957.out) line 1).
+- With that line plus one def in isolation, both grammars give the same tree. The long ERROR needs the
+  preceding context: blanking L940–956 shrinks it to 7 lines, while blanking L950–956 does not.
+- This is error-recovery churn, the corpus-budget's own documented class, not a wrong rule. Under the per-file
+  A/B rule ("exit 1 if ANY file got worse") it still does not ship.
+
+**Found: the corpus gate has failed on this branch since `3fcb720a`.** `check-corpus.sh` reports MISSING 75 against
+a budget of 71, identically before and after this item (tsg §3). The +4 are exactly M18's lines above.
+- No hook runs the corpus gate. The pre-commit hook's grammar check is a tripwire that only warns, so 1b-vi-F
+  added M18 without measuring it. That was my miss at F, and it is recorded in DEFERRED 205.
+- **Decision for the owner**, before the checkpoint merge:
+  - (a) raise `max_missing` 71 → 75 with the reason in the commit and a pointer to 205, lowering it again when
+    205 lands;
+  - (b) hold the checkpoint until 205 lands.
+  - **Lean: (a)**. The gap is old (P3c); M18 only measured it, and a gate that stays red stops being read.
+    Against (a): a ratchet loosened for a known gap is how drift starts. That is why the reason must name 205.
+
+**[DEFERRED 179](DEFERRED.md) (Q_U56's guided `*->` text missed the closer seat), fixed.**
+- **Mechanism, now measured** (the entry had it as a conjecture). The fold fuses the closer star onto its
+  selection and leaves `>` as the next sibling: `env{prod dev}*->` preparses to
+  `(($select-path ($select env prod dev) $postfix-star-collapse) >)`. The `>` is therefore an ARGUMENT, and it
+  reached the elaborator as an unbound name. Before the fix this produced the comparison-keyword hint
+  (probe-179 pre-fix lines 28–33, 35, 36, 39, 42, 45), or, inside a keyword form, the arity error
+  "map-get expects 2 arguments, got 3" (pre-fix line 34).
+- **The seat is `parse-list`, not the selection consumer.** The `>` is outside the braces, so Q_U56's item arm in
+  `segment-select-items` cannot see it. `parse-list` is the one seat every list form passes before head dispatch,
+  so a single arm covers the head, argument and keyword positions.
+  - It sits after `$angle-type`, so type territory keeps Q_U31's seat.
+  - The error is a per-command value, never a reader raise.
+- **What it fires on.** A `>` right after a selection whose last step is a star:
+  - the closer band (the star sentinel);
+  - the dot band (`env.prod*->` → `($select-path env prod*-)`);
+  - the broadcast band (`rm:cfg*_>`).
+- **Glued and spaced cannot be told apart in the datum.** So the text is true of both: it names the star's
+  meaning, says to drop the `>`, and gives the comparison spelling (`gt`) for the spaced reader.
+  - `env{prod} > 1`, with no star, keeps the comparison hint (line 40).
+  - `env{prod}*- >= 1` keeps it too (line 49), since `>=` is a comparison attempt rather than a `*->` slip.
+- **Data territory is unchanged in kind.** `'[env{prod}*- >]` was already a refusal (pre-fix line 46: the hint)
+  and now gets the star text (line 46); `'[a b >]` is unchanged (line 47).
+- **A first cut did not fire,** and the red rows staying red is what showed it. `stx->datum` is shallow: a
+  compound syntax comes back as a list of syntax objects, so the head test never saw `$select-path`. The arm now
+  uses `syntax->datum`.
+
+**[DEFERRED 180](DEFERRED.md) (the arrival instrument could not tell `*-` from `*` then `-`), fixed.**
+- `star-last-token-type` and `star-mints?` take an optional spelling. With one, the last star-family token must
+  BE that lexeme, or the answer is `'split`. Without one, they keep the old meaning.
+- The arrival gate passes the lexeme under test.
+- The battery's "is ONE token" pins now compare `(lexeme . type)` through `p4e-star-token`, with split controls
+  (`* -`, `* -_`).
+
+**Evidence.**
+- Stage H: 8 flipping rows (H-179a…h) and 3 controls. Red against the old parser on exactly the 8; green after.
+- One new test case for 180. It was red against the old instrument (arity); a mutation that ignores the
+  spelling turns exactly that case red.
+- Mutations M1 (dot band), M2 (broadcast band), M3 (sentinel) and M4 (the arm) each turn exactly their own rows
+  red: M1 → H-179f, M2 → H-179g, M3 → the six closer rows, M4 → all eight.
+- Hand rows 141 → 152. Battery + acceptance + hygiene **702 / 702**. Dependency cache verified.
+
+| VAG question | catalogue | challenge — could it be more aligned? |
+|---|---|---|
+| (a) on-network | a lexer token, an instrument argument, a parse-time message; no state | — |
+| (b) complete | three bands of 179's shape; both instrument entry points; every remedy run (`env{prod}*-`, `rm:cfg*_`, `[map-get env{prod}*- :db]` → values) | `>=` and other `>`-led names after a star keep the comparison hint, by choice; the ordinal grammar is 205 |
+| (c) vision-advancing | the editor now reads the star family the compiler mints | the corpus gate cannot see wrong-but-error-free trees, which is exactly 144's class; only `test/corpus` can, and nothing forces a tree test per new surface form |
+| (d) drift risks | the corpus gate failed for a slice and a half unseen | a corpus run in the slice-close checklist, or a hook gate (filed with 205) |
 
 ##### §5.P4e-1b-v — WHAT SHIPPED  (A → B1 → B1b → B2a → verify, 2026-08-13)
 

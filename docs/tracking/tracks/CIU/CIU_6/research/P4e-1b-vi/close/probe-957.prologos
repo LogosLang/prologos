@@ -1,0 +1,6 @@
+;; probe-957 — is foray.prologos L957 (`users:<{0.userName^}`) valid Prologos? (CIU 6 1b-vi close, item 2)
+ns p957
+def users := @[{:userName "Lisa"} {:userName "John"}]
+users:<{0.userName^}
+users:<{userName^}
+users:{userName^}

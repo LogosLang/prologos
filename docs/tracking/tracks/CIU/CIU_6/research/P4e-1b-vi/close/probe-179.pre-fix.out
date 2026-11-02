@@ -1,0 +1,51 @@
+0: app : {:database {:pool-size Int :url String} :server {:port Int :ssl {:cert String :enabled Bool}}} defined.
+1: env : {:dev {:db {:port Int :url String}} :prod {:db {:port Int :url String}}} defined.
+2: cloud : {:regions {:eu {:host String :port Int} :us {:host String :port Int}}} defined.
+3: t5 : {:a {:b {:c {:m {:x Int} :n {:y Int}}}}} defined.
+4: vv : {:a {:b [PVec [PVec Int]]}} defined.
+5: v3 : {:a {:b {:c [PVec [PVec Int]]}}} defined.
+6: e3 : {:a {:b {:c [PVec Int]}}} defined.
+7: rm : {:eu {:cfg {:x Int}} :us {:cfg {:x Int}}} defined.
+8: deep : {:top {:eu {:cfg {:x Int}} :us {:cfg {:x Int}}}} defined.
+9: hz : {:a {:b {:c-d Int}} :a-b {:c {:d Int}}} defined.
+10: mn : {:a {:x Int} :b {:y Int}} defined.
+11: org : {:db {:admins [PVec {:name String}]}} defined.
+12: sh : {:a {:b {:port Int :u Int} :c {:port Int :v Int}}} defined.
+13: ot : [PVec {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}] defined.
+14: ov3 : [PVec {:a {:b {:c [PVec [PVec Int]]}}}] defined.
+15: ot2 : [PVec {:a {:b {:k Int}}}] defined.
+16: vhm : ⟨[PVec {:x Int}] [PVec {:y Int}]⟩ defined.
+17: ow : {:top {:eu {:cfg {:x {:p Int}}} :us {:cfg {:x {:p Int}}}}} defined.
+18: og : {:db {:admins [PVec {:name {:f {:z Int}}}]}} defined.
+19: ovv : [PVec [PVec {:a {:b {:k Int}}}]] defined.
+20: vo : [PVec {:a [PVec {:n Int}]}] defined.
+21: vk2 : [PVec {:a {:b {:k Int}} :c {:d {:j Int}}}] defined.
+22: vhm2 : [PVec [PVec {:x Int}]] defined.
+23: rv : {:k Int :xs [PVec {:a {:k Int}}]} defined.
+24: w : {:v [PVec {:a {:b {:k Int}}}]} defined.
+25: mx : {:a {:b [PVec [PVec Int]]} :m {:x Int :y Int}} defined.
+26: t3x : {:a {:b {:q {:r Int}}} :c {:k Int} :d {:k Int}} defined.
+27: oo : [PVec [PVec {:a {:b {:c {:m {:x Int} :n {:y Int}}}}}]] defined.
+28: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+29: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+30: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+31: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+32: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+33: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+34: ERROR: map-get expects 2 arguments, got 3
+35: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+36: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+37: {:db {:url "p-url", :port 5432}} : {:db {:port Int :url String}}
+38: {:prod-db {:url "p-url", :port 5432}} : {:prod-db {:port Int :url String}}
+39: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+40: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+41: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+42: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+43: {:us-x 2, :eu-x 1} : {:eu-x Int :us-x Int}
+44: {:url "p-url", :port 5432} : {:port Int :url String}
+45: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+46: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+47: ERROR: Unbound variable
+48: ERROR: Unbound variable
+49: ERROR: hint: comparison keywords are spelled lt/le/gt/ge in Prologos (< and <= conflict with angle-bracket syntax); values: ord-lt/ord-le/ord-gt/ord-ge
+50: ERROR: preparse: >>: >> compose step cannot be empty

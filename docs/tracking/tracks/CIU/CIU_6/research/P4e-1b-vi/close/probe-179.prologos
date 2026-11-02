@@ -1,0 +1,55 @@
+;; probe-179 — DEFERRED 179 (Q_U56's `*->` at the CLOSER seat), CIU 6 1b-vi close item 2.
+;; The fixture is the battery's `1bvi-fixtures`, verbatim; the probe lines follow it.
+;; .pre-fix.out = parser.rkt at cc520b1d (before 04e3c5c5); .out = at 04e3c5c5.
+ns p4e1bvi
+def app := {:server {:ssl {:enabled true :cert "c.pem"} :port 8080} :database {:url "db" :pool-size 10}}
+def env := {:prod {:db {:url "p-url" :port 5432}} :dev {:db {:url "d-url" :port 5433}}}
+def cloud := {:regions {:eu {:host "e" :port 443} :us {:host "u" :port 8443}}}
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def vv := {:a {:b @[@[1 2] @[3]]}}
+def v3 := {:a {:b {:c @[@[1 2] @[3]]}}}
+def e3 := {:a {:b {:c @[1 2]}}}
+def rm := {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}
+def deep := {:top {:eu {:cfg {:x 1}} :us {:cfg {:x 2}}}}
+def hz := {:a {:b {:c-d 1}} :a-b {:c {:d 2}}}
+def mn := {:a {:x 1} :b {:y 2}}
+def org := {:db {:admins @[{:name "a"} {:name "b"}]}}
+def sh := {:a {:b {:port 1 :u 2} :c {:port 3 :v 4}}}
+def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]
+def ov3 := @[{:a {:b {:c @[@[1 2] @[3]]}}}]
+def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]
+def vhm := @[@[{:x 1}] @[{:y 2}]]
+def ow := {:top {:eu {:cfg {:x {:p 1}}} :us {:cfg {:x {:p 2}}}}}
+def og := {:db {:admins @[{:name {:f {:z 1}}} {:name {:f {:z 2}}}]}}
+def ovv := @[@[{:a {:b {:k 1}}}] @[{:a {:b {:k 2}}}]]
+def vo := @[{:a @[{:n 1} {:n 2}]}]
+def vk2 := @[{:a {:b {:k 1}} :c {:d {:j 3}}} {:a {:b {:k 2}} :c {:d {:j 4}}}]
+def vhm2 := @[@[{:x 1}] @[{:x 2}]]
+def rv := {:xs @[{:a {:k 1}} {:a {:k 2}}] :k 9}
+def w := {:v @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]}
+def mx := {:m {:x 1 :y 2} :a {:b @[@[1 2] @[3]]}}
+def t3x := {:a {:b {:q {:r 1}}} :c {:k 1} :d {:k 2}}
+def oo := @[@[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]]
+env{prod dev}*->
+env{prod}*->
+env{prod}*_>
+env{prod}*>
+env{prod}*-_>
+env{prod dev}*- > 1
+[map-get env{prod}*-> :db]
+env.prod*->
+env.prod.db*->
+env{prod}*-
+env{prod}*_
+env{prod dev}*-> x
+env{prod} > 1
+[map-get env :prod] > 1
+rm:cfg*_>
+rm:cfg*_
+[map-get env{prod}*- :db]
+env{prod}* > 1
+'[env{prod}*- >]
+'[a b >]
+[list env{prod}*-]
+env{prod}*- >= 1
+env{prod}*-> >

@@ -609,3 +609,28 @@ are in [`../README.md`](../README.md).
   by REL 2: a panicking `:check` printed as a value) is the buried-panic class fixed for selection at `55b7df16`; it
   gets a cross-reference on main.
 - **Next**: 1b-vi close item 2, the star family in the tree-sitter grammar (DEFERRED 144, with 179 and 180).
+
+### 1b-vi close item 2 — the star family in the editor grammar (DEFERRED 144), with 179 and 180 — `04e3c5c5` (2026-11-02)
+- **What**: [§ close-2](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2).
+  - **144**: `flatten_step` reads `*`, `*_`, `*-` and `*-_` as one token, `token.immediate(prec(1, /\*[-_]*/))`.
+    Before, the closer seat parsed `cfg{db}*_` as an application to `_`, an error-free wrong tree. The
+    `prec` is load-bearing: corpus test 54 broke without it.
+  - **179**: Q_U56's guided `*->` text now reaches the closer, dot and broadcast seats, from one arm in
+    `parse-list`. The fold leaves the `>` as a sibling argument, outside the braces, where the item arm cannot
+    see it.
+  - **180**: the arrival instrument compares the lexeme (`'split`), and the "is ONE token" pins compare
+    `(lexeme . type)`.
+- **Tried, not shipped**: ordinal-headed branches in the grammar. Seven formulations each fix the acceptance file
+  (E43/M4 → E35/M0) and make `foray.prologos` worse: its invalid L957 (the compiler says `Unbound variable`)
+  becomes a 251-line ERROR. That is error-recovery churn, and it is filed as DEFERRED 205.
+- **Found**: the corpus gate has failed on this branch since `3fcb720a`, at MISSING 75 > 71. The +4 are M18's
+  `{0.{…}}` lines, and no hook runs the gate. This was my miss at F.
+- **Gates**: 702 / 702 (battery + acceptance + hygiene); 60 / 60 tree tests; grammar A/B 0 better / 0 worse / 142
+  unchanged; stage H red against the old parser; mutations M1–M4 and the 180 mutation each red on their own rows;
+  dependency cache verified.
+- **Measurements**: `research/P4e-1b-vi/close/` — `tsg-close2.txt`, `probe-179` (with `.pre-fix.out`), `probe-957`.
+- **Correction**: the code commit's first message (`9cfa3dcb`, amended before any citation into `04e3c5c5`) said
+  four new corpus trees were red on the old grammar. Three were; the fourth is a control that passes on both.
+- **Next**: close item 3 (retire the stage scaffolding; approved with the close, "Ok to proceed on 1"). The owner's
+  decision on the corpus budget (raise to 75, citing 205, or hold the checkpoint) is needed before item 4 (merge
+  main in, full suite, checkpoint).
