@@ -176,7 +176,7 @@
 ;; row fails for a reason unrelated to its name. That result-narrowing hazard
 ;; has already cost this track a false RED once.
 ;; ---------------------------------------------------------------------------
-(define (star-last-token-type src)
+(define (star-last-token-type src [spelling #f])
   (register-default-token-patterns!)
   (define tok (tokenize-char-rrb (make-char-rrb-from-string src)))
   (define bd (make-bracket-depth-rrb tok src))
@@ -188,13 +188,18 @@
   ;; token" — and the CONTROLS passed for the second reason while claiming the
   ;; first. `'none` now names that case explicitly so blindness cannot read as
   ;; success.
-  (let loop ([ts (rrb-to-list narrowed)] [found 'none])
-    (cond [(null? ts) found]
+  ;; ⭐ 1b-vi close (DEFERRED 180): with a SPELLING, the last star-family token must BE
+  ;; that lexeme, else the answer is 'split. Without it, `c{a}* -` answered postfix-star
+  ;; for `*-` exactly like `c{a}*-` (the type of the `*`), so a reader regression that
+  ;; split the token passed the arrival gate (verify probe v9-arrival.out). One argument
+  ;; keeps the old meaning: the type of the last star-family token, whatever its lexeme.
+  (let loop ([ts (rrb-to-list narrowed)] [found 'none] [lex #f])
+    (cond [(null? ts) (if (and spelling lex (not (string=? lex spelling))) 'split found)]
           [(member (token-entry-lexeme (car ts)) star-spellings)
-           (loop (cdr ts) (set-first (token-entry-types (car ts))))]
-          [else (loop (cdr ts) found)])))
+           (loop (cdr ts) (set-first (token-entry-types (car ts))) (token-entry-lexeme (car ts)))]
+          [else (loop (cdr ts) found lex)])))
 
-(define (star-mints? src) (eq? (star-last-token-type src) 'postfix-star))
+(define (star-mints? src [spelling #f]) (eq? (star-last-token-type src spelling) 'postfix-star))
 
 ;; ---------------------------------------------------------------------------
 (module+ main
@@ -217,7 +222,7 @@
         (define expect (star-carrier-expect c))
         (define outcomes
           (for/list ([k (in-list star-contexts)])
-            (star-last-token-type (string-append star-prelude (star-cell-source k c 0 sp)))))
+            (star-last-token-type (string-append star-prelude (star-cell-source k c 0 sp)) sp)))
         (define per (for/sum ([o (in-list outcomes)]) (if (eq? o 'postfix-star) 1 0)))
         (define off (for/list ([o (in-list outcomes)] #:unless (eq? o expect)) o))
         (printf "  ~a ~a  mints in ~a of ~a~a\n"

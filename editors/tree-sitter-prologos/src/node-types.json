@@ -929,11 +929,6 @@
     }
   },
   {
-    "type": "flatten_step",
-    "named": true,
-    "fields": {}
-  },
-  {
     "type": "fn_body",
     "named": true,
     "fields": {},
@@ -3061,6 +3056,10 @@
   {
     "type": "false",
     "named": false
+  },
+  {
+    "type": "flatten_step",
+    "named": true
   },
   {
     "type": "fn",

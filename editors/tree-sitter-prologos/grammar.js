@@ -1155,7 +1155,26 @@ module.exports = grammar({
 
     // `*` flatten, postfix and adjacent — `…:diags*:msg`. Adjacency is what
     // separates it from the spaced binary `*` (Sigma / multiplication).
-    flatten_step: $ => token.immediate('*'),
+    //
+    // ⭐ THE WHOLE STAR FAMILY IS ONE TOKEN (DEFERRED 144; CIU 6 1b-vi close):
+    // `*` flatten, `*_` with provenance, `*-` total collapse, `*-_` total
+    // collapse with provenance. The bare `'*'` it replaced parsed `cfg{db}*_`
+    // as an APPLICATION of the path to the identifier `_`, and `cfg{db}*-` as
+    // an application to the operator `-` — wrong trees with NO ERROR and NO
+    // MISSING, so the corpus gate could not see it (only test/corpus does).
+    // A SUPERSET of the family on purpose (Q_U53's containment rule): a token
+    // that is exactly the mint table re-blinds itself when the table grows, and
+    // a grammar that accepts more than the compiler is the harmless direction.
+    // The FUSED band (`x{a*_ b}`) needs nothing: `*`, `-`, `_` continue an
+    // identifier here exactly as in the compiler's `ident-continue?`.
+    //
+    // ⚠ `prec(1, …)` IS LOAD-BEARING. `operator` contains the STRING `'*'`, and
+    // tree-sitter breaks a same-length tie in favour of a string token over a
+    // regex token — so without the precedence a bare `*` after a step lexed as
+    // `operator`, and `record.orders:items*:sku` became an application (caught by
+    // test/corpus 54). The old string token `'*'` won that tie by being a string;
+    // the regex needs the precedence spelled out (same remedy as `:` at line 657).
+    flatten_step: $ => token.immediate(prec(1, /\*[-_]*/)),
 
     // `{a b}` nominal / `{N M}` ordinal n-ary selection.
     //

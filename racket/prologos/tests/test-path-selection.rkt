@@ -6149,6 +6149,15 @@
           [(p4e-star-token-lexeme? (car (car ts))) (cdr (car ts))]
           [else (loop (cdr ts))])))
 
+;; ⭐ 1b-vi close (DEFERRED 180): the FIRST star-family token's (lexeme . type), or 'none.
+;; `p4e-star-type` answers the type alone, so a reader that split `*-` into `*` then `-`
+;; still answered 'postfix-star and the "is ONE token" pins below could not fail.
+(define (p4e-star-token src)
+  (let loop ([ts (p4e-token-types src)])
+    (cond [(null? ts) 'none]
+          [(p4e-star-token-lexeme? (car (car ts))) (car ts)]
+          [else (loop (cdr ts))])))
+
 (define (p4e-last-star-type src)
   ;; ⚠ USE THIS WHEN THE SOURCE CONTAINS MORE THAN ONE `*`. `p4e-star-type` takes
   ;; the FIRST, and a source like `def a := .(1 * 2)` / `def b := [f x]*` has an
@@ -6197,12 +6206,16 @@
   ;; gate mints it; `*-` / `*-_` are NOT in the table ([Q_U52] — 1b-vi, two
   ;; owner rulings first) and stay `symbol`. That contrast is the whole of
   ;; [Q_U53] part 1 at the gate: exact membership, nothing wider.
-  (check-equal? (p4e-star-type "cfg{a}*_ ") 'postfix-star
+  (check-equal? (p4e-star-token "cfg{a}*_ ") '("*_" . postfix-star)
                 "`*_` is ONE token; the widened gate MINTS it (it was `symbol` before B2b)")
   ;; ⭐ 1b-vi-D-2b FLIPPED THESE TWO: the mint puts `*-` / `*-_` in the table, so the
   ;; gate mints them exactly as B2b made it mint `*_` — the same contrast, one slice on.
-  (check-equal? (p4e-star-type "cfg{a}*- ") 'postfix-star "`*-` is ONE token; minted since 1b-vi-D-2b")
-  (check-equal? (p4e-star-type "cfg{a}*-_ ") 'postfix-star "`*-_` is ONE token; minted since 1b-vi-D-2b")
+  ;; ⭐ 1b-vi close (DEFERRED 180): the LEXEME is pinned with the type — "ONE token" is now
+  ;; checked, not asserted. The split controls must NOT read as the family member.
+  (check-equal? (p4e-star-token "cfg{a}*- ") '("*-" . postfix-star) "`*-` is ONE token; minted since 1b-vi-D-2b")
+  (check-equal? (p4e-star-token "cfg{a}*-_ ") '("*-_" . postfix-star) "`*-_` is ONE token; minted since 1b-vi-D-2b")
+  (check-equal? (p4e-star-token "cfg{a}* - ") '("*" . postfix-star) "split control: `*` then `-` is NOT `*-`")
+  (check-equal? (p4e-star-token "cfg{a}* -_ ") '("*" . postfix-star) "split control: `*` then `-_` is NOT `*-_`")
   ;; ⚠⚠ THE LAST-STAR ROW WAS VACUOUS ON ITS FIRST DRAFT AND THE POWER-CHECK
   ;; CAUGHT IT. It read `.(1 * 2)` … `cfg{a}*_`, where the blind helper reports
   ;; `symbol` (the arithmetic star) and the widened one ALSO reports `symbol`
@@ -6960,6 +6973,21 @@
                 (seteq 'let-nested 'spec-type)
                 "the set of contexts leaking the sentinel into a user message changed"))
 
+(test-case "1b-vi close [DEFERRED 180]: the arrival instrument tells a ONE-token `*-` from `*` then `-`"
+  ;; Measured before the fix (verify probe v9-arrival.out): `c{a}* -` answered postfix-star /
+  ;; mints? #t exactly like `c{a}*-`, so a regression splitting the token passed the gate.
+  (define (src body) (string-append star-prelude "def q0 := " body "\n"))
+  (for ([sp (in-list '("*" "*_" "*-" "*-_"))])
+    (check-true (star-mints? (src (string-append "c{a}" sp)) sp)
+                (format "`c{a}~a` mints as `~a`" sp sp)))
+  (check-false (star-mints? (src "c{a}* -") "*-") "`*` then `-` is not a mint of `*-`")
+  (check-false (star-mints? (src "c{a}* -_") "*-_") "`*` then `-_` is not a mint of `*-_`")
+  (check-false (star-mints? (src "c{a}*_ -") "*-_") "`*_` then `-` is not a mint of `*-_`")
+  (check-equal? (star-last-token-type (src "c{a}* -") "*-") 'split
+                "a star-family token arrived, but not as the spelling under test")
+  ;; the one-argument form keeps its old meaning (the type of the last star-family token)
+  (check-equal? (star-last-token-type (src "c{a}* -")) 'postfix-star))
+
 (test-case "P4e-1a slice 1a-i: the matrix's own mint expectations hold"
   ;; The gate above is only meaningful if the matrix still describes reality.
   ;; This pins the generator against the tokenizer, so a mint-rule change that
@@ -6979,7 +7007,7 @@
          [c (in-list star-carriers)])
     (define non-minting
       (for/list ([k (in-list star-contexts)]
-                 #:unless (star-mints? (string-append star-prelude (star-cell-source k c 0 lex))))
+                 #:unless (star-mints? (string-append star-prelude (star-cell-source k c 0 lex)) lex))
         (car k)))
     (if (star-minting-carrier? c)
         (check-equal? (list->seteq (map string->symbol non-minting))
@@ -9486,8 +9514,8 @@
 ;; (`"*-"` has no sentinel).
 ;; ===========================================================================
 
-(define 1bvi-stage 'G)   ;; 1b-vi close: DEFERRED 185 — SB-3 (Q_U46's gap, one text) + SB-4 (remedies the branch can spell)
-(define 1bvi-stage-order '(A B C D E V F G))
+(define 1bvi-stage 'H)   ;; 1b-vi close: DEFERRED 179 — Q_U56's guided `*->` text at the CLOSER seat (outside the braces)
+(define 1bvi-stage-order '(A B C D E V F G H))
 (define (1bvi-reached? s)
   (and s (<= (index-of 1bvi-stage-order s) (index-of 1bvi-stage-order 1bvi-stage))))
 
@@ -9889,7 +9917,46 @@
     ("G-pan2" "ot2{5.a}*" G
               (line "(panic \"select: index 5 out of bounds for the vector of length 2 (at `5`)\").* : {:a {:b {:k Int}}}")
               (refused (#rx"panic: select: index 5 out of bounds for the vector of length 2") (#rx"[.][*]")))
-    ("G-pan-c" "ot2{5.a}" #f (refused (#rx"panic: select: index 5 out of bounds for the vector of length 2") ()) #f)))
+    ("G-pan-c" "ot2{5.a}" #f (refused (#rx"panic: select: index 5 out of bounds for the vector of length 2") ()) #f)
+    ;; ================= 1b-vi close — DEFERRED 179: Q_U56 at the CLOSER seat =================
+    ;; A star after the braces (or glued to a dot / broadcast lexeme) followed by `>` reads as
+    ;; the star then a separate `>`, which the fold leaves as an ARGUMENT of the selection — so
+    ;; it reached the elaborator as the unbound name `>` and got the comparison-keyword hint
+    ;; (DEFERRED 179's table; measured again: research/P4e-1b-vi/close/probe-179). Inside the braces Q_U56's item
+    ;; arm already guided it (X-arrow). The datum cannot tell glued from spaced, so the text is
+    ;; true of both and keeps the comparison spelling for the spaced case.
+    ("H-179a" "env{prod dev}*->" H
+              (refused (#rx"comparison keywords are spelled lt/le/gt/ge") ())
+              (refused (#rx"there is no `[*]->` operator" #rx"`[*]-` [(]the total collapse[)] ends a selection by itself" #rx"Drop the `>`")
+                       (#rx"comparison keywords are spelled")))
+    ("H-179b" "env{prod}*_>" H
+              (refused (#rx"comparison keywords are spelled lt/le/gt/ge") ())
+              (refused (#rx"there is no `[*]_>` operator" #rx"`[*]_` [(]the provenance flatten[)]") ()))
+    ("H-179c" "env{prod}*>" H
+              (refused (#rx"comparison keywords are spelled lt/le/gt/ge") ())
+              (refused (#rx"there is no `[*]>` operator" #rx"`[*]` [(]the flatten[)]") ()))
+    ("H-179d" "env{prod}*-_>" H
+              (refused (#rx"comparison keywords are spelled lt/le/gt/ge") ())
+              (refused (#rx"there is no `[*]-_>` operator" #rx"`[*]-_` [(]the total collapse with provenance[)]") ()))
+    ;; not the head: a keyword form's arity check used to report the stray `>` as an argument
+    ("H-179e" "[map-get env{prod}*-> :db]" H
+              (refused (#rx"map-get expects 2 arguments, got 3") ())
+              (refused (#rx"there is no `[*]->` operator") (#rx"expects 2 arguments")))
+    ;; the dot band and the broadcast band glue the star into the step's lexeme
+    ("H-179f" "env.prod*->" H
+              (refused (#rx"comparison keywords are spelled lt/le/gt/ge") ())
+              (refused (#rx"there is no `[*]->` operator") ()))
+    ("H-179g" "rm:cfg*_>" H
+              (refused (#rx"comparison keywords are spelled lt/le/gt/ge") ())
+              (refused (#rx"there is no `[*]_>` operator") ()))
+    ;; spaced: the same datum, so the same text — which names the comparison spelling
+    ("H-179h" "env{prod}* > 1" H
+              (refused (#rx"comparison keywords are spelled lt/le/gt/ge") ())
+              (refused (#rx"there is no `[*]>` operator" #rx"a comparison is spelled `gt`") ()))
+    ;; controls: a `>` after a selection with NO star keeps the comparison hint; the remedy runs
+    ("H-179-c" "env{prod} > 1" #f (refused (#rx"comparison keywords are spelled lt/le/gt/ge") (#rx"operator")) #f)
+    ("H-179-fix" "[map-get env{prod}*- :db]" #f (line "{:url \"p-url\", :port 5432} : {:port Int :url String}") #f)
+    ("H-179-fix_" "rm:cfg*_" #f (line "{:us-x 2, :eu-x 1} : {:eu-x Int :us-x Int}") #f)))
 
 (define (1bvi-row-id r) (list-ref r 0))
 (define (1bvi-row-spelling r) (list-ref r 1))
@@ -10423,9 +10490,10 @@
                 ;; (plain `*`: 1 + 3 + 9 over `ot` + 9 over `ov3` = 22; `*-`: 13 + 9 + 13 + 9 = 44)
                 ;; 1b-vi-F, predicted before its run: 21 hand rows (+2, SB1-c1b / SB2-c, at review);
                 ;; 1b-vi close (DEFERRED 185): +9 hand rows (G-SB4a/-K, G-SB4b/-K, G-SB3a…d, G-SB3-c);
-                ;; +3 for the buried panic (G-pan1, G-pan2, G-pan-c); `sub-block` laws over `ot` =
+                ;; +3 for the buried panic (G-pan1, G-pan2, G-pan-c); DEFERRED 179: +11 (H-179a…h, three
+                ;; controls); `sub-block` laws over `ot` =
                 ;; (1 + 2 + 4 kept/dissolved assignments) × 6 families = 42, over `ov3` = 4 × 2 = 8
-                '(141 194 (("*" . 22) ("*-" . 44) ("*-_" . 26) ("^-" . 26) ("^-z" . 26)
+                '(152 194 (("*" . 22) ("*-" . 44) ("*-_" . 26) ("^-" . 26) ("^-z" . 26)
                            ("{}*" . 11) ("{}*-" . 11) ("{}*-_" . 7) ("{}*_" . 7) ("{}^-" . 7) ("{}^-_" . 7)))
                 "hand rows, law rows, law rows per family"))
 
