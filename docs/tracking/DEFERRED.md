@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 205**
+> ### **NEXT FREE: 206**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -6802,7 +6802,7 @@ this lands; they are the acceptance tests.
 
 ---
 
-### 144. ⬜ THE TREE-SITTER GRAMMAR'S `flatten_step` IS A BARE `*` — the star-continuation family (`*_` LIVE at 1b-v-B2b; `*-`/`*-_` at 1b-vi) mis-parses at the CLOSER seat in the editor
+### 144. ✅ **DISCHARGED `04e3c5c5`** (branch `ciu6-path-selection`; reaches main at the 1b-vi close checkpoint) — THE TREE-SITTER GRAMMAR'S `flatten_step` IS A BARE `*` — the star-continuation family (`*_` LIVE at 1b-v-B2b; `*-`/`*-_` at 1b-vi) mis-parses at the CLOSER seat in the editor
 
 Found by the grammar-drift tripwire firing on `940c9c88` (CIU T6 slice
 1b-v-B2b), which is exactly what it exists for.
@@ -6844,6 +6844,15 @@ shows up in the corpus gate without anyone remembering it.
 (`angle_group`'s `token.immediate('*')` is irrelevant: the compiler refuses a
 glued star inside `<…>` per Q_U31, and a grammar that accepts more than the
 compiler is the harmless direction.)
+
+**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2), on the branch until the checkpoint).
+The fix shape above landed as `token.immediate(prec(1, /\*[-_]*/))`. The `prec` is load-bearing: `operator`
+contains the string `'*'`, a string wins a same-length tie against a regex, and without it corpus test 54
+(`record.orders:items*:sku`) broke. Three new corpus trees are red on the old grammar and green now (60 / 60).
+The per-file A/B is 0 better / 0 worse / 142, because the old trees were wrong without being errors. The
+`@operator` capture now covers `*_`, `*-` and `*-_` whole. Measurements: `tsg-close2.txt` under
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/close/` (on the branch). Ordinal-headed select branches, the
+other grammar gap the close measured, did not ship: see [205](#205-entry) below.
 
 ---
 
@@ -8380,7 +8389,7 @@ The fix shape is now "**deleted by PAR 4 P2**", which deletes the Tier-1 branch 
 if P2 slips. Tier-1 dispatch reads cell 1 (`propagator.rkt:3410`), so PAR 4 P1a row 1 lands with or after the
 deletion (W2-6-3). Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §5.2, §6.
 
-### 179. ⬜ Q_U56'S GUIDED `*->` TEXT MISSES THE BLOCK-CLOSER POSITION — `env{prod dev}*->` reports the comparison-keyword hint ("comparison keywords are spelled lt/le/gt/ge …"), not the star-family diagnostic
+### 179. ✅ **DISCHARGED `04e3c5c5`** (branch `ciu6-path-selection`; reaches main at the 1b-vi close checkpoint) — Q_U56'S GUIDED `*->` TEXT MISSES THE BLOCK-CLOSER POSITION — `env{prod dev}*->` reports the comparison-keyword hint ("comparison keywords are spelled lt/le/gt/ge …"), not the star-family diagnostic
 
 **Found by** the CIU 6 1b-vi verify (2026-10-18; lens VS, finding VS-7; D4 §5.P4e-1b-vi `#p4e-1b-vi-verify`), re-measured
 on the main thread: probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v5-misc.prologos` line 15, branch
@@ -8397,7 +8406,16 @@ give the closer-band star followed by `>` Q_U56's message ("drop the `>`"), in t
 reader raise aborts the whole file). **When**: no gate; with the star-family grammar work (DEFERRED 144) at CIU 6 T6's
 close, or with the next Q_U56-family message work.
 
-### 180. ⬜ THE STAR ARRIVAL INSTRUMENT CANNOT TELL A ONE-TOKEN `*-` FROM `*` THEN `-` — `star-last-token-type` / `star-mints?` answer `postfix-star` / `#t` for `c{a}*-` and `c{a}* -` alike (and for `-_`), so the flipped arrival pins' "is ONE token" lost its power at the 1b-vi mint
+**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2)). The mechanism is now measured: the
+fold fuses the closer star and leaves `>` as the next sibling, `(($select-path ($select env prod dev)
+$postfix-star-collapse) >)`, so `>` was an argument. Inside a keyword form it gave "map-get expects 2 arguments,
+got 3" instead. The consumer named in the fix shape cannot see a `>` outside the braces, so the arm sits in
+`parse-list`, the one seat every list form passes before head dispatch (after `$angle-type`, so type territory
+keeps Q_U31's seat). It covers the closer, dot and broadcast bands. A spaced `*- >` is the same datum, so the
+text names the comparison spelling too. `env{prod} > 1` (no star) and `env{prod}*- >= 1` keep the comparison hint.
+Probe `research/P4e-1b-vi/close/probe-179` (+ `.pre-fix.out`).
+
+### 180. ✅ **DISCHARGED `04e3c5c5`** (branch `ciu6-path-selection`; reaches main at the 1b-vi close checkpoint) — THE STAR ARRIVAL INSTRUMENT CANNOT TELL A ONE-TOKEN `*-` FROM `*` THEN `-` — `star-last-token-type` / `star-mints?` answer `postfix-star` / `#t` for `c{a}*-` and `c{a}* -` alike (and for `-_`), so the flipped arrival pins' "is ONE token" lost its power at the 1b-vi mint
 
 **Found by** the CIU 6 1b-vi verify (2026-10-18; lens VI, finding VI-10), re-measured on the main thread: probe
 `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v9-arrival.rkt` + `.out` (branch `ciu6-path-selection`; on main
@@ -8408,6 +8426,12 @@ lexeme not compared); its readers are the arrival gate and the `p4e-star-type` p
 equals the injected IR, 68 rows) both hold. This is instrument POWER: a regression that split `*-` into `*` and `-` would
 pass the arrival gate. **Fix shape**: require the minting token's LEXEME to equal the table lexeme under test (the gate
 already iterates the table). **When**: with DEFERRED 144, or the next edit of the arrival matrix.
+
+**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2)). The fix shape landed as
+written: `star-last-token-type` / `star-mints?` take an optional spelling, and with one the last star-family token
+must BE that lexeme, or the answer is `'split`. The arrival gate passes the lexeme under test. The battery's
+"is ONE token" pins compare `(lexeme . type)` with split controls. A mutation that ignores the spelling turns the
+new test case red.
 
 ### 181. ⬜ ⭐ A FIRE THAT RAISES HANGS THE PRODUCTION BSP EXECUTOR — on any round of ≥ 8 fires, `make-parallel-thread-fire-all` (installed at load, `driver.rkt:567`) loses the exception with its thread and the joiner blocks forever in `channel-get`; the LSP, whose error port goes nowhere, wedges with an empty log
 
@@ -9331,3 +9355,40 @@ no meaning a program could rely on; the singly-defined, unreferred case does hav
 **When**: with PM Track 12's name-resolution work; before REL 2's FQN-keyed store lands (203).
 
 **Owner**: PM Track 12 (the module system; placed by the owner's Q_B decision, 2026-10-24).
+
+<a id="205-entry"></a>
+
+### 205. ⬜ THE TREE-SITTER GRAMMAR HAS NO ORDINAL-HEADED SELECT BRANCH — `{0.server^.ssl* name}` is an ERROR and `{0.{…}}` makes the parser INVENT an identifier; on `ciu6-path-selection` the corpus gate has FAILED since `3fcb720a` (MISSING 75 > budget 71), and every rule tried so far makes `foray.prologos`'s invalid L957 swallow 251 lines
+
+**Found by** CIU 6's 1b-vi close, item 2 (2026-11-02; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2)). Measurements:
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/close/tsg-close2.txt` §3 and §5, plus `probe-957` (on the branch
+until the 1b-vi close checkpoint).
+
+**The gap.** The compiler has accepted a select branch that starts with an ordinal since P3c (`(@ord N)` heads; Q_U61,
+Q_U62). The grammar's `_select_branch` has no such shape. So the CIU 6 acceptance file's ordinal-headed lines are
+ERRORs, and its M18 section (`guilds{0.{server^.ssl*}}`, `guild-pair{0.{…} 1.{…}}`, L638 / L642 ×2 / L650) makes the
+parser invent an identifier before `.{` (4 MISSING).
+
+**The gate.** `check-corpus.sh` on the branch reports MISSING 75 against a budget of 71. The +4 are exactly those
+lines, added at `3fcb720a` (1b-vi-F). No hook runs the corpus gate, since the pre-commit grammar check is a tripwire
+that only warns, so the failure went unseen for a slice and a half. The budget decision (raise to 75 with the reason
+naming this entry, or hold the checkpoint) is with the owner; see D4 § close-2.
+
+**Why not fixed at the close.** A rule (a path whose base is a `number`, as a select branch) fixes the acceptance file
+(E43/M4 → E35/M0). Seven formulations were tried: aliased to `path_expr`, a distinct node, `number` in `_path_base`,
+restricted steps, `prec.dynamic(-1)`, lower `prec`, and no `prec`. Every one makes `foray.prologos` worse (E87/M3 →
+E84/M4): a 251-line ERROR from L957, plus an invented identifier there.
+- L957 (`users:<{0.userName^}`, a ";; :< broadcast pick/unwrap (APL)" note) is not valid Prologos: the compiler
+  answers `Unbound variable`.
+- In isolation both grammars give it the same tree. Blanking L940–956, which holds its multi-line `def users`,
+  shrinks the ERROR to 7 lines.
+- So this is error-recovery churn in an already-broken file, the class `corpus-budget.txt` documents. The per-file
+  A/B rule still refuses it.
+
+**Fix shape — a conjecture, not measured.** Either make the recovery around an unclosed `:<` local (a scanner token,
+the recipe for a contested shape), or land the rule together with a `foray.prologos` change. The second is the
+owner's call, since the file is his work in progress on main. Then lower `max_missing` again.
+
+**When**: CIU 6 X.close at the latest. That is the closing-phase grammar obligation for P3c's syntax.
+
+**Owner**: CIU 6.
