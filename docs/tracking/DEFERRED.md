@@ -7706,6 +7706,10 @@ further fused ω steps or a sub-block, so an ω ancestor under a deep star is un
 > **Why it now matters more:** Q_U63 (the ravel question, PENDING) leans to `x:*`, a broadcast of the identity then
 > a join. In block position that spelling (`x{a:*}`) sits on exactly this route, so this entry's fix gates
 > block-position ravel under that option.
+>
+> **Update (2026-11-02):** that option is DECIDED (CIU 6 Q_U63 = J, sub-decision JD-3). Until this entry is fixed,
+> `x{a:*}` gets a guided waypoint refusal naming the path form `x.a:*`, built at P4e-2. It widens to the meaning when
+> this entry lands.
 
 ### 168. ⬜ A STAR GLUED TO AN ARROW IN A TYPE IS SILENTLY NOT AN ARROW — `spec s4 Nat *-> Nat` reports "spec type for s4 has no arrow"; ~~`<(x : Nat)*- Nat>` reports a bare "Type mismatch"~~ **Withdrawn** — `<(x : Nat)*- Nat>` reports a nameless "Unbound variable" (see the correction below)
 
@@ -8603,6 +8607,10 @@ renders its suggestion on the user's branch and runs it, as the battery's remedy
 >     separately") is unspellable on vector-only paths. What "flatten element N" should be is CIU 6 Q_U63
 >     (opened 2026-10-19), so that text waits for it.
 >   - The class-level cure stands as written above.
+>
+> **Update (2026-11-02):** CIU 6 Q_U63 is DECIDED J. Ravel is `x:*` (the identity broadcast, then the join), so
+> "flatten element N" is spelled `x.N:*`. The refusal's remedy text changes to it when P4e-2 builds `:*`; a remedy
+> is offered only once it runs. P4e-2 is re-scoped to carry this entry's reader seats as well (CIU 6 D4, P4e-2 row).
 
 ### 186. ⬜ ⭐ A MODULE ALREADY IN THE REGISTRY BRINGS NONE OF ITS REGISTRY STATE TO A LATER IMPORTER — the second `process-file` of a file in one process loses imported instances and constructors (`e1 : Bool defined.` → `No instance of Eq for Int`); `core::csv` elaborated after its closure was imported directly fails E2001
 
@@ -9134,6 +9142,14 @@ total per-row validator; today a panicking row is silently a value.
 **When**: before REL 2's `:from` calls `validate` per row.
 
 **Owner**: CIU (the validator's consumers) or whoever owns `reduce` strictness; REL 2 depends on it.
+
+> **ADDENDUM (2026-11-02, CIU 6): the same class, in selection, measured and fixed.** On branch `ciu6-path-selection`
+> @ `55b7df16` (reaches main with the 1b-vi checkpoint merge), `ot2{2}*` printed
+> `(panic "select: index 2 out of bounds …").* : {…}` at 0 errors, while the starless `ot2{5.a}` aborted. An
+> `expr-select` whose subject whnf's to a panic matched no arm and stayed stuck. One arm in that case,
+> `[(expr-panic? subj*) subj*]` (`reduction.rkt`, the `expr-select` whnf case), fixed it, with red rows first. This
+> supports this entry's conjecture for `expr-select` only. The `reduce` / match case and `seal-forcing-error` were
+> not checked there. Probe: `docs/tracking/tracks/CIU/CIU_6/research/P4e-2/probe-p4e2-b.pre-fix-a9788c0a.out` line 4.
 
 ### 199. ⬜ A ONE-TOKEN CONTINUATION LINE RE-CHUNKS `||` ROWS SILENTLY — `|| "John" "Smith" "Jr"` then `"Jane"` on the next line, under arity 2, is accepted as the two rows `{:f "John", :l "Smith"} {:f "Jr", :l "Jane"}`, with or without a schema
 
