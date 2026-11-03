@@ -5894,7 +5894,7 @@ is the worst shape this class can take.
 
 > **ADDENDUM (2026-10-19, CIU 6 [Q_U62](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) = B, critique DC-2; probe
 > `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-ah` lines 17–24, branch `ciu6-path-selection` @ `93f36b3a`.
-> The probe reaches main with the next checkpoint merge.)** A second star side condition, this time on Q_U45's
+> The probe is on main since the 1b-vi checkpoint `d2ad3dad`.)** A second star side condition, this time on Q_U45's
 > L★ (`x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*` for Map contents). Under Q_U62 = B ("braces scope a landing"), L★ holds at key
 > heads (`t5{a.b.c.{m* n*}}` ≡ `t5{a.b.c.{m n}*}`, kept and dissolved) and at an ordinal head with a kept key. It
 > FAILS across an ordinal head's braces when every ancestor between them dissolves:
@@ -6802,7 +6802,7 @@ this lands; they are the acceptance tests.
 
 ---
 
-### 144. ✅ **DISCHARGED `04e3c5c5`** (branch `ciu6-path-selection`; reaches main at the 1b-vi close checkpoint) — THE TREE-SITTER GRAMMAR'S `flatten_step` IS A BARE `*` — the star-continuation family (`*_` LIVE at 1b-v-B2b; `*-`/`*-_` at 1b-vi) mis-parses at the CLOSER seat in the editor
+### 144. ✅ **DISCHARGED `04e3c5c5`** (on main since the 1b-vi checkpoint `d2ad3dad`) — THE TREE-SITTER GRAMMAR'S `flatten_step` IS A BARE `*` — the star-continuation family (`*_` LIVE at 1b-v-B2b; `*-`/`*-_` at 1b-vi) mis-parses at the CLOSER seat in the editor
 
 Found by the grammar-drift tripwire firing on `940c9c88` (CIU T6 slice
 1b-v-B2b), which is exactly what it exists for.
@@ -6845,13 +6845,13 @@ shows up in the corpus gate without anyone remembering it.
 glued star inside `<…>` per Q_U31, and a grammar that accepts more than the
 compiler is the harmless direction.)
 
-**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2), on the branch until the checkpoint).
+**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2), on main since the checkpoint `d2ad3dad`).
 The fix shape above landed as `token.immediate(prec(1, /\*[-_]*/))`. The `prec` is load-bearing: `operator`
 contains the string `'*'`, a string wins a same-length tie against a regex, and without it corpus test 54
 (`record.orders:items*:sku`) broke. Three new corpus trees are red on the old grammar and green now (60 / 60).
 The per-file A/B is 0 better / 0 worse / 142, because the old trees were wrong without being errors. The
 `@operator` capture now covers `*_`, `*-` and `*-_` whole. Measurements: `tsg-close2.txt` under
-`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/close/` (on the branch). Ordinal-headed select branches, the
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/close/` (on main since `d2ad3dad`). Ordinal-headed select branches, the
 other grammar gap the close measured, did not ship: see [205](#205-entry) below.
 
 ---
@@ -7705,7 +7705,7 @@ further fused ω steps or a sub-block, so an ω ancestor under a deep star is un
 > step after ω when this entry's decision is taken.
 
 > **ADDENDUM (2026-10-19, CIU 6 Q_U63 finding RV-4; probe
-> `docs/tracking/tracks/CIU/CIU_6/research/P4e-2/probe-p4e2-c` lines 26–28, branch `ciu6-path-selection` @ `21ac833a`).**
+> `docs/tracking/tracks/CIU/CIU_6/research/P4e-2/probe-p4e2-c` lines 26–28, branch `ciu6-path-selection` @ `21ac833a`; on main since `d2ad3dad`).**
 > The same class meets a STAR. With `tw := {:teams @[{:m @[1]} {:m @[2 3]}] :name "x"}`:
 > - the path `tw.teams:m*` → `@[1 2 3]`;
 > - the block `tw{teams:m*}`, and `tw{teams:m* name}`, are refused with "`*` (flatten) cannot join Map-valued
@@ -8389,7 +8389,7 @@ The fix shape is now "**deleted by PAR 4 P2**", which deletes the Tier-1 branch 
 if P2 slips. Tier-1 dispatch reads cell 1 (`propagator.rkt:3410`), so PAR 4 P1a row 1 lands with or after the
 deletion (W2-6-3). Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §5.2, §6.
 
-### 179. ✅ **DISCHARGED `04e3c5c5`** (branch `ciu6-path-selection`; reaches main at the 1b-vi close checkpoint) — Q_U56'S GUIDED `*->` TEXT MISSES THE BLOCK-CLOSER POSITION — `env{prod dev}*->` reports the comparison-keyword hint ("comparison keywords are spelled lt/le/gt/ge …"), not the star-family diagnostic
+### 179. ✅ **DISCHARGED `04e3c5c5`** (on main since the 1b-vi checkpoint `d2ad3dad`) — Q_U56'S GUIDED `*->` TEXT MISSES THE BLOCK-CLOSER POSITION — `env{prod dev}*->` reports the comparison-keyword hint ("comparison keywords are spelled lt/le/gt/ge …"), not the star-family diagnostic
 
 **Found by** the CIU 6 1b-vi verify (2026-10-18; lens VS, finding VS-7; D4 §5.P4e-1b-vi `#p4e-1b-vi-verify`), re-measured
 on the main thread: probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v5-misc.prologos` line 15, branch
@@ -8415,7 +8415,7 @@ keeps Q_U31's seat). It covers the closer, dot and broadcast bands. A spaced `*-
 text names the comparison spelling too. `env{prod} > 1` (no star) and `env{prod}*- >= 1` keep the comparison hint.
 Probe `research/P4e-1b-vi/close/probe-179` (+ `.pre-fix.out`).
 
-### 180. ✅ **DISCHARGED `04e3c5c5`** (branch `ciu6-path-selection`; reaches main at the 1b-vi close checkpoint) — THE STAR ARRIVAL INSTRUMENT CANNOT TELL A ONE-TOKEN `*-` FROM `*` THEN `-` — `star-last-token-type` / `star-mints?` answer `postfix-star` / `#t` for `c{a}*-` and `c{a}* -` alike (and for `-_`), so the flipped arrival pins' "is ONE token" lost its power at the 1b-vi mint
+### 180. ✅ **DISCHARGED `04e3c5c5`** (on main since the 1b-vi checkpoint `d2ad3dad`) — THE STAR ARRIVAL INSTRUMENT CANNOT TELL A ONE-TOKEN `*-` FROM `*` THEN `-` — `star-last-token-type` / `star-mints?` answer `postfix-star` / `#t` for `c{a}*-` and `c{a}* -` alike (and for `-_`), so the flipped arrival pins' "is ONE token" lost its power at the 1b-vi mint
 
 **Found by** the CIU 6 1b-vi verify (2026-10-18; lens VI, finding VI-10), re-measured on the main thread: probe
 `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v9-arrival.rkt` + `.out` (branch `ciu6-path-selection`; on main
@@ -8585,8 +8585,8 @@ the library.
 
 **Found by** CIU 6: finding SB-3 when [Q_U62](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) was opened (2026-10-18;
 probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-ae` line 66), and SB-4 at 1b-vi-F (2026-10-19;
-probe `…/probe-1bvi-ai` lines 19, 31, 32; branch `ciu6-path-selection` @ `3fcb720a`, reaching main with the next
-checkpoint merge). Subject: `vhm := @[@[{:x 1}] @[{:y 2}]]`.
+probe `…/probe-1bvi-ai` lines 19, 31, 32; branch `ciu6-path-selection` @ `3fcb720a`, on main since the
+checkpoint `d2ad3dad`). Subject: `vhm := @[@[{:x 1}] @[{:y 2}]]`.
 - **SB-4, measured.** `vhm{0.{0}* 0.{0}}` is an L4 refusal (correct) whose all-ordinal arm offers two remedies.
   Neither can be spelled on this path:
   - "keep a key before each star (`x{0.a.b* 1.a.b*}`, a tuple of records)": the path has no key;
@@ -8607,8 +8607,8 @@ and send `{N*}` to Q_U46's ordinal-star message. The class-level cure (1b-vi-F's
 renders its suggestion on the user's branch and runs it, as the battery's remedy rows already do by hand.
 **When**: the 1b-vi close, or the next edit of the level arms, whichever comes first.
 
-> **ADDENDUM (2026-10-19, CIU 6 1b-vi close, branch `ciu6-path-selection` @ `a9788c0a`; reaches main with the
-> 1b-vi checkpoint merge).**
+> **ADDENDUM (2026-10-19, CIU 6 1b-vi close, branch `ciu6-path-selection` @ `a9788c0a`; on main since the
+> 1b-vi checkpoint `d2ad3dad`).**
 > - **Re-measured before fixing: wider than filed, and one claim above is wrong.** "Q_U46's gap 1 made a star after
 >   an ordinal a guided error" held for ONE spelling, the bracket `y{a[0]*}`. The rest missed it:
 >   - `vhm{0*}` / `vhm{0.{0*}}` → "`*` is postfix";
@@ -9168,7 +9168,7 @@ total per-row validator; today a panicking row is silently a value.
 **Owner**: CIU (the validator's consumers) or whoever owns `reduce` strictness; REL 2 depends on it.
 
 > **ADDENDUM (2026-11-02, CIU 6): the same class, in selection, measured and fixed.** On branch `ciu6-path-selection`
-> @ `55b7df16` (reaches main with the 1b-vi checkpoint merge), `ot2{2}*` printed
+> @ `55b7df16` (on main since the 1b-vi checkpoint `d2ad3dad`), `ot2{2}*` printed
 > `(panic "select: index 2 out of bounds …").* : {…}` at 0 errors, while the starless `ot2{5.a}` aborted. An
 > `expr-select` whose subject whnf's to a panic matched no arm and stayed stuck. One arm in that case,
 > `[(expr-panic? subj*) subj*]` (`reduction.rkt`, the `expr-select` whnf case), fixed it, with red rows first. This
@@ -9358,21 +9358,21 @@ no meaning a program could rely on; the singly-defined, unreferred case does hav
 
 <a id="205-entry"></a>
 
-### 205. ⬜ THE TREE-SITTER GRAMMAR HAS NO ORDINAL-HEADED SELECT BRANCH — `{0.server^.ssl* name}` is an ERROR and `{0.{…}}` makes the parser INVENT an identifier; on `ciu6-path-selection` the corpus gate has FAILED since `3fcb720a` (MISSING 75 > budget 71), and every rule tried so far makes `foray.prologos`'s invalid L957 swallow 251 lines
+### 205. ⬜ THE TREE-SITTER GRAMMAR HAS NO ORDINAL-HEADED SELECT BRANCH — `{0.server^.ssl* name}` is an ERROR and `{0.{…}}` makes the parser INVENT an identifier; the corpus gate FAILED from `3fcb720a` (MISSING 75 > budget 71) until the owner raised the budget to 75 (`a7dcde7d`), and every rule tried so far makes `foray.prologos`'s invalid L957 swallow 251 lines
 
 **Found by** CIU 6's 1b-vi close, item 2 (2026-11-02; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2)). Measurements:
-`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/close/tsg-close2.txt` §3 and §5, plus `probe-957` (on the branch
-until the 1b-vi close checkpoint).
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/close/tsg-close2.txt` §3 and §5, plus `probe-957` (on main since
+the 1b-vi checkpoint `d2ad3dad`).
 
 **The gap.** The compiler has accepted a select branch that starts with an ordinal since P3c (`(@ord N)` heads; Q_U61,
 Q_U62). The grammar's `_select_branch` has no such shape. So the CIU 6 acceptance file's ordinal-headed lines are
 ERRORs, and its M18 section (`guilds{0.{server^.ssl*}}`, `guild-pair{0.{…} 1.{…}}`, L638 / L642 ×2 / L650) makes the
 parser invent an identifier before `.{` (4 MISSING).
 
-**The gate.** `check-corpus.sh` on the branch reports MISSING 75 against a budget of 71. The +4 are exactly those
+**The gate.** `check-corpus.sh` reported MISSING 75 against a budget of 71. The +4 are exactly those
 lines, added at `3fcb720a` (1b-vi-F). No hook runs the corpus gate, since the pre-commit grammar check is a tripwire
-that only warns, so the failure went unseen for a slice and a half. The budget decision (raise to 75 with the reason
-naming this entry, or hold the checkpoint) is with the owner; see D4 § close-2.
+that only warns, so the failure went unseen for a slice and a half. The owner decided to raise the budget to 75, with the
+reason naming this entry (2026-11-02, `a7dcde7d`); lower it again when this lands (D4 § close-2).
 
 **Why not fixed at the close.** A rule (a path whose base is a `number`, as a select branch) fixes the acceptance file
 (E43/M4 → E35/M0). Seven formulations were tried: aliased to `path_expr`, a distinct node, `number` in `_path_base`,
