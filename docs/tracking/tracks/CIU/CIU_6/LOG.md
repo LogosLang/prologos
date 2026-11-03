@@ -720,3 +720,21 @@ are in [`../README.md`](../README.md).
   - **My first injection run was misaligned by one** (the `ns` form is consumed); discarded and re-run.
 - **Next**: the dialogue checkpoint. One scope question (D4 § P4e-2, *Open at this checkpoint*): does E(ii), `xs:0*` as a
   meaning (reopening DEFERRED 105), ride P4e-2 or wait behind a waypoint naming `xs:0:*`? Lean: ride. Then P4e-2-A, the pins.
+
+### Owner, 2026-11-03: two process updates applied; E(ii) decided to ride P4e-2; the mini-audit moves to its own document — docs commit on the branch (2026-11-03)
+- **Owner** (2026-11-03 10:57): "As an improvement to our process, I'm thinking that our dailies should switch to following the
+  local date hereforth. Audit findings can be there own thing and not cloud-up the design doc (but cross-reference) -- another
+  update to process. Fine with the lean to include in Phase 4e-2. Let's proceed therewith."
+- **Process, applied on main at `cea41f43`**:
+  - dailies follow the LOCAL date: one file per local calendar date, created at its first write with the STATE head copied
+    forward. Size, track shift and rewind no longer split a file (`DAILIES_METHODOLOGY.org` § *File rolling*; `workflow.md`,
+    where standups keep creation-to-creation);
+  - Stage 4 mini-audit findings get their own document in the track's `audits/`, and the design doc keeps the decisions and a
+    cross-reference (`DESIGN_METHODOLOGY.org` Per-Phase Protocol step 2).
+- **Applied here**:
+  - RA-1…13 moved unchanged from D4 §5.P4e-2 to `audits/2026-11-03_CIU_6_P4e-2_GROUNDING_AUDIT.md`. D4 keeps the design target,
+    the decisions each citing its RA-n, the worked examples and the plan (207 → 134 lines).
+  - The previous entry's claim that the protocol puts findings in the design doc was true when written; it is superseded.
+- **Decision**: E(ii) DECIDED — `xs:0*` gets its meaning in P4e-2, reopening DEFERRED 105 for that seat as its own mint with
+  its own corpus A/B (D4 § P4e-2, *Decided at the checkpoint*).
+- **Next**: P4e-2-A, the pins, all red.

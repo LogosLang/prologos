@@ -12056,7 +12056,7 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-v-B2b — the reader MINT** ✅ `940c9c88` | Widen the gate's lexeme conjunct to EXACT table membership; route the emit through the same lookup ([DEFERRED 129](DEFERRED.md)); [DEFERRED 130](DEFERRED.md)'s two refusal messages ride along. **MINIMAL by ruling** — reader-only, so the three live bands cannot regress. Preconditions the grounding found: the battery's `p4e-star-type` / `p4e-last-star-type` helpers are exact-lexeme `"*"` and structurally blind to `*_` ([DEFERRED 133](DEFERRED.md)), and the DEFERRED-108 snapshot needs a deliberate re-baseline. | Scoped by [Q_U53](#q-u53) part 1: the miss-case is ruled out at the GATE, not handled at the emit. Record: [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b) · shipped: [§5.P4e-1b-v-B2b-shipped](#p4e-1b-v-b2b-shipped) |
 | **1b-v-C — the FOLD** ✅ `24fc1be4` (pins) · `a492bbb7` | `split-star-lexeme`'s suffix dispatch AND the printer's cont→lexeme delegate to the family table, so the four bands and every star label share ONE semantic authority; site 3 (`form-deps`) DERIVED, site 4 (the matrix) PINNED. Behaviour-preserving on every input. | [Q_U53](#q-u53) part 2 + [Q_U54](#q-u54) (the printer folds too; site 3 derived, site 4 pinned). Record: [§5.P4e-1b-v-C](#p4e-1b-v-c) |
 | **1b-vi — the star-COLLAPSE slice** 🔄 (**opened 2026-10-13**, CIU 6 branch `ciu6-path-selection`; grounding: [audit](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md); [Q_U55](#q-u55) ✅ A — refuse, `^-` aligned; [Q_U56](#q-u56) ✅ (a) — `*->` guided in selection territory; [Q_U57](#q-u57) ✅ P — `*-_` names the whole collapsed path; [Q_U58](#q-u58) ✅ M + slicing A→B→C→D; **implementing — tracker [§5.P4e-1b-vi](#p4e-1b-vi)**) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
-| **P4e-2** | the `.*` retirement inventory (`.*` → a guided refusal naming `x:*`, JD-1) + ravel as **`x:*`** ([Q_U63](#q-u63) = J): the `:*` production, ε as `(@bcast ε)`, the JD-2…4 messages and waypoint, the laws; plus DEFERRED 185's reader seats | ⚠ RE-SCOPED 2026-11-02 by Q_U63 · 🔄 **OPENED 2026-11-03**: design target, mini-audit RA-1…13 and the sub-slice plan A–F in [§5.P4e-2](#p4e-2) |
+| **P4e-2** | the `.*` retirement inventory (`.*` → a guided refusal naming `x:*`, JD-1) + ravel as **`x:*`** ([Q_U63](#q-u63) = J): the `:*` production, ε as `(@bcast ε)`, the JD-2…4 messages and waypoint, the laws; plus DEFERRED 185's reader seats | ⚠ RE-SCOPED 2026-11-02 by Q_U63 · 🔄 **OPENED 2026-11-03**: design target + sub-slice plan A–F in [§5.P4e-2](#p4e-2); mini-audit RA-1…13 in [its own document](tracks/CIU/CIU_6/audits/2026-11-03_CIU_6_P4e-2_GROUNDING_AUDIT.md); E(ii) (`xs:0*` as a meaning) decided to ride, owner 2026-11-03 |
 
 **⚠ TWO HOLES C2 OPENS, AND THEY ARE C2's TO CLOSE** — both found by the
 grounding audit, neither in any prior record:
@@ -12554,14 +12554,13 @@ star with a keyed sibling, and none put a caret after a star.**
 
 <a id="p4e-2"></a>
 
-### §5.P4e-2 — RAVEL `x:*` ([Q_U63](#q-u63) = J): design target, mini-audit, plan  (opened 2026-11-03, branch `ciu6-path-selection` @ `bd2e48ff`)
+### §5.P4e-2 — RAVEL `x:*` ([Q_U63](#q-u63) = J): design target and plan  (opened 2026-11-03, branch `ciu6-path-selection` @ `bd2e48ff`; mini-audit: [its own document](tracks/CIU/CIU_6/audits/2026-11-03_CIU_6_P4e-2_GROUNDING_AUDIT.md))
 
-Written per the Implementation Protocol's per-phase steps 1–2 (`principles/DESIGN_METHODOLOGY.org`
-§ *Per-Phase Protocol*): the outcomes of the mini-design and the mini-audit live here, the commit
-story in the track LOG. Probes, all in `tracks/CIU/CIU_6/research/P4e-2/`, run at `bd2e48ff`, committed `5876569b`:
-`probe-p4e2-e.prologos` (`e:N` = its output line N, via `tools/scratch-run.sh`), `reader-dump.rkt`
-(`dump: <spelling>` = that spelling's block in `reader-dump.out`), `inject.rkt` (`inject:N`),
-`census-p4e2.py` (`.out` beside it). Earlier probes `probe-p4e2-{a…d}` keep their own `a:N`…`d:N`.
+The mini-design (Implementation Protocol, per-phase step 1) is here. The mini-audit's findings (step 2) are in
+[their own document](tracks/CIU/CIU_6/audits/2026-11-03_CIU_6_P4e-2_GROUNDING_AUDIT.md), cross-referenced below. The commit
+story is in the track LOG. The process was revised on 2026-11-03 (owner: "Audit findings can be their own thing and not
+cloud-up the design doc (but cross-reference)"); the findings were first drafted here at `71c8dbfc`. `e:N` cites
+`research/P4e-2/probe-p4e2-e.out` line N (`5876569b`); `inject:N` cites `inject.out`.
 
 **Design reference.** [Q_U63](#q-u63) = J and its critique [JC-n / JD-1…7](#q-u63-jc), with the five
 laws listed there; [Q_U26](#q-u26)'s meaning (a one-level whole-container join) under J's spelling;
@@ -12618,96 +12617,24 @@ says why not.
 7. **Performance**: no microbench claim is load-bearing here (protocol step 6 does not apply). The trigger adds one predicate per
    `colon` token; the corpus A/B reports reader wall time as a bounce-back check only.
 
-**Mini-audit — findings (RA-n; prefix checked clean on 50 local branches).**
-
-- **RA-1 — the reader seat.** `values:*` reads as three items, `(values : *)`: the colon at column 6, the star at 7
-  (`dump: values:*`). The `:` gate mints `$bcast-step` only for a `keyword` / `colon-annotation` token glued to a base
-  (`bcast-step-trigger?`, `parse-reader.rkt:4319`) or a bare colon glued on BOTH sides to a base and an `lbrace`
-  (`bcast-brace-trigger?`, `:4309`, DEFERRED 42). `:*` is neither, so it falls through. Glued and spaced differ only in
-  srcloc (`dump: values: *`, `dump: values :*`). J's seat is the third case of the same rule: a bare colon glued on both
-  sides to a base and to a star-family token, emitting what a keyword `:k*` emits with k = ε.
-- **RA-2 — the keyed twin already carries every continuation J needs.** Measured in `reader-dump.out`:
-
-  | keyed twin | built today | J's spelling |
-  |---|---|---|
-  | `values:k*` / `*_` / `*-` / `*-_` | `((@bcast k) (@star flatten))` / `flatten-synth` / `flatten-collapse` / `flatten-collapse-synth` | `values:*` … `values:*-_` |
-  | `values:k*:name` | a nested `$select-path` with `($bcast-step :name)` | `values:*:name` |
-  | `values:k*.0` | `(get … 0)` | `values:*.0` |
-  | `values:k*{a b}` | `($select … a b)` | `values:*{a b}` |
-  | `values.0:k*` | `($select-path (get values 0) ($bcast-step :k*))` | `values.0:*` |
-  | `values:k**`, `k*^`, `k*x` | guided parse errors at the segment split | `values:**` gets JD-4's own text |
-
-  Without the mint the continuations are mangled, not merely unbound: `values:*:name` builds a path whose SUBJECT is `*`
-  (`dump: values:*:name`). A parser-level recognizer cannot recover that; the reader is the only seat. (A parser-side J was
-  considered and is refuted by this row.)
-- **RA-3 — the IR seat, and ε's representation.** The step vocabulary is a closed union (`select-step-kind`,
-  `syntax.rkt:1417`; its contract at `:1395-1432`: "a new kind must be added to select-step-kind AND given an arm in every
-  `case` over it"). Seven `case` sites (syntax `select-step-mark-collapsed`, `select-step-unmark`, `select-step-output-name`,
-  `select-branch-top-keys`; typing `select-branch-entries`; reduction `select-reduce`; printer `pp-select-branch`) and 23
-  consumers of a broadcast's inner step (most delegate to `select-step-name` `:1547`, `select-step-cont`,
-  `select-step-output-name` `:1706`, the printer's `step->string`, or `select-project`). ε = `(@id)` **inside** `(@bcast ε)`
-  (the decided text) reuses `select-bcast-lift`'s whole container dispatch; a nullary `(@ravel)` kind would rebuild it per
-  container and lose JC-2. Injected: `(@bcast (@id))` RAISES `select-step-kind: unknown select step kind: (@id)` (inject:7)
-  — the negative control: the guard fires, and ε needs its arms. The bare `(@id)` outside a broadcast must be unbuildable
-  (one constructor) and refused by the branch validator if it ever arrives.
-- **RA-4 — the retirement inventory is empty.** Census (`census-p4e2.out`; 8 patterns, each passing its must-match and
-  must-reject strings): **0** non-comment hits in 139 production `.prologos` files and in the owner's WIP `foray.prologos`
-  for every spelling P4e-2 touches. The 54 distinct test lines any pattern hits are classified mechanically: Racket regexes
-  (`#rx".*"`, 21), comments (8) and a test name (1) are look-alikes; 6 are the `#p(a.*)` / `#p(a.**)` path-literal pins
-  (PF's form) and 18 are `selection` declarations (JD-7, untouched). **The expression-position class is 0: no pin flips.** So the "17 lines … the bulk of what a retirement must move" of
-  [§5.P4e-1b](#p4e-1b) (the `test-selection-paths.rkt` count) is, under JD-7, nothing to move. foray's `.*` "splat" is one
-  comment (line 687 of the WIP copy): no collision.
-- **RA-5 — the `.**` message offers `xs:*` already, by accident.** `values.**` → "broadcast `.**` was retired — its
-  replacement is `:*` (e.g. `xs:*`)" (e:23). It is the `.*NAME` → `:NAME` template (`parser.rkt:979`, since `25f3f22d`,
-  2026-08-08) applied to the field name `*`. Once J lands the remedy RUNS, and ravels one level. JD-4's family: name
-  `x:*` (one level) and `x:*:*` (two).
-- **RA-6 — block position has two shapes.** `rec{k:*}` and `y{a.0:*}` both read `($select … : *)` and both get "block keys
-  are written bare — `x{}`, not `x{:}`" (e:25, e:26; `parser.rkt:2062`). JD-3's waypoint covers both, naming `rec.k:*` and
-  `y.a.0:*`.
-- **RA-7 — DEFERRED 185's reader seats split in two, and one of them is a CORRECTION.** By [Q_U46](#q-u46)'s rule ("the star
-  deletes the layer **sₙ** contributed"):
-  - `t3.0*`, `y.a.0*`, `y{a.0*}` star an ordinal **step**, which contributes no layer → Q_U46's ordinal-star refusal, the
-    text the block band already gives (`values{0*}`, e:58), with the remedy `x.N:*` once J runs. Today: Unbound variable
-    (e:27, e:28), "stray `.`" (e:29).
-  - `t3:0*` stars a **broadcast**, which does contribute a layer → by Q_U46 + [Q_U27](#q-u27) it has a meaning: the join of
-    each element's element 0, the ordinal-sort sibling of `values:k*`. Measured: the twins already compute it —
-    `(@bcast 0) (@star flatten)` injected → `@[1 2 4] : [PVec Int]` (inject:4) = `t3:0{0 1}*` (e:36). Only the reader
-    cannot spell it (e:30, Unbound variable).
-  - ⚠ **Correction:** DEFERRED 185's 1b-vi-close addendum listed `vv:0*` among the spellings that "missed" Q_U46's
-    refusal. That classification was wrong; `vv:0*` is a missing spelling of a meaning already built. (Addendum on main.)
-- **RA-8 — DEFERRED 105's verdict, re-derived at HEAD.** 105 (⛔, 2026-08-10) blocked `x.0*` / `xs:0*` on the star's datum
-  representation: "the star has nowhere to live in an ordinal payload" ([§5.P4e-0](#p4e-0) attempt 3). Two later facts move it:
-  `x.0*` now wants a REFUSAL (Q_U46, 2026-08-12), so a reader marker that collapses to one loud item suffices and no star
-  representation is needed; `xs:0*`'s star would ride the broadcast's KEYWORD payload, as `:k*`'s does (`:k*` fuses into one
-  symbol — the count-preserving shape), not `$postfix-index`'s numeric one. **Conjecture until built:** both seats are
-  landable as their own mints, each with its corpus A/B. This was checked against the record and the reader code, not by
-  building.
-- **RA-9 — the count change, as a meaning claim at every position** (DEFERRED 105's lesson). Today's 3-item reading of a glued
-  `x:*`:
-
-  | position | today | after the mint (predicted) |
-  |---|---|---|
-  | application argument `[take1 values:*]` | loud — "Too many arguments" (e:37) | the meaning: `take1` of the ravel |
-  | collection literals `@[values:* 1]`, `'[values:*]` | loud — Unbound variable (e:38, e:39; `'[…]` is a list literal whose elements are evaluated: control e:40) | the meaning |
-  | binder `defn f1 [x:*]` | loud — "Empty type segment in arrow type" (e:42; control e:41) | still loud; text to measure |
-  | `def q1:* := 1` | loud — Type mismatch (e:44; control e:43) | still loud; text to measure |
-  | bundle `(Eq:*)` | loud — Unbound variable (e:55, e:56; control e:53, e:54) | still loud; text to measure |
-  | **fact row** `\|\| "x" values:*` | **silent**: 3 rows, `{:a unknown, :b unknown}` among them (e:50; control e:47) | **silent**: 2 rows with an `unknown` term — exactly the keyed twin today, `\|\| "x" values:k` (e:52) |
-
-  The only zero-error change is the fact row, and it is DEFERRED 192's class (a non-ground term in a `||` row is accepted
-  silently): 192's fix (refuse at registration) covers J's term and the keyed twin's alike. J adds no hazard class there;
-  192 gets an addendum. Demand: 0 of 1 109 `||` rows hold a non-ground term (192's census).
-- **RA-10 — the editor grammar is loud on J today.** `values:*` and `values.0:*` parse as a `path_expr` with an `ERROR`
-  node on the colon (`grammar.js:1153`'s `broadcast_step` is one immediate token `/:[a-zA-Z_]…/`), so the corpus gate can
-  see them — not the silent-wrong-tree class its comment at `:1140-1148` records. P4e-2 adds one path-step alternative.
-- **RA-11 — Q_U35's refusal can name the spelling it lacked.** `[id values]*` → "`*` (flatten) applies to a SELECTION step
-  … e.g. `xs:{a}*` or `cfg{a}*`" (e:57; `parser.rkt:696`). Q_U35 promised "the separate-flatten spelling"; under J that is
-  `[f x]:*` (Unbound today, e:15; its subject is bound, e:59). Its meaning stays refused (Q_U35); only the remedy grows.
-- **RA-12 — `selection` declarations are untouched, and the one type-level use stays.** `selection-field-unrestricted?`
-  (`typing-core.rkt:2639`) is the only TYPE-level reader of `*` / `**` (RV-3); JD-7 leaves it.
-- **RA-13 — a principles-doc staleness, proposed, not applied.** *The Most Generalizable Interface*
-  (`principles/DESIGN_PRINCIPLES.org:200-212`) still gives `xs.*field` as its example of syntactic sugar; that spelling
-  was retired at D4.P1a (its message names `xs:field`, `parser.rkt:979`). Owner-owned surface.
+**What the mini-audit changed in the design.** The findings are in their own document,
+[the P4e-2 grounding audit](tracks/CIU/CIU_6/audits/2026-11-03_CIU_6_P4e-2_GROUNDING_AUDIT.md) (RA-1…13, probes at
+`5876569b`). The decisions they led to:
+- **The reader seat is the `:` gate's third case** (RA-1, RA-2). A bare colon glued on both sides, to a base and to a
+  star-family token, emits what a keyword `:k*` emits with k = ε. The keyed twin already carries every continuation J
+  needs. A parser-side J is refuted: without the mint, `values:*:name` builds a path whose subject is `*`.
+- **ε is `(@id)` inside `(@bcast ε)`**, with one constructor; a bare `(@id)` is refused (RA-3). This reuses
+  `select-bcast-lift`'s container dispatch; a nullary `(@ravel)` kind would rebuild that dispatch per container.
+- **No retirement inventory** (RA-4). No pin flips. JD-7 leaves the 18 `selection`-declaration lines alone.
+- **DEFERRED 185's reader seats split** (RA-7). The ordinal-STEP family (`t3.0*`, `y.a.0*`, `y{a.0*}`) gets Q_U46's
+  refusal, with the remedy `x.N:*`. `xs:0*` gets its MEANING, the ordinal-sort sibling of `xs:k*`, which the twins
+  already compute. The seat is DEFERRED 105's, re-derived as landable (RA-8, a conjecture until built).
+- **The count change is safe at every position but one, and that one is DEFERRED 192's** (RA-9). The fact-row rows
+  become pins; 192 owns the fix.
+- **Messages** (RA-5, RA-6, RA-11). `.**` names one level and two; JD-3's waypoint covers both block shapes; Q_U35's
+  refusal gains `[f x]:*`.
+- **The editor grammar gains one path-step alternative** (RA-10). Spec §2.1 / §3.5 and RA-13 stay proposals to the
+  owner.
 
 **Worked examples — what P4e-2 makes run.** Each predicted value is today's measured equivalent.
 
@@ -12751,12 +12678,13 @@ says why not.
 - **P4e-2-F — the close.** The adversarial verify (four lenses), the fix round, main merged in, the full suite, the
   checkpoint; the spec §2.1 / §3.5 departures and RA-13 proposed to the owner.
 
-**Open at this checkpoint** — one scope question, put to the owner with a lean: does E(ii), `xs:0*` as a meaning (which
-reopens DEFERRED 105), ride P4e-2, or wait behind a guided waypoint naming `xs:0:*`? Lean: ride. Q_U30 put the carrier in
-scope, Q_U46 + Q_U27 give the meaning, the twins already compute it (inject:4), and without it the bind law `x:k*` ≡
-`x:k:*` holds for keys and is unspellable for ordinals — the "unspellable case in a ruled operator" Q_U27 was decided to
-close. Counter-case: a second reader mint in this slice, at the seat where 105's slice B regressed; the waypoint costs
-nothing and stays monotone.
+**Decided at the checkpoint (owner, 2026-11-03 10:57): E(ii) rides P4e-2** — "Fine with the lean to include in Phase
+4e-2." So `xs:0*` gets its meaning in this slice, which reopens DEFERRED 105 for that seat, as its own mint with its own
+corpus A/B. The question as posed, with the lean and the counter-case it was decided on: does E(ii), `xs:0*` as a meaning,
+ride P4e-2, or wait behind a guided waypoint naming `xs:0:*`? Lean: ride. Q_U30 put the carrier in scope, Q_U46 + Q_U27
+give the meaning, and the twins already compute it (inject:4). Without it, the bind law `x:k*` ≡ `x:k:*` holds for keys
+and is unspellable for ordinals. Counter-case: a second reader mint in this slice, at the seat where 105's slice B
+regressed; the waypoint costs nothing and stays monotone.
 
 <a id="pf"></a>
 
