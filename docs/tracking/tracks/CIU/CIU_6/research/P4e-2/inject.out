@@ -1,0 +1,16 @@
+0: fixture
+    => t3 : [PVec [PVec [PVec Int]]] defined.
+1: fixture
+    => values : [PVec [PVec Int]] defined.
+2: fixture
+    => recs : [PVec {:k [PVec Int]}] defined.
+3: recs:k*  (as parsed: (@bcast k) (@star flatten))
+    => @[1 2 3] : [PVec Int]
+4: t3 with (@bcast 0) (@star flatten)  — `t3:0*`, unspellable today
+    => @[1 2 4] : [PVec Int]
+5: t3:0  (the broadcast alone)
+    => @[@[1 2] @[4]] : [PVec [PVec Int]]
+6: t3:0{0 1}*  (known-length ravel of the broadcast's result)
+    => @[1 2 4] : [PVec Int]
+7: values with (@bcast (@id)) (@star flatten)  — the ε kind, not yet in the union
+    => RAISED: select-step-kind: unknown select step kind: (@id)
