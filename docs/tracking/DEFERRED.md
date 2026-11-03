@@ -5554,7 +5554,8 @@ nowhere to live in an ordinal payload"). Two later facts move that verdict:
   shape this entry names; `$postfix-index`'s numeric payload is not involved.
 
 This was checked against the record and the reader code, not by building. Planned as P4e-2-E (CIU 6 D4 §5.P4e-2), each
-seat its own mint with its own corpus A/B. Whether `xs:0*` rides P4e-2 is with the owner.
+seat its own mint with its own corpus A/B. **Decided 2026-11-03 (owner): `xs:0*` rides P4e-2** ("Fine with the lean to
+include in Phase 4e-2"); CIU 6 D4 § P4e-2, *Decided at the checkpoint* (branch `776bd3c7`).
 
 ---
 
@@ -8660,7 +8661,9 @@ renders its suggestion on the user's branch and runs it, as the battery's remedy
 > - the ordinal-STEP family (`vhm.0*`, `y.a.0*`, `y{a.0*}`) wants Q_U46's refusal, with the remedy `x.N:*`;
 > - `vv:0*` wants its meaning, and its seat is DEFERRED 105's (re-derived there the same day).
 >
-> Both are planned as P4e-2-E (CIU 6 D4 §5.P4e-2). Whether the meaning half rides P4e-2 is with the owner.
+> Both are planned as P4e-2-E (CIU 6 D4 §5.P4e-2). **Decided 2026-11-03 (owner): the meaning half rides P4e-2** ("Fine
+> with the lean to include in Phase 4e-2"; branch `776bd3c7`). The findings are in
+> `docs/tracking/tracks/CIU/CIU_6/audits/2026-11-03_CIU_6_P4e-2_GROUNDING_AUDIT.md` (moved there from D4 the same day).
 
 ### 186. ⬜ ⭐ A MODULE ALREADY IN THE REGISTRY BRINGS NONE OF ITS REGISTRY STATE TO A LATER IMPORTER — the second `process-file` of a file in one process loses imported instances and constructors (`e1 : Bool defined.` → `No instance of Eq for Int`); `core::csv` elaborated after its closure was imported directly fails E2001
 
