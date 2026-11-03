@@ -1,0 +1,91 @@
+PERF-COUNTERS:{"cell_allocs":3401,"constraint_count":0,"constraint_retries":0,"elaborate_steps":349,"inert_dependent_skips":0,"infer_steps":501,"meta_created":60,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":1096,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":10,"solver_row_scans":10,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":79,"zonk_steps":534}
+PHASE-TIMINGS:{"elaborate_ms":2,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":72,"atms_nogood_count":4,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":69,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: values : [PVec [PVec Int]] defined.
+1: t3 : [PVec [PVec [PVec Int]]] defined.
+2: mh : {:a [PVec Int] :b [PVec Int]} defined.
+3: mm : {:a {:x Int} :b {:y Int}} defined.
+4: groups : [PVec [PVec {:name String}]] defined.
+5: pr : ⟨{:x Int} {:y Int}⟩ defined.
+6: hv : ⟨{:x Int} {:x String}⟩ defined.
+7: recs : [PVec {:k [PVec Int]}] defined.
+8: rec : {:k [PVec [PVec Int]]} defined.
+9: y : {:a [PVec [PVec [PVec Int]]]} defined.
+10: take1 : [PVec Int] -> Nat defined.
+11: pk : _ defined.
+12: pj : _ defined.
+13: @[1 2 3 4 5 6 7 8 9] : [PVec Int]
+14: @[1 2 3 4 5 6 7 8 9] : [PVec Int]
+15: ERROR: select: `*_` — `*_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `⟨[PVec Int] [PVec Int] [PVec Int]⟩`): there is nothing to prefix with. Bare `*` joins these contents directly
+16: ERROR: select: `*-_` — `*-_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `⟨[PVec Int] [PVec Int] [PVec Int]⟩`): there is nothing to prefix with. Bare `*-` joins these contents directly
+17: @[@[1 2] @[3] @[4] @[5 6]] : [PVec [PVec Int]]
+18: @[@[1 2] @[3] @[4] @[5 6]] : [PVec [PVec Int]]
+19: ERROR: select: `*_` — `*_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `⟨[PVec [PVec Int]] [PVec [PVec Int]]⟩`): there is nothing to prefix with. Bare `*` joins these contents directly
+20: ERROR: select: `*-_` — `*-_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `⟨[PVec [PVec Int]] [PVec [PVec Int]]⟩`): there is nothing to prefix with. Bare `*-` joins these contents directly
+21: @[{:name "a"} {:name "b"} {:name "c"}] : [PVec {:name String}]
+22: @[{:name "a"} {:name "b"} {:name "c"}] : [PVec {:name String}]
+23: ERROR: select: `*_` — `*_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `⟨[PVec {:name String}] [PVec {:name String}]⟩`): there is nothing to prefix with. Bare `*` joins these contents directly
+24: ERROR: select: `*-_` — `*-_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `⟨[PVec {:name String}] [PVec {:name String}]⟩`): there is nothing to prefix with. Bare `*-` joins these contents directly
+25: @[1 2 3] : [PVec Int]
+26: @[1 2 3] : [PVec Int]
+27: ERROR: select: `*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:a [PVec Int] :b [PVec Int]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+28: ERROR: select: `*-_` — `*-_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:a [PVec Int] :b [PVec Int]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*-`
+29: {:y 2, :x 1} : {:x Int :y Int}
+30: {:y 2, :x 1} : {:x Int :y Int}
+31: {:a-x 1, :b-y 2} : {:a-x Int :b-y Int}
+32: {:a-x 1, :b-y 2} : {:a-x Int :b-y Int}
+33: {:y 2, :x 1} : {:x Int :y Int}
+34: {:y 2, :x 1} : {:x Int :y Int}
+35: ERROR: select: `*_` — `*_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `⟨{:x Int} {:y Int}⟩`): there is nothing to prefix with. Bare `*` joins these contents directly
+36: ERROR: select: `*-_` — `*-_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `⟨{:x Int} {:y Int}⟩`): there is nothing to prefix with. Bare `*-` joins these contents directly
+37: ERROR: select: `*` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `⟨{:x Int} {:x String}⟩`). Star a narrower layer, or select the colliding fields as separate branches
+38: ERROR: select: `*-` — `*-` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `⟨{:x Int} {:x String}⟩`). Star a narrower layer, or select the colliding fields as separate branches
+39: ERROR: select: `*_` — `*_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `⟨{:x Int} {:x String}⟩`): there is nothing to prefix with. Bare `*` joins these contents directly
+40: ERROR: select: `*-_` — `*-_` prefixes each lifted field with the key its content sat under, and this layer's contents sit at POSITIONS, not keys (layer `⟨{:x Int} {:x String}⟩`): there is nothing to prefix with. Bare `*-` joins these contents directly
+41: ERROR: select: `0*` — `*` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b*}`), or select the element first and flatten separately
+42: ERROR: `*` (flatten) applies to a SELECTION step — there is no selection to its left here. Write it after a path or block access, e.g. `xs:{a}*` or `cfg{a}*`; a bare `*` between values is multiplication, and a spaced `*` after a value is the operator
+43: ERROR: Could not infer type
+44: ERROR: solve: values is bound as a value, not a relation — application is written [values …]; parens make a relational goal (define a relation with defr)
+45: @[@[1] @[2]] : [PVec [PVec Int]]
+46: @[1 2] : [PVec Int]
+47: @[1 2 3] : [PVec Int]
+48: {:k @[1 2 3]} : {:k [PVec Int]}
+49: {:a @[1 2]} : {:a [PVec Int]}
+50: @[{:a "x", :b unknown} {:a unknown, :b unknown} {:a "z", :b "w"}] : [PVec {:a String :b String}]
+51: @[{:a "x", :b unknown} {:a "z", :b "w"}] : [PVec {:a String :b String}]
+52: @[1 2 4] : [PVec Int]
+53: @[1 2 3] : [PVec Int]
+54: @[1 2 3] : [PVec Int]
+55: ERROR: Unbound variable
+56: ERROR: Unbound variable
+57: ERROR: broadcast `.**` was retired — its replacement is `:*` (e.g. `xs:*`)
+58: ERROR: Unbound variable
+59: ERROR: Unbound variable
+60: ERROR: Unbound variable
+61: ERROR: Unbound variable
+62: ERROR: Unbound variable
+63: ERROR: Unbound variable
+64: ERROR: Unbound variable
+65: ERROR: block keys are written bare — `x{}`, not `x{:}`
+66: ERROR: block keys are written bare — `x{}`, not `x{:}`
+67: ERROR: Unbound variable
+68: ERROR: Unbound variable
+69: ERROR: stray `.` in a select block — write the path with no spaces (`server.host`)
+70: ERROR: Unbound variable
+71: ERROR: Unbound variable
+72: ERROR: Too many arguments to 'p4e2::take1'
+73: ERROR: Unbound variable
+74: ERROR: Unbound variable
+75: ERROR: Empty type segment in arrow type
+76: ERROR: Type mismatch
+77: ERROR: Unbound variable
+78: ERROR: Map literal requires an even number of elements (key-value pairs)
+79: @[1 2 3 4 5 6] : [PVec Int]
+80: 1 : Int
+81: @[1 2] : ⟨Int Int⟩
+82: 1 : Int
+83: @["a" "b" "c"] : [PVec String]
+84: @[1 2 4] : [PVec Int]
+
+--- 42 errors ---
