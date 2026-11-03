@@ -658,3 +658,21 @@ are in [`../README.md`](../README.md).
   - My first D4 draft double-unescaped braces and printed `{:m {:x Int} :n {:y Int}`. A brace-balance check
     caught it before the commit, and the quoted values were then checked against the dump.
 - **Next**: item 4. Merge main in (`--no-commit`, gated), run the full suite, then the checkpoint merge to main.
+
+### 1b-vi close item 4 — main merged in, the full suite gate: 10 431 / 502 all pass, exactly as predicted — `a28d648c` (2026-11-02)
+- **What**: `git merge --no-ff --no-commit main`, covering 61 commits since `ab41836c`.
+  - They are docs and registers, the BSP-LE series move (comment-path rewrites in `decision-cell.rkt`, two micro
+    benchmarks and one example), and PAR 4's O-16 probe.
+  - No file changed on both sides. The staged set equals main plus exactly the branch's files, and the merge left
+    the branch's files untouched.
+- **Prediction before the run**: main's code gate (`83fe4fb4`, 10 426 / 502, carried over by every later
+  checkpoint) plus `test-path-selection` 581 → 582, plus `test-path-selection-acceptance` 114 → 118 (the acceptance
+  file's M18; its test file is unchanged) = 10 431 / 502.
+- **Gate**:
+  - `--all --force-rerun`: **10 431 tests, 502 files, all pass**, 34 s wall with 18 workers (80.5 s summed per
+    file). Reconciled file by file against the `9d0dea51` record: exactly the two predicted files differ.
+  - Battery 702 / 702; `run-file --check` 116 / 116.
+  - Tree-sitter corpus gate: PASS at 75.
+  - `.zo` fingerprints of four modules neither side changed match main's checkout.
+- **Next**: the checkpoint merge to main, from a throwaway worktree. The merge tree must equal this tip's tree. Then
+  the DEFERRED citations on main move from "reaches main at the checkpoint" to the checkpoint's hash.
