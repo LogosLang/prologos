@@ -693,3 +693,30 @@ are in [`../README.md`](../README.md).
 - **Next**: P4e-2, which builds J: `x:*`, `.*` as a guided refusal naming `x:*`, the near-miss messages and the
   `x{a:*}` waypoint (JD-2…4), and DEFERRED 185's reader seats. It opens with a grounding audit. After it, the rest of
   P4e (transpose, disclose, DEFERRED 63, keyword projection) is walked through with the owner.
+
+### P4e-2 OPENED — ravel `x:*` (Q_U63 = J): design target, mini-audit RA-1…13, the sub-slice plan; one scope question to the owner — `5876569b` (2026-11-03)
+- **What**: per the Implementation Protocol's per-phase steps 1–2, the mini-design and the mini-audit are written into D4
+  [§5.P4e-2](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-2), not into a separate audit file (the protocol: "Not in
+  dailies, not in separate per-phase audit files"; the 1b-vi audit file predates my reading of that line). Probes at
+  `5876569b`: `probe-p4e2-e` (60 results), `reader-dump` (68 spellings), `inject` (IR injection), `census-p4e2` (power-checked).
+- **Why it is small**: J needs no new rule. The keyed twin `values:k*` already carries every continuation J needs (RA-2). The
+  reader seat is a third case of the `:` gate's positional rule (RA-1), and ε inside `(@bcast ε)` reuses the broadcast's whole
+  container dispatch (RA-3). The "retirement inventory" is empty: 0 production / owner-WIP hits and, of 54 test lines any
+  pattern hits, 0 expression-position pins (RA-4).
+- **Surprise / correction**:
+  - **DEFERRED 185's addendum misclassified `vv:0*`.** It listed `vv:0*` among the spellings that "missed" Q_U46's refusal. By
+    Q_U46 a broadcast contributes a layer, so `t3:0*` has a meaning, and the twins already compute it: the injected
+    `(@bcast 0) (@star flatten)` gives `@[1 2 4]` = `t3:0{0 1}*` (RA-7). Corrected on main.
+  - **DEFERRED 105's ⛔ verdict re-derived** (RA-8): `x.0*` now wants a refusal (Q_U46 postdates 105), and `xs:0*`'s star can ride
+    the broadcast keyword payload like `:k*`. Conjecture until built.
+  - **The fact row is the one silent position** of J's 3 → 1 item-count change (RA-9): today `|| "x" values:*` splays into
+    3 rows; after the mint it holds one `unknown` term, exactly what the keyed twin `values:k` does today. DEFERRED 192's
+    fix covers both.
+  - **The `.**` message has offered `xs:*` since `25f3f22d`**, a template accident (RA-5).
+  - **My first census was wrong twice, and the power checks caught it**: `|` served as both field separator and ERE
+    alternation, and a brace pattern accepted `x{a}:*`. A by-eye classification of the test hits double-counted lines
+    (25/7/5/19 → mechanically 21 regex, 8 comment, 1 test name, 6 path-literal, 18 selection); the classifier is now in
+    the script.
+  - **My first injection run was misaligned by one** (the `ns` form is consumed); discarded and re-run.
+- **Next**: the dialogue checkpoint. One scope question (D4 § P4e-2, *Open at this checkpoint*): does E(ii), `xs:0*` as a
+  meaning (reopening DEFERRED 105), ride P4e-2 or wait behind a waypoint naming `xs:0:*`? Lean: ride. Then P4e-2-A, the pins.
