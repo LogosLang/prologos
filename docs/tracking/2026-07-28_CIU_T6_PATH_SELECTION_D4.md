@@ -12056,7 +12056,7 @@ moves, `walk-to-leaf` is the abort it lands in.
 | **1b-v-B2b — the reader MINT** ✅ `940c9c88` | Widen the gate's lexeme conjunct to EXACT table membership; route the emit through the same lookup ([DEFERRED 129](DEFERRED.md)); [DEFERRED 130](DEFERRED.md)'s two refusal messages ride along. **MINIMAL by ruling** — reader-only, so the three live bands cannot regress. Preconditions the grounding found: the battery's `p4e-star-type` / `p4e-last-star-type` helpers are exact-lexeme `"*"` and structurally blind to `*_` ([DEFERRED 133](DEFERRED.md)), and the DEFERRED-108 snapshot needs a deliberate re-baseline. | Scoped by [Q_U53](#q-u53) part 1: the miss-case is ruled out at the GATE, not handled at the emit. Record: [§5.P4e-1b-v-B2b](#p4e-1b-v-b2b) · shipped: [§5.P4e-1b-v-B2b-shipped](#p4e-1b-v-b2b-shipped) |
 | **1b-v-C — the FOLD** ✅ `24fc1be4` (pins) · `a492bbb7` | `split-star-lexeme`'s suffix dispatch AND the printer's cont→lexeme delegate to the family table, so the four bands and every star label share ONE semantic authority; site 3 (`form-deps`) DERIVED, site 4 (the matrix) PINNED. Behaviour-preserving on every input. | [Q_U53](#q-u53) part 2 + [Q_U54](#q-u54) (the printer folds too; site 3 derived, site 4 pinned). Record: [§5.P4e-1b-v-C](#p4e-1b-v-c) |
 | **1b-vi — the star-COLLAPSE slice** 🔄 (**opened 2026-10-13**, CIU 6 branch `ciu6-path-selection`; grounding: [audit](tracks/CIU/CIU_6/2026-10-13_CIU_6_P4e-1b-vi_GROUNDING_AUDIT.md); [Q_U55](#q-u55) ✅ A — refuse, `^-` aligned; [Q_U56](#q-u56) ✅ (a) — `*->` guided in selection territory; [Q_U57](#q-u57) ✅ P — `*-_` names the whole collapsed path; [Q_U58](#q-u58) ✅ M + slicing A→B→C→D; **implementing — tracker [§5.P4e-1b-vi](#p4e-1b-vi)**) | **`*-`** ([Q_U48](#q-u48)) · the **`*-_`** decision · the cont-axis **totality dispatcher** · plus TWO owed rulings [Q_U52](#q-u52) surfaced: what "total collapse" does to a **renamed** ancestor (`^p` and `^` are mutually exclusive spellings of one step), and the **`*->` token boundary** (`>` breaks the identifier, so `x{a*-> b}` would become a `*-` step plus a stray `>`). | Split from 1b-v because those two are RULINGS, not implementation, and because `*-` is the spelling that forces the totality work. ⭐ Sequenced AFTER the fold [owner] so ruling `*-` costs a table row, not four edits. |
-| **P4e-2** | the `.*` retirement inventory (`.*` → a guided refusal naming `x:*`, JD-1) + ravel as **`x:*`** ([Q_U63](#q-u63) = J): the `:*` production, ε as `(@bcast ε)`, the JD-2…4 messages and waypoint, the laws; plus DEFERRED 185's reader seats | ⚠ RE-SCOPED 2026-11-02 by Q_U63 · 🔄 **OPENED 2026-11-03**: design target + sub-slice plan A–F in [§5.P4e-2](#p4e-2); mini-audit RA-1…13 in [its own document](tracks/CIU/CIU_6/audits/2026-11-03_CIU_6_P4e-2_GROUNDING_AUDIT.md); E(ii) (`xs:0*` as a meaning) decided to ride, owner 2026-11-03 |
+| **P4e-2** | the `.*` retirement inventory (`.*` → a guided refusal naming `x:*`, JD-1) + ravel as **`x:*`** ([Q_U63](#q-u63) = J): the `:*` production, ε as `(@bcast ε)`, the JD-2…4 messages and waypoint, the laws; plus DEFERRED 185's reader seats | ⚠ RE-SCOPED 2026-11-02 by Q_U63 · 🔄 **OPENED 2026-11-03**: design target + sub-slice plan A–F in [§5.P4e-2](#p4e-2); mini-audit RA-1…13 in [its own document](tracks/CIU/CIU_6/audits/2026-11-03_CIU_6_P4e-2_GROUNDING_AUDIT.md); E(ii) (`xs:0*` as a meaning) decided to ride, owner 2026-11-03; **A ✅ `8ecb7cbc`** (the stage table, 585) |
 
 **⚠ TWO HOLES C2 OPENS, AND THEY ARE C2's TO CLOSE** — both found by the
 grounding audit, neither in any prior record:
@@ -12665,6 +12665,25 @@ says why not.
   `x:*` ≡ `x{0 … n−1}*`; a Map's values `m:*` ≡ `m{k₁ … kₙ}*` and `*_`; naturality `x:*:k` ≡ `x{0 … n−1}*:k`; JD-2
   `x:*-` ≡ `x:*`, `x:*-_` ≡ `x:*_`), each with a size pin predicted before the run; the near-miss, waypoint and remedy
   rows (expected text written from the decisions); the RA-9 position rows; the grammar's corpus trees.
+  **✅ 2026-11-03, `8ecb7cbc`** (test-path-selection 582→585). The table is in
+  [test-path-selection.rkt § D4.P4e-2](../../racket/prologos/tests/test-path-selection.rkt). It has:
+  - 38 hand rows: C 15, D 11, E 5, plus 7 controls;
+  - 28 generated law rows: `S:σ` ≡ `S{K}σ` over 7 carriers × the 4 star families, 14 of them equivalences and 14
+    refusals. Each refusal is pinned to its block form's measured REASON: contents at positions, a Map of vectors, or a
+    keywise collision (`research/P4e-2/probe-p4e2-grid.out`). The JD-2 laws are covered here, because each block form's
+    `*-` / `*-_` equals its `*` / `*_` (grid lines 13–40);
+  - B's 8 injection rows, plus a harness check in identity mode;
+  - C's parity law over a NAMED domain (37 rows, empty before C).
+
+  **Power.** 8 mutants, each failing only its own rows. Stage B → the 8 injection rows. Stage C → 56 = 15 + 28 + 8 + 4
+  remedies + parity. A wrong PRE → 1. A wrong reason → 1. A dropped collision → 1 + the size pin. A blind harness → 8.
+  PRE = TARGET → 3 test cases. Two predictions were wrong. My count of the hand rows (35 vs 38) had double-counted two
+  remedy lists by regex, and was corrected by id before the first run. M8's 1 → 3 was corrected before its run.
+
+  **Departure.** The grammar's corpus trees move to C, with the production. Tree-sitter's corpus runner has no staged-red
+  mode, so a corpus tree written ahead of its production would fail the editor suite rather than pin a target.
+  **Measured while pinning.** `values :k` is `Could not infer type` today (the K-kwarg control). `t3:**` is
+  `Unbound variable`, the same as `values:*`, so JD-4's `**` row starts from the generic failure.
 - **P4e-2-B — ε, inert.** `(@id)` joins the closed union with its arms at every consumer (RA-3); one constructor builds
   `(@bcast (@id))`, and a bare `(@id)` is refused. Reachable only from injection rows. Pins: the identity at both twins,
   and the injected laws. A mutation per twin seat.

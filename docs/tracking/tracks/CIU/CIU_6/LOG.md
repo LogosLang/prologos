@@ -738,3 +738,19 @@ are in [`../README.md`](../README.md).
 - **Decision**: E(ii) DECIDED — `xs:0*` gets its meaning in P4e-2, reopening DEFERRED 105 for that seat as its own mint with
   its own corpus A/B (D4 § P4e-2, *Decided at the checkpoint*).
 - **Next**: P4e-2-A, the pins, all red.
+
+### P4e-2-A ✅ — the ravel stage table, pinned with no compiler change — `8ecb7cbc` (2026-11-03)
+- **What**: the table, in `test-path-selection.rkt` § D4.P4e-2.
+  - 38 hand rows: C 15, D 11, E 5, plus 7 controls.
+  - 28 generated laws: `S:σ` ≡ `S{K}σ`, or the block form's measured refusal reason (`research/P4e-2/probe-p4e2-grid`).
+  - B's 8 injection rows, with an identity-mode harness check.
+  - C's parity law over a named domain.
+  - The 1b-vi runners now wrap the shared `fixture-batch` / `fixture-parse-forms`.
+- **Power**: 8 mutants, each failing only its own rows (D4 §5.P4e-2, plan A).
+  - Two predictions were corrected before their runs: the hand-row count 35 → 38, and M8's 1 → 3.
+  - M3's count (80) was taken after its run; only its composition had been predicted.
+- **Departure**: the grammar's corpus trees move to C, with the production. Tree-sitter's corpus runner has no staged-red
+  mode.
+- **Battery**: 585 + 118 + 2 = 705, all pass.
+- **Next**: P4e-2-B, ε inert — `(@id)` in the closed union, its arms at every consumer, one constructor, and a bare
+  `(@id)` refused.
