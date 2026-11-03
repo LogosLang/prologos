@@ -5543,6 +5543,19 @@ states "every star that now reaches the parser takes a guided not-yet", which is
 false for slice A's carriers too (only the FUSED identifier band gets the guided
 message).
 
+**Addendum 2026-11-03 (CIU 6 P4e-2 mini-audit RA-8; branch `ciu6-path-selection` @ `71c8dbfc`): the verdict re-derived at
+HEAD. CONJECTURE until built.** This entry blocks `x.0*` / `xs:0*` on the star's datum representation ("the star has
+nowhere to live in an ordinal payload"). Two later facts move that verdict:
+- **`x.0*`** stars an ordinal STEP. By CIU 6 Q_U46 (2026-08-12, two days after this entry) a step contributes no layer, so
+  the shape wants Q_U46's refusal, not a meaning. A reader marker that collapses it to ONE loud item is enough, so no star
+  representation is needed.
+- **`xs:0*`** stars a broadcast, which does have a meaning (DEFERRED 185's 2026-11-03 correction; the twins compute it).
+  Its star can ride the broadcast's KEYWORD payload as `:k*`'s does. `:k*` is one fused symbol, the count-preserving
+  shape this entry names; `$postfix-index`'s numeric payload is not involved.
+
+This was checked against the record and the reader code, not by building. Planned as P4e-2-E (CIU 6 D4 §5.P4e-2), each
+seat its own mint with its own corpus A/B. Whether `xs:0*` rides P4e-2 is with the owner.
+
 ---
 
 ### 106. ⬜ The `let` NESTED-SHORTHAND binding value leaks a RAW SENTINEL to the user — pre-existing, and it BOUNDS Q_U35's blast-radius argument
@@ -8613,7 +8626,8 @@ renders its suggestion on the user's branch and runs it, as the battery's remedy
 >   an ordinal a guided error" held for ONE spelling, the bracket `y{a[0]*}`. The rest missed it:
 >   - `vhm{0*}` / `vhm{0.{0*}}` → "`*` is postfix";
 >   - `y{a.0*}` → "stray `.`";
->   - `vhm.0*`, `vv:0*`, `y.a.0*` → a bare "Unbound variable".
+>   - `vhm.0*`, `vv:0*`, `y.a.0*` → a bare "Unbound variable". ⚠ `vv:0*` does not belong in this list: see the
+>     2026-11-03 correction below.
 >
 >   SB-4 is wider too: "keep a key before each star" is unspellable on `ot2{0.a* 1.a}` (no dissolved key).
 > - **Fixed:**
@@ -8635,6 +8649,18 @@ renders its suggestion on the user's branch and runs it, as the battery's remedy
 > **Update (2026-11-02):** CIU 6 Q_U63 is DECIDED J. Ravel is `x:*` (the identity broadcast, then the join), so
 > "flatten element N" is spelled `x.N:*`. The refusal's remedy text changes to it when P4e-2 builds `:*`; a remedy
 > is offered only once it runs. P4e-2 is re-scoped to carry this entry's reader seats as well (CIU 6 D4, P4e-2 row).
+>
+> **Correction (2026-11-03, CIU 6 P4e-2 mini-audit RA-7; branch `ciu6-path-selection` @ `71c8dbfc`, probes `5876569b`).**
+> The 2026-10-19 addendum lists `vv:0*` among the spellings that "missed" Q_U46's refusal. That is wrong for `vv:0*`. By
+> Q_U46 the star deletes the layer its preceding step made, and a broadcast makes one. So `xs:0*` joins each element's
+> element 0: the ordinal-sort sibling of `xs:k*`, which Q_U27 and Q_U30 put in scope as a meaning. The twins already
+> compute it. The injected `(@bcast 0) (@star flatten)` on `t3 := @[@[@[1 2] @[3]] @[@[4] @[5 6]]]` gives `@[1 2 4] : [PVec Int]`
+> (`docs/tracking/tracks/CIU/CIU_6/research/P4e-2/inject.out` `4:`), equal to today's `t3:0{0 1}*` (`probe-p4e2-e.out` `36:`).
+> This entry's reader seats therefore split in two:
+> - the ordinal-STEP family (`vhm.0*`, `y.a.0*`, `y{a.0*}`) wants Q_U46's refusal, with the remedy `x.N:*`;
+> - `vv:0*` wants its meaning, and its seat is DEFERRED 105's (re-derived there the same day).
+>
+> Both are planned as P4e-2-E (CIU 6 D4 §5.P4e-2). Whether the meaning half rides P4e-2 is with the owner.
 
 ### 186. ⬜ ⭐ A MODULE ALREADY IN THE REGISTRY BRINGS NONE OF ITS REGISTRY STATE TO A LATER IMPORTER — the second `process-file` of a file in one process loses imported instances and constructors (`e1 : Bool defined.` → `No instance of Eq for Int`); `core::csv` elaborated after its closure was imported directly fails E2001
 
@@ -8968,6 +8994,17 @@ gate is PAR 4's file, so it is requested by note.
   receive one (`vg-grid-validate.out` `13:`, `vg-grid-def.out` `15:`). The fix must refuse under a schema as well.
 - A name that DOES resolve, a constructor, is stored exactly like this entry's `y`: filed as 195. The fix has to
   resolve constructors before it can refuse unresolved names. (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)
+
+**Addendum 2026-11-03 (CIU 6 P4e-2 mini-audit RA-9; branch `ciu6-path-selection` @ `71c8dbfc`, probes `5876569b`;
+reaches main at the next CIU 6 checkpoint).** Ravel `x:*` (CIU 6 Q_U63 = J) turns a glued `values:*` from three datum items
+into one. A `||` row is the one position where that change is silent:
+- today `defr pr1 [?a ?b] || "x" values:* / "z" "w"` registers THREE rows, `{:a "x", :b unknown} {:a unknown, :b unknown}
+  {:a "z", :b "w"}` (`docs/tracking/tracks/CIU/CIU_6/research/P4e-2/probe-p4e2-e.out` `50:`; ground control `47:`);
+- after the mint the row holds ONE non-ground term, which is what the keyed broadcast `values:k` does today (`52:`: two
+  rows, `:b unknown`).
+
+This entry's fix (refuse a non-ground term at registration) covers J's term and the keyed twin's alike. CIU 6 adds no
+hazard class here and needs nothing new from this entry.
 
 ### 193. ⬜ THE WS READER IS STILL QUADRATIC IN FILE LENGTH — `pos->line-col` (`parse-reader.rkt:2500-2506`) rescans the source from position 0 for every token: a 10 000-row fact block spends 85 % of its load there, and a 100 000-row block takes 468 s to load while its `defr` command takes 0.9 s
 
