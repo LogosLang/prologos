@@ -19,7 +19,7 @@ max_unparsed_pct=1.21
 # ERROR swallows everything inside it. Measured 2026-08-14 (§9.7): a change that
 # moved ERROR 3054 -> 2743 simultaneously pushed MISSING 74 -> 110, and only the
 # MISSING delta showed it.
-max_missing=71
+max_missing=75
 
 # Ratcheted 2026-08-14 by the comment-scanner fix (EHP P2): the scanner no
 # longer consumes comment-only lines as part of its lookahead token, so those
@@ -58,3 +58,12 @@ max_missing=71
 # angle open — settled by the INFIX_CMP scanner token, externals preempting
 # the internal lexer — and fn_body's whitelist inventing an identifier rather
 # than admitting the group). foray E122 -> E87; four files to absolute clean.
+
+# RAISED 2026-11-02, 71 -> 75 — a deliberate act, by owner decision (CIU 6 1b-vi close,
+# D4 § close-2, "OK with lean on (a)"). The +4 are NOT a grammar regression: they are
+# the CIU 6 acceptance file's M18 lines (`guilds{0.{server^.ssl*}}`, `guild-pair{0.{…} 1.{…}}`,
+# L638 / L642 x2 / L650, added at 3fcb720a), where the grammar has no ORDINAL-HEADED select
+# branch and invents an identifier before `.{`. The gap dates from P3c; M18 measured it.
+# Every rule tried for it churns foray.prologos (a 251-line ERROR from its invalid L957),
+# so it is DEFERRED 205. ⚠ LOWER THIS BACK TO 71 (or below) WHEN 205 LANDS — a ratchet
+# loosened for a known gap is how drift starts, which is why the reason names the entry.
