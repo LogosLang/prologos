@@ -3901,8 +3901,12 @@
     "flatten_step": {
       "type": "IMMEDIATE_TOKEN",
       "content": {
-        "type": "STRING",
-        "value": "*"
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "\\*[-_]*"
+        }
       }
     },
     "select_block": {

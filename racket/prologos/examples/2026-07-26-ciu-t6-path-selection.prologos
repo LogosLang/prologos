@@ -632,6 +632,24 @@ def guild-pair := @[app-config app-config]
 guild-pair{0.server^.ssl^ 1.server^.ssl^}
 ;;117=> @[{:cert-path "/etc/ssl/cert.pem", :enabled true} {:cert-path "/etc/ssl/cert.pem", :enabled true}] : ⟨{:cert-path String :enabled Bool} {:cert-path String :enabled Bool}⟩
 
+;; M18 — braces scope a landing [Q_U62, decided B]: a star INSIDE a sub-block after
+;; an ordinal lands in the sub-block, which is the element's ONE tuple component.
+;; Beside M16's `guilds{0.server^.ssl*}` (the fields, at this level):
+guilds{0.{server^.ssl*}}
+;;118=> @[{:cert-path "/etc/ssl/cert.pem", :enabled true}] : ⟨{:cert-path String :enabled Bool}⟩
+
+;; …so each element can be its own record, even records of different shapes
+guild-pair{0.{server^.ssl* name} 1.{server^.ssl*}}
+;;119=> @[{:cert-path "/etc/ssl/cert.pem", :enabled true, :name "GuildHall"} {:cert-path "/etc/ssl/cert.pem", :enabled true}] : ⟨{:cert-path String :enabled Bool :name String} {:cert-path String :enabled Bool}⟩
+
+;; when every element's sub-block is the same, it is the broadcast over the ordinals
+guild-pair{0 1}:{server^.ssl* name}
+;;120=> @[{:cert-path "/etc/ssl/cert.pem", :enabled true, :name "GuildHall"} {:cert-path "/etc/ssl/cert.pem", :enabled true, :name "GuildHall"}] : ⟨{:cert-path String :enabled Bool :name String} {:cert-path String :enabled Bool :name String}⟩
+
+;; and a star AFTER the braces is the ordinal branch's own: it passes through (M16)
+guild-pair{0.{server^.ssl}*}
+;;121=> {:cert-path "/etc/ssl/cert.pem", :enabled true} : {:cert-path String :enabled Bool}
+
 ;; —— §M edge cases: REFUSALS (commented — this file runs with 0 errors; each is
 ;; pinned live in tests/test-path-selection.rkt's 1b-vi stage table). Messages
 ;; MEASURED on this file's subjects (probe: accept-ref, 2026-10-14). ——
@@ -669,3 +687,15 @@ guild-pair{0.server^.ssl^ 1.server^.ssl^}
 ;;   tell elements apart either: an ordinal contributes no name to its prefix. To
 ;;   keep each element as its own tuple component, end EVERY branch here with `^`
 ;;   instead of its star (`x{0.a^.b^ 1.a^.b^}`).   (M17; re-measured at the 1b-vi verify)
+;;
+;; With SEVERAL branches per element the `^` remedy would keep each BRANCH apart, so
+;; the refusal offers the grouping instead (Q_U62 = B, 1b-vi-F):
+;; guild-pair{0.server^.ssl* 0.database* 1.server^.ssl* 1.database*}
+;;   ERROR: duplicate output key `:cert-path` in the select block — … Dropping it on
+;;   every branch here gives a tuple of the branches, one component each. … To keep
+;;   each element as its own tuple component, group each element's branches in ONE
+;;   sub-block after its ordinal (`x{0.{a^.b* c^.d*} 1.{a^.b* c^.d*}}`): inside the
+;;   braces a star lands in that element's record (Q_U62), so keys collide only
+;;   within one element.  The grouping, run:
+;;   guild-pair{0.{server^.ssl* database*} 1.{server^.ssl* database*}}
+;;   => @[{:cert-path …, :enabled true, :url …, :pool-size 10} {… the same}]   (M18)

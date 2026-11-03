@@ -77,3 +77,102 @@ def b := admins :name
           (expression
             (atom
               (keyword_literal))))))))
+
+===
+Star family at the closer seat: `*_` is ONE flatten step (DEFERRED 144)
+===
+
+def b := cfg{db}*_
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (path_expr
+          base: (identifier)
+          (path_step
+            (select_block
+              (identifier)))
+          (path_step
+            (flatten_step)))))))
+
+===
+Star family at the closer seat: `*-` is ONE flatten step, not `*` then the operator `-`
+===
+
+def c := cfg{db}*-
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (path_expr
+          base: (identifier)
+          (path_step
+            (select_block
+              (identifier)))
+          (path_step
+            (flatten_step)))))))
+
+===
+Star family: `*-_` after a broadcast and after a group
+===
+
+def d := xs:tags*-_
+def e := [g x]*-
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (path_expr
+          base: (identifier)
+          (path_step
+            (broadcast_step
+              step: (identifier)))
+          (path_step
+            (flatten_step))))))
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (path_expr
+          base: (grouped_expr
+            (expression
+              (application
+                (expression
+                  (atom
+                    (identifier)))
+                (expression
+                  (atom
+                    (identifier))))))
+          (path_step
+            (flatten_step)))))))
+
+===
+A decimal in a block stays ONE number: `{0.5}`
+===
+
+def k := m{0.5}
+
+---
+
+(source_file
+  (top_level
+    (def_form
+      name: (identifier)
+      value: (expression
+        (path_expr
+          base: (identifier)
+          (path_step
+            (select_block
+              (number))))))))

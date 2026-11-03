@@ -408,3 +408,271 @@ are in [`../README.md`](../README.md).
   main's DEFERRED 170 fix is now merged, and this gate ran the file sharded ×5 green.
 - **Next**: the checkpoint merge to main; the DEFERRED "on the branch" passages flipped to the merge hash; dailies.
   Q_U62 stays pending (owner).
+
+### CIU 6 checkpoint merged to main: `83fe4fb4` — 1b-vi through its verify (2026-10-18)
+- **Why / decision**: the owner — *"Let's proceed."* — the checkpoint closing the verify → gate → merge plan.
+- **What shipped**: `83fe4fb4` on main (parents `74f70310` main, `32fe9c52` this branch), made in a throwaway
+  `--detach` worktree and fast-forwarded into main's checkout (main's 16 owner-WIP files untouched: no overlap with the
+  branch's 99). Its tree equals the gated tree (`b630da40` both), so the gate above IS this merge's gate; the clean
+  merge tree, built with the limit (`reduction_rkt.zo` fingerprint equal to this branch's), ran the merged test files
+  plus main's temp-file guard targeted: **697 / 697**, acceptance **112 / 112**. No instrumentation to triage (no
+  tools, 0 environment knobs; the census finds main's own opt-in). The branch fast-forwarded to the merge. On main:
+  the five DEFERRED passages saying "until the next checkpoint merge" (167 ×2, 168, 179, 180) and two probe locations
+  now cite `83fe4fb4`; the dailies carry the STATE line and a pointer.
+- **Surprise / correction**: none beyond the gate entry's.
+- **Next**: [Q_U62](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) (an ordinal head then a sub-block; lean
+  S+, medium) — pending, owner. Then the 1b-vi close: the stage table's `pre` column and `1bvi-stage` retire. Then
+  P4e-2.
+
+### Q_U62 opened with worked examples; my lean corrected S+ → B; SB-1…3 found (2026-10-18)
+- **Why / decision**: the owner — *"Let's open what Q_U62 is with many, multiple worked examples … walk through the
+  design space in played out examples."* Still PENDING; nothing decided.
+- **What shipped**: probe-1bvi-ae (74 lines, nine families: the VS-3 shapes, key-head transparency, star-free ordinal
+  sub-blocks, factored vs unfactored, a realistic `fleet` subject, the bare-number control, every star family, the star
+  outside the braces, heterogeneous per-element records) and the
+  [Q_U62 ledger entry](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) rewritten around it: five options (B, S+,
+  S1, F, R), F refuted by measurement (factoring across an ordinal prefix is not a law), S1 and R rejected with reasons.
+  Every quoted value checked mechanically against its probe line (39 values, 0 mismatches; three seeded errors caught).
+- **Surprise / correction**: my posing lean (S+, medium; also in the checkpoint entry above) read Q_U47's remainder
+  ACROSS the sub-block. Q_U47 computes it in the star's own branch and Q_U49 splices into the ENCLOSING level — the
+  sub-block — so B is what the rules on record already say. New lean **B, medium-high**. And the measurement corrected a
+  second expectation: `fleet{0 1}:{…}` spells per-element records for a subset, so S+ loses only records of DIFFERENT
+  shapes per element (ae:67). Side findings: **SB-1** the dup refusal's "end EVERY branch with `^`" remedy is false when
+  an element has several branches (ae:71 — a 4-tuple of branches), a VF-3-class defect in my `0988a4f0`, its fix
+  depending on Q_U62; **SB-2** the all-ordinal L4 refusal omits the factored sub-block; **SB-3** `vhm{0.{0*}}` gets a
+  misleading "`*` is postfix" message (pre-existing).
+- **Next**: the owner's decision on Q_U62; then SB-1's fix under it.
+
+### Q_U62: owner lean B (slight); the joint lean critiqued — B's law measured unconditional, 98/98; decision next — `990fafb7` (2026-10-19)
+- **Why / decision**: the owner (2026-10-19 00:22) — *"I do think B has a slight lean than the S+ reading."* A lean, so
+  ledgered OWNER LEAN under critique; it agrees with mine, so the stance is joint and was critiqued as such
+  ([D4 Q_U62 critique](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62-critique), UC-1…9).
+- **What shipped**: probe-1bvi-af (generated, 102 pairs): `x{0.P.{X}}` ≡ `y{P.{X}}` WRAPPED holds on 98/98 comparable
+  pairs — six star families × 15 positions/assignments plus vector contents; 4 pairs refused identically on both sides.
+  The step-chain control fails the wrap where S passes, so the comparison discriminates. Under S+ (derived) the same
+  grid splits 26 / 72 — a two-case law. Critique: for B, UC-1 (the law) and UC-2 (spec §3.3/§7.5: honest nesting
+  "holds because branch count becomes runtime-known"); against, UC-3 (the silent surprise) and UC-4 (S's scope must
+  be stated); UC-5 weighs R, the monotone-migration hedge.
+- **Surprise / correction**: none against the record; my lean firms from medium-high to high.
+- **Next**: the owner's decision — B, or R as the waypoint. Then UC-7 (B as generated laws), UC-8 (SB-1/SB-2 under B),
+  UC-9 (S's scope in Q_U61 + a spec note).
+
+### Q_U62: R worked out beside B — each refused shape's two readings both spellable today (26/26 + 26/26); decision still next — `a593fdc6` (2026-10-19)
+- **Why / decision**: the owner (2026-10-19 01:11) — *"I'd have to see R worked out alongside B in multiple, clear,
+  worked examples to make a weigh-in on either. I don't have an intuition for what R is, otherwise."*
+- **What shipped**: probe-1bvi-ag (80 lines) and the ledger section
+  [R worked out beside B](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62-r): R defined as refusing exactly
+  where B and S+ disagree; eleven refused programs side by side (B's value; R's refusal; B's meaning and S+'s meaning,
+  each spelled under R and measured); over R's whole refused population in af's grid the one-component recipe
+  `x{N}:{P.{X}}` reproduces B 26/26 and the unfactored chains reproduce S+'s reading 26/26. R's message drafted
+  (proposed, not implemented); a migration table; R's costs; R2 rejected. 34 quoted values checked, 0 mismatches.
+- **Surprise / correction**: the measurement reframes the decision. On these shapes B makes `x{N.{X}}` a synonym for
+  `x{N}:{X}`, S+ makes it a synonym for the unfactored chains, and R leaves it unassigned. B's only extra
+  expressivity over R is records of different shapes per element (ae:67).
+- **Next**: the owner's decision — B, S+ or R.
+
+### Q_U62 DECIDED = B (braces scope a landing); the decision critiqued on the owner's four dimensions — `93f36b3a` (2026-10-19)
+- **Why / decision**: the owner (2026-10-19 01:33) — *"On the language design front, I want to balance ergonomics,
+  expressivity, composition, and correctness. I think I'm landing B still as well. Happy for a critique or pushback on
+  these dimensions and choices, but if B is clear on this, then let's go with that for now."*
+- **What shipped**: [the decision](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) and its critique
+  ([DC-1…7](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62-dc)), measured by probe-1bvi-ah: under B the
+  SPLICED reading is also factored, `fleet{0.{meta^.id net^.tls}*}` → `{:n 1, :port 443}` ≡ the unfactored chains
+  (DC-1: B's rule is one sentence — a star inside the braces lands in the element, a star after them escapes); L★
+  (`x{p* q*} ≡ x{p q}*`) holds at key heads and with a kept key but fails across an ordinal head's braces exactly where
+  B and S+ disagree (DC-2, a side condition for P5 → DEFERRED 115 addendum); `x{N.{X} M.{X}}` ≡ `x{N M}:{X}` (DC-3, a
+  normal-form question for P5, DC-7). Verdict: B is clear on all four dimensions.
+- **Surprise / correction**: DC-2 is a real cost I had not stated before measuring — B's star-position semantics is
+  exactly what breaks L★ at one shape. And DC-4 corrects a tempting overclaim: S+ would not be riskier to build (one
+  widened shared predicate); B's correctness edge is that it needs no rule. Process slip, caught before commit: a
+  scripted ledger edit truncated the D4 (−8 716 lines, uncommitted); restored from `1d254b21` and redone with a size
+  check.
+- **Next**: UC-7 (pin B as generated laws), UC-8 (SB-1/SB-2 under B), UC-9 (S's scope), the typing-core comment; DEFERRED
+  115 addendum + SB-3 filing on main.
+
+### P4e-1b-vi-F — Q_U62 = B pinned; SB-1 / SB-2's remedies under B — `3fcb720a` (2026-10-19)
+- **Why**: the owner decided B "for now". B was already the code's behaviour, so F makes it a
+  contract and corrects the two refusals whose remedies were false or missing under B (UC-7, UC-8, UC-9).
+- **What shipped**: [§1b-vi-F](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-f):
+  - 50 `sub-block` laws + 23 hand rows (stage F; size pin 129 / 194, predicted).
+  - The dup refusal no longer offers `^` where an element heads several branches. It kept the BRANCHES
+    apart: `fleet{0.meta^.id 0.net^.tls 1.meta^.id 1.net^.tls}` → a 4-tuple. It now offers grouping
+    each element's branches, only where that resolves the collision (pairwise-distinct ordinals).
+  - The all-ordinal L4 refusal offers grouping where the rests can be wrapped.
+  - S's scope is stated in Q_U61.
+  - Acceptance M18.
+  - Every remedy was run per family (`*`, `*_`, `*-`, `*-_`; probe-1bvi-ai, 40 lines).
+  - Battery + acceptance 701 / 701; run-file --check 116 / 116.
+  - Mutations F1–F7 each red on their own rows; S+ at either twin seat turns 64 / 63 red.
+- **Surprise**: SB-4, a pre-existing VF-3-class defect. On a vector-only path, the all-ordinal L4 refusal
+  offers two remedies that cannot be spelled there ("keep a key", and `vhm{0.{0}^ 0.{0}}` is a parse
+  error). It is filed with SB-3.
+- **Self-correction**: `'cross` was first written as "more than one ordinal", which would offer a grouping
+  that still collides (`fleet{0.meta^.id* 0.meta^.id* 1.meta^.id*}`). Tightened before the commit and
+  pinned (SB1-c1b, F3).
+- **Filed on main `e751736c`**: the DEFERRED 115 addendum (DC-2, L★'s side condition) and DEFERRED 185 (SB-3 + SB-4).
+- **Next**: the 1b-vi close (the `pre` column and `1bvi-stage` scaffolding retire), then P4e-2.
+
+### 1b-vi close, item 1: DEFERRED 185 (Q_U46's ordinal-star gap, one text; remedies the branch can spell) + a buried panic — `a9788c0a` · `55b7df16` (2026-10-19)
+- **Why**: the owner approved the close ("Ok to proceed on 1"), in four items: 185; the star family in the grammar
+  (144 / 179 / 180); retiring the stage scaffolding; the close note, suite and checkpoint.
+- **What shipped**: [§1b-vi CLOSE](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close):
+  - A star right after an ordinal head (`vhm{0*}`, `vhm{0.{0*}}`) now gets Q_U46's refusal from one
+    definition shared with typing.
+  - The all-ordinal L4 offers each remedy only where every passing head can spell it; otherwise
+    "drop each `*`", which runs.
+  - `ot2{2}*` no longer prints a runtime miss as a value (a panic subject propagates).
+  - Red steps were run against the OLD code; mutations G1–G4 and the panic arm each turned their own rows
+    red; 701 / 701.
+- **Surprise / correction**:
+  - 185 was wider than filed: one meaning had five messages, depending on spelling. My SB-3 sentence ("Q_U46's
+    gap 1 made a star after an ordinal a guided error; this spelling misses it") was written from the record:
+    only the bracket spelling reached it. Struck in the ledger.
+  - The reader seats (`vhm.0*`, `vv:0*`, `y.a.0*` → bare "Unbound variable"; `y{a.0*}` → "stray `.`") go to
+    P4e-2, which opens the same recognizer.
+  - The panic was found while measuring P4e-2's question, not by any 1b-vi row.
+- **Next**: item 2 (the grammar).
+
+### Q_U63 opened: does ravel `.*` add expressivity, or only notation? (PENDING) — docs commit on the branch (2026-10-19)
+- **Why**: the owner — *"On 2. I want to open up whether this syntax/spelling offers any true increase in
+  expressivity?"* (2026-10-19). Item 3 (the rest of P4e) is to be walked through together, later.
+- **What**: [Q_U63](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63), probes `research/P4e-2/probe-p4e2-a`
+  / `-b`.
+  - In the whole language ravel is notation (Felleisen: a fixed context, `concat`).
+  - In the selector language it is a real increase, by exactly one primitive: join at the focus = bind with
+    an identity step. That step is missing at three places: a runtime-length subject, an element reached by
+    an ordinal (Q_U46's gap), and a Map's values.
+  - Options: K (`.*`), E (an identity step ε), A (APL full ravel), N (library only).
+  - My lean: E over K, medium.
+- **Surprise / correction**:
+  - Under Q_U40's OUTER rule a named step cannot ravel (`w{v*}` is a 1-tuple of `v`). I expected `w.v*` to
+    ravel and said so in chat before measuring; it does not.
+  - RV-1: Q_U40's record states `vv:{0 1}*` → `⟨1 2 3 4⟩` as falling out; measured, it is refused as
+    not-yet.
+  - RV-3: `.*` already means "unrestricted" in `selection` declarations.
+- **Next**: the owner's answer on Q_U63; P4e-2's grounding audit waits for it.
+
+### Q_U63 worked out: five options over eleven intents, against the principles; a fifth option (J, `x:*`) found; lean revised E → J — docs commit on the branch (2026-10-19)
+- **Why**: the owner — *"I think it would do us well to work out these options in worked examples, and consider their
+  design tradeoffs against our design principles and expressivity. I'm still not seeing a clear choice among what has
+  been considered."*
+- **What**: [Q_U63, worked out](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63-worked) with probe
+  `research/P4e-2/probe-p4e2-c` (29 lines):
+  - each intent's value measured through today's nearest spelling;
+  - each option's spelling for it;
+  - a trade-off table against the principles as worded;
+  - the laws each option makes checkable.
+- **Surprise / correction**:
+  - Writing the spellings out produced option **J: `x:*`**, a broadcast of the identity, then join. It is built
+    entirely from `:` and `*` under Q_U40's rule, with the identity kept as an IR step, so `syntax.rkt:891`'s
+    one-step invariant holds. It removes K's glyph collisions and E's do-nothing token.
+  - My lean moves from "E over K" to **J, medium-high**; the old lean is struck in the ledger.
+  - A cannot express a one-level ravel at runtime length.
+  - RV-4: `tw{teams:m*}` is refused in a block where the path form works; that is DEFERRED 167's class
+    (addendum on main).
+- **Next**: the owner's decision on Q_U63; 1b-vi close item 2 (the grammar) proceeds meanwhile.
+
+### Q_U63: OWNER LEAN J ("I'm liking J. It reads well to me."); the joint lean critiqued (JC-1…8), seven sub-decisions surfaced (JD-1…7) — docs commit on the branch (2026-10-19)
+- **Why**: the owner's answer is a lean ("liking"), so it is ledgered as a lean under critique, joint with mine.
+- **What**: [Q_U63 critique](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63-jc), probe
+  `research/P4e-2/probe-p4e2-d` (16 lines).
+  - J's substrate is measured:
+    - a broadcast over a Map comes back KEYED (`mh:x` → `{:a 1, :b 2}`), so `m:*` joins exactly as
+      `m{a b}*` does;
+    - a broadcast over a tuple works per position;
+    - an ordinal step followed by a broadcast works;
+    - `:*` is no keyword, and every near-miss is a bare "Unbound variable", so J breaks nothing.
+  - Against J:
+    - it elides the broadcast's step in the surface (the IR keeps `(@bcast ε)`);
+    - it needs guided refusals for five near-misses;
+    - block position waits on DEFERRED 167;
+    - it supersedes Q_U26's spelling, though not its meaning.
+  - Laws to pin are listed.
+  - JD-1…7 (what `.*` becomes; `x:*-`; the block waypoint; near-miss messages; full ravel; ε in PF; the
+    `selection` form) are ledgered with leans.
+- **Next**: the owner decides J (and takes or defers the JDs). 1b-vi close item 2 (the grammar) proceeds.
+
+### Q_U63 DECIDED J (ravel is `x:*`) and JD-1…7 decided at their leans, as a batch — docs commit on the branch (2026-11-02)
+- **Why / decision**: the owner (2026-11-02 12:06) — *"OK to take the leans in a batch. Let's proceed accordingly."* —
+  after the 2026-10-19 lean ("I'm liking J. It reads well to me.").
+- **What**: [Q_U63](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63) is marked DECIDED with the decision stated;
+  the JD header is DECIDED.
+  - [Q_U26](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) gets a "spelling superseded" callout; its
+    meaning stands.
+  - Q_U40's unmeasured `vv:{0 1}*` → `⟨1 2 3 4⟩` line is struck with a correction callout (RV-1).
+  - The P4e tracker row and §5.P4e's ravel bullet name `x:*`.
+  - **P4e-2 is re-scoped**: the `.*` retirement (`.*` becomes a guided refusal naming `x:*`), plus the `:*`
+    production, ε as `(@bcast ε)`, the JD-2…4 messages and waypoint, the laws, and DEFERRED 185's reader seats.
+  - Spec departures (§2.1 and §3.5) are proposed, not applied.
+- **Re-grounding after a two-week gap**: main moved 23 commits, all `DEFERRED.md` / dailies (REL 2, PM, BSP-LE 3).
+  No code changed, so the code gate carries over. Nothing new is addressed to CIU 6. DEFERRED 198 (CIU-owned, filed
+  by REL 2: a panicking `:check` printed as a value) is the buried-panic class fixed for selection at `55b7df16`; it
+  gets a cross-reference on main.
+- **Next**: 1b-vi close item 2, the star family in the tree-sitter grammar (DEFERRED 144, with 179 and 180).
+
+### 1b-vi close item 2 — the star family in the editor grammar (DEFERRED 144), with 179 and 180 — `04e3c5c5` (2026-11-02)
+- **What**: [§ close-2](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2).
+  - **144**: `flatten_step` reads `*`, `*_`, `*-` and `*-_` as one token, `token.immediate(prec(1, /\*[-_]*/))`.
+    Before, the closer seat parsed `cfg{db}*_` as an application to `_`, an error-free wrong tree. The
+    `prec` is load-bearing: corpus test 54 broke without it.
+  - **179**: Q_U56's guided `*->` text now reaches the closer, dot and broadcast seats, from one arm in
+    `parse-list`. The fold leaves the `>` as a sibling argument, outside the braces, where the item arm cannot
+    see it.
+  - **180**: the arrival instrument compares the lexeme (`'split`), and the "is ONE token" pins compare
+    `(lexeme . type)`.
+- **Tried, not shipped**: ordinal-headed branches in the grammar. Seven formulations each fix the acceptance file
+  (E43/M4 → E35/M0) and make `foray.prologos` worse: its invalid L957 (the compiler says `Unbound variable`)
+  becomes a 251-line ERROR. That is error-recovery churn, and it is filed as DEFERRED 205.
+- **Found**: the corpus gate has failed on this branch since `3fcb720a`, at MISSING 75 > 71. The +4 are M18's
+  `{0.{…}}` lines, and no hook runs the gate. This was my miss at F.
+- **Gates**: 702 / 702 (battery + acceptance + hygiene); 60 / 60 tree tests; grammar A/B 0 better / 0 worse / 142
+  unchanged; stage H red against the old parser; mutations M1–M4 and the 180 mutation each red on their own rows;
+  dependency cache verified.
+- **Measurements**: `research/P4e-1b-vi/close/` — `tsg-close2.txt`, `probe-179` (with `.pre-fix.out`), `probe-957`.
+- **Correction**: the code commit's first message (`9cfa3dcb`, amended before any citation into `04e3c5c5`) said
+  four new corpus trees were red on the old grammar. Three were; the fourth is a control that passes on both.
+- **Next**: close item 3 (retire the stage scaffolding; approved with the close, "Ok to proceed on 1"). The owner's
+  decision on the corpus budget (raise to 75, citing 205, or hold the checkpoint) is needed before item 4 (merge
+  main in, full suite, checkpoint).
+
+### 1b-vi close item 3 — the stage scaffolding retires; the parity pin becomes a law over its own domain — `3f2db4ca` (+ the corpus budget `a7dcde7d`) (2026-11-02)
+- **Why / decision**: the owner (2026-11-02 17:36) — *"OK with lean on (a). Let's proceed with the Next."* So (a)
+  the corpus budget is raised 71 → 75, naming DEFERRED 205 (`a7dcde7d`; the gate PASSes), and item 3 proceeds.
+  Item 3 was approved with the close ("Ok to proceed on 1"; the "walk through together" was about the later P4e
+  items, re-read from the 10-19 exchange).
+- **What**: [§ close-3](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-3).
+  - Retired: the stage constant, FLIPS-AT and PRE (rows are `(ID SPELLING EXPECT)`), the pre-mint classes, and C's
+    injection batch.
+  - The parity pin is now the law `parse(*-) ≡ totalize(parse(*))` over every total-star row the parser reads as
+    a selection: 81 → 113 rows, size-pinned. It held on all 32 new rows at once.
+  - The remedy check covers every refused row that offers remedies.
+  - Plus [§ what 1b-vi shipped](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-shipped), the close note (item 4's first part).
+- **Evidence**:
+  - Equivalence by mechanical dump: 346 / 346 rows identical, and the old domain ⊆ the new one
+    (`research/P4e-1b-vi/close/retire-*`).
+  - Power: three mutations, each red only where intended.
+  - 702 / 702; dependency cache verified.
+- **Surprise / correction**:
+  - The first run of the size-pin mutation was contaminated by the previous mutation of `parser.rkt`, which my
+    loop had not restored between files. It was discarded and re-run alone; the record cites only the clean run.
+  - My first D4 draft double-unescaped braces and printed `{:m {:x Int} :n {:y Int}`. A brace-balance check
+    caught it before the commit, and the quoted values were then checked against the dump.
+- **Next**: item 4. Merge main in (`--no-commit`, gated), run the full suite, then the checkpoint merge to main.
+
+### 1b-vi close item 4 — main merged in, the full suite gate: 10 431 / 502 all pass, exactly as predicted — `a28d648c` (2026-11-02)
+- **What**: `git merge --no-ff --no-commit main`, covering 61 commits since `ab41836c`.
+  - They are docs and registers, the BSP-LE series move (comment-path rewrites in `decision-cell.rkt`, two micro
+    benchmarks and one example), and PAR 4's O-16 probe.
+  - No file changed on both sides. The staged set equals main plus exactly the branch's files, and the merge left
+    the branch's files untouched.
+- **Prediction before the run**: main's code gate (`83fe4fb4`, 10 426 / 502, carried over by every later
+  checkpoint) plus `test-path-selection` 581 → 582, plus `test-path-selection-acceptance` 114 → 118 (the acceptance
+  file's M18; its test file is unchanged) = 10 431 / 502.
+- **Gate**:
+  - `--all --force-rerun`: **10 431 tests, 502 files, all pass**, 34 s wall with 18 workers (80.5 s summed per
+    file). Reconciled file by file against the `9d0dea51` record: exactly the two predicted files differ.
+  - Battery 702 / 702; `run-file --check` 116 / 116.
+  - Tree-sitter corpus gate: PASS at 75.
+  - `.zo` fingerprints of four modules neither side changed match main's checkout.
+- **Next**: the checkpoint merge to main, from a throwaway worktree. The merge tree must equal this tip's tree. Then
+  the DEFERRED citations on main move from "reaches main at the checkpoint" to the checkpoint's hash.

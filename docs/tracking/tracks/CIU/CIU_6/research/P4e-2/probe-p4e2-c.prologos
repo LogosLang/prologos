@@ -1,0 +1,40 @@
+ns probe-p4e2-c
+;; Q_U63 worked examples — each intent's value measured through TODAY's nearest spelling.
+;; Output line N = the Nth top-level form (defs 0..8). Measured at cee02607.
+def values := @[@[1 2 3] @[4 5 6] @[7 8 9]]
+def vv := @[@[1 2] @[3 4]]
+def t3 := @[@[@[1 2] @[3]] @[@[4]]]
+def m := {:a {:x 1} :b {:y 2}}
+def mv := {:a @[1 2] :b @[3]}
+def rr := @[{:a 1} {:b 2}]
+def rc := @[{:a 1} {:a 2}]
+def groups := @[@[{:name "a"}] @[{:name "b"} {:name "c"}]]
+def teams := @[{:members @[{:name "a"}]} {:members @[{:name "b"} {:name "c"}]}]
+;; 1 — flatten a matrix: positions written out, and the SAME selector on another length
+values{0 1 2}*
+vv{0 1 2}*
+vv{0 1}*
+;; 2 — rank 3: one level, then two
+t3{0 1}*
+t3{0 1}*{0 1 2}*
+;; 3 — flatten element 0
+t3.0{0 1}*
+t3{0.{0 1}*}
+;; 4 — a Map's values joined: records keywise, with provenance, and vectors
+m{a b}*
+m{a b}*_
+mv{a b}*
+;; 5 — a vector of records joined keywise, and the collision
+rr{0 1}*
+rc{0 1}*
+;; 6 — flatten, then project each (ravel ∘ map) vs the bind that exists
+groups{0 1}*:name
+teams:members*:name
+;; 7 — the candidate spellings as they read today
+t3.0.*
+m:*
+;; 8 — the substrate J would use in block position: ONE in-block broadcast, then a star
+def tw := {:teams @[{:m @[1]} {:m @[2 3]}] :name "x"}
+tw{teams:m*}
+tw{teams:m* name}
+tw.teams:m*

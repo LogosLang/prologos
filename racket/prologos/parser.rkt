@@ -37,7 +37,9 @@
                   select-branch-mark-total-collapse
                   select-star-step? select-star-cont select-star-cont-of
                   ;; 1b-vi verify (VF-1): the ω-ancestor refusal covers `*-_` too
-                  select-star-cont-total?)
+                  select-star-cont-total?
+                  ;; 1b-vi close (DEFERRED 185, SB-3): Q_U46's reserved gap, one text
+                  select-ordinal-star-message)
          ;; D4.P4e-1b slice 1b-vi-B [Q_U55]: the renamed-ancestor refusal renders its
          ;; two remedies with the ONE branch printer (Q_U54) rather than a second
          ;; hand-written copy in this file. Acyclic (pretty-print's closure does not
@@ -1247,6 +1249,31 @@
 ;; ⚠ The message names the escape hatch, which is MEASURED to work:
 ;; `[map-get r :c*d]` → 2. Shadowing is confined to the selection surface, which
 ;; is what makes Q_U28's trade payable.
+;; 1b-vi close [DEFERRED 179]: the star lexeme a FOLDED selection ends in, or #f. The fold
+;; emits `($select-path base S)`; S is the star sentinel for the closer band (`x{a}*-`), or
+;; a lexeme with the star glued on for the dot band (`x.a*-` → `a*-`) and the broadcast band
+;; (`x:a*-` → `($bcast-step |:a*-|)`). A star is always the operator in selection territory
+;; (Q_U29), so a lexeme ending in a family member is that member.
+(define (select-path-trailing-star d)
+  (define (lexeme-star s)
+    (let ([m (and (symbol? s) (regexp-match #rx"[^*]([*](?:-_|-|_)?)$" (symbol->string s)))])
+      (and m (cadr m))))
+  (and (pair? d) (eq? (car d) '$select-path) (pair? (cdr d)) (pair? (cddr d)) (null? (cdddr d))
+       (let ([s (caddr d)])
+         (cond [(postfix-star-sentinel? s) (postfix-star-sentinel-lexeme s)]
+               [(symbol? s) (lexeme-star s)]
+               [(and (pair? s) (eq? (car s) '$bcast-step) (pair? (cdr s))) (lexeme-star (cadr s))]
+               [else #f]))))
+
+;; The words the guided texts use for each star (Q_U56's one-token arm uses the same ones).
+(define (star-lexeme-gloss op)
+  (case op
+    [("*") "the flatten"]
+    [("*_") "the provenance flatten"]
+    [("*-") "the total collapse"]
+    [("*-_") "the total collapse with provenance"]
+    [else "a star"]))
+
 (define (star-mid-lexeme-message str)
   (cond
     ;; ⭐ 1b-vi-D-2b [Q_U56], the ONE-TOKEN shape. `->` continues an identifier
@@ -1811,6 +1838,15 @@
             ;; (star name). `(closed-acc)` unconditionally is CORRECT here —
             ;; a bare identifier item always starts a branch, exactly like its
             ;; neighbour `plain-key?` (the audit's C2 adjudication).
+            ;; ⭐ 1b-vi close (DEFERRED 185, SB-3): a star-family item right after an
+            ;; ordinal HEAD — `vhm{0*}`, `vhm{0.{0*}}`. The reader leaves `0*` as `0` then
+            ;; `*` (Q_U27: byte-identical to `{0 *}`), so `split-star-lexeme` saw a bare
+            ;; `*` and said "`*` is postfix" — false, the star does end segment `0`. This
+            ;; is [Q_U46]'s reserved gap, the one typing refuses for `y{a[0]*}`: ONE text.
+            [(and (symbol? it) (regexp-match? #rx"^[*]-?_?$" (symbol->string it))
+                  (pair? cur) (pair? (car cur)) (eq? (car (car cur)) '@ord)
+                  (null? (cdr cur)))
+             (fail (select-ordinal-star-message (format "~a~a" (cadr (car cur)) it) it))]
             [(star-sym? it)
              (let-values ([(name cont) (split-star-lexeme it)])
                (cond
@@ -2073,6 +2109,31 @@
      (prologos-error loc
                      (format "preparse: ~a"
                              (if (pair? args) (stx->datum (car args)) "(no detail)")))]
+
+    ;; ⭐ 1b-vi close [DEFERRED 179] — Q_U56 at the CLOSER seat. `env{prod dev}*->` lexes as
+    ;; the closer-band star `*-` then `>`; the fold fuses the star onto its selection and
+    ;; leaves `>` as the NEXT SIBLING, so the form is an application of the selection to the
+    ;; bare name `>` — which reached the elaborator and got the comparison-keyword hint, and
+    ;; inside a keyword form an arity error (`map-get expects 2 arguments, got 3`). The item
+    ;; arm in `segment-select-items` cannot see this: the `>` is outside the braces. Here is
+    ;; the one seat every list form passes before head dispatch, so it covers the head, the
+    ;; argument and keyword positions alike, and it is a per-command error VALUE (never a
+    ;; reader raise, which would abort the file). After `$angle-type` on purpose: type
+    ;; territory keeps Q_U31's seat. The datum cannot tell glued from spaced (`*- >` is the
+    ;; same siblings), so the text is true of both and names the comparison spelling too.
+    [(for/or ([a (in-list parts)] [b (in-list (if (pair? parts) (cdr parts) '()))])
+       ;; `syntax->datum`, not `stx->datum`: the latter is SHALLOW (a compound syntax comes
+       ;; back as a list of syntax objects), and the head test below needs the whole datum
+       (and (eq? (stx->datum b) '>) (select-path-trailing-star (if (syntax? a) (syntax->datum a) a))))
+     => (lambda (op)
+          (prologos-error
+           loc
+           (format (string-append
+                    "`~a>` — there is no `~a>` operator: `~a` (~a) ends a selection by itself, and"
+                    " a glued `~a>` reads as `~a` then a separate `>`, which would be applied to the"
+                    " selection as an argument. Drop the `>`. (If you meant to compare, `>` is not"
+                    " an operator here either: a comparison is spelled `gt`, e.g. `[gt x 1]`)")
+                   op op op (star-lexeme-gloss op) op op)))]
 
     ;; D4.P1a retired-selection marker (preparse-normalized) → guided error.
     ;; ⚠ The (pair? args) guard is LOAD-BEARING, not defensive: a user may

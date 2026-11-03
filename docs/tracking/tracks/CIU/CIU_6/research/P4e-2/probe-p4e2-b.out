@@ -1,0 +1,18 @@
+PERF-COUNTERS:{"cell_allocs":458,"constraint_count":0,"constraint_retries":0,"elaborate_steps":81,"inert_dependent_skips":0,"infer_steps":107,"meta_created":26,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":483,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":3,"unify_steps":30,"zonk_steps":209}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":5,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: values : [PVec [PVec Int]] defined.
+1: m : {:a {:x Int} :b {:y Int}} defined.
+2: ERROR: panic: select: index 3 out of bounds for the vector of length 3 (at `3`)
+3: ERROR: panic: select: index 3 out of bounds for the vector of length 3 (at `3`)
+4: ERROR: panic: select: index 3 out of bounds for the vector of length 3 (at `3`)
+5: ERROR: panic: get: index 3 out of bounds for PVec of length 3
+6: ERROR: Unbound variable
+7: ERROR: empty selection — `x{}` selects nothing (`{}` alone is the empty map literal)
+8: ERROR: empty sub-block — `.{}` selects nothing; name the fields to keep (e.g. `server.{host port}`)
+9: '[1 2 3] : [prologos::data::list::List Int]
+10: '[1 2 3] : [prologos::data::list::List Int]
+11: ERROR: broadcast fails at field :b — Could not infer type — field :x is not present in the record {:y Int}; available fields: :y
+
+--- 8 errors ---

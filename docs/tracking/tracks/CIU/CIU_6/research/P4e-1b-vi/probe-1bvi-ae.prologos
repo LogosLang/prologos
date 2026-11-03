@@ -1,0 +1,99 @@
+ns probe-1bvi-ae
+
+;; Q_U62 — an ordinal head, then a sub-block that holds the star. The design space, played out.
+;; Every line is measured at HEAD (48fe3b48 = the CIU 6 checkpoint 83fe4fb4 + docs). The S+
+;; column of the ledger is read off each line's nearest STEP-CHAIN spelling, which S (Q_U61)
+;; already decides; B is today.
+
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]
+def oo := @[@[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]]
+def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]
+def v3 := {:a {:b {:c @[@[1 2] @[3]]}}}
+def ov3 := @[{:a {:b {:c @[@[1 2] @[3]]}}}]
+def vhm := @[@[{:x 1}] @[{:y 2}]]
+def w := {:v @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]}
+def fleet := @[{:meta {:id {:n 1}} :net {:tls {:port 443}} :tags @[1 2]} {:meta {:id {:n 2}} :net {:tls {:port 8443}} :tags @[3]}]
+
+;; ---- A. the four VS-3 shapes, each beside its step-chain spelling
+ot{0.a^.{b*}}
+ot{0.a^.b*}
+ot{0.{a^.b*}}
+oo{0.{0.a^.b*}}
+oo{0 .0.a^.b*}
+ot2{0.a^.{b*} 1.a^.{b*}}
+ot2{0.a^.b* 1.a^.b*}
+
+;; ---- B. key heads: is a one-branch sub-block transparent there?
+t5{a.{b}}
+t5{a.b}
+t5{a^.{b*}}
+t5{a^.b*}
+t5{a.b.c.{m^}}
+t5{a.b.c.m^}
+v3{a^.b^.{c*}}
+v3{a^.b^.c*}
+t5{a^.b^.c^.{m^}}
+t5{a^.b^.c^.m^}
+
+;; ---- C. ordinal heads with NO star: the sub-block is the ordinal's one component
+ot{0.a^}
+ot{0.{a^}}
+ot{0.a^.b^}
+ot{0.a^.{b^}}
+ot{0.a^.b^.c^.{m n}}
+ot{0.a^.b^.c^.{m^ n^}}
+ot{0.a.{b*}}
+ot{0.a.b*}
+
+;; ---- D. multi-branch sub-blocks with stars: factored vs unfactored
+ot{0.a^.b^.c^.{m* n*}}
+ot{0.a^.b^.c^.m* 0.a^.b^.c^.n*}
+ot{0.a^.b^.c^.{m* n}}
+ot{0.a^.b^.c^.m* 0.a^.b^.c^.n}
+t5{a^.b^.c^.{m* n*}}
+t5{a^.b^.c^.{m* n}}
+
+;; ---- E. the realistic subject: per-element records from several lifted subtrees
+fleet{0.{meta^.id* net^.tls*}}
+fleet{0.meta^.id* 0.net^.tls*}
+fleet{0.{meta^.id* net^.tls*} 1.{meta^.id* net^.tls*}}
+fleet{0.meta^.id* 0.net^.tls* 1.meta^.id* 1.net^.tls*}
+fleet:{meta^.id* net^.tls*}
+fleet{0.{meta^.id^ net^.tls^}}
+fleet{0.meta^.id^ 1.meta^.id^}
+fleet{0.{meta^.id* tags}}
+fleet{0.meta^.id* 0.tags}
+fleet{0.{meta^.id*} 1.{meta^.id*}}
+fleet{0 1}:{meta^.id* net^.tls*}
+
+;; ---- F. only at a HEAD: a bare number after a dissolve never wraps
+w{v^.0.a^.b*}
+w{v^.0.a^.{b*}}
+w{v^.{0.a^.b*}}
+
+;; ---- G. the other families through a sub-block
+ot{0.{a.b*-}}
+ot{0.a.b*-}
+ot{0.a.{b*-}}
+ot{0.a^.{b*_}}
+ot{0.a^.b*_}
+ot{0.{a.b.c^-}}
+ot{0.a.b.c^-}
+
+;; ---- H. vector contents, nested ordinals, and the star OUTSIDE the braces (decided)
+ov3{0.a^.b^.{c*}}
+ov3{0.a^.b^.c*}
+oo{0.{0.a^.b^}}
+vhm{0.{0}*}
+vhm{0.{0}}
+vhm{0.{0*}}
+
+;; ---- I. heterogeneous per-element records, and the dup refusal's remedy on the fleet population
+fleet{0.{meta^.id* net^.tls*} 1.{meta^.id*}}
+fleet{0.{meta^.id*} 1.{net^.tls*}}
+fleet{0.meta^.id* 1.net^.tls*}
+fleet{0.meta^.id^ 1.net^.tls^}
+fleet{0.meta^.id^ 0.net^.tls^ 1.meta^.id^ 1.net^.tls^}
+fleet{0}:{meta^.id* net^.tls*}
+fleet{0 1}:{meta^.id*}

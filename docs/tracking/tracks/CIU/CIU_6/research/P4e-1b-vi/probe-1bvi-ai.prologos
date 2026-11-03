@@ -1,0 +1,43 @@
+ns probe-1bvi-ai
+;; 1b-vi-F (Q_U62 = B) — SB-1 / SB-2 under B, every remedy run on every population.
+;; Measured at 3fcb720a. Output line N = the Nth top-level form (defs are 0..5).
+def ot := @[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]
+def ot2 := @[{:a {:b {:k 1}}} {:a {:b {:k 2}}}]
+def vhm := @[@[{:x 1}] @[{:y 2}]]
+def fleet := @[{:meta {:id {:n 1}} :net {:tls {:port 443}} :tags @[1 2]} {:meta {:id {:n 2}} :net {:tls {:port 8443}} :tags @[3]}]
+def t5 := {:a {:b {:c {:m {:x 1} :n {:y 2}}}}}
+def oo := @[@[{:a {:b {:c {:m {:x 1} :n {:y 2}}}}}]]
+fleet{0.meta^.id* 0.net^.tls* 1.meta^.id* 1.net^.tls*}
+fleet{0.{meta^.id* net^.tls*} 1.{meta^.id* net^.tls*}}
+fleet{0.meta^.id 0.net^.tls 1.meta^.id 1.net^.tls}
+fleet{0.meta.id*- 0.net.tls*- 1.meta.id*- 1.net.tls*-}
+fleet{0.{meta.id*- net.tls*-} 1.{meta.id*- net.tls*-}}
+fleet{0.meta^.id*_ 0.net^.tls*_ 1.meta^.id*_ 1.net^.tls*_}
+fleet{0.{meta^.id*_ net^.tls*_} 1.{meta^.id*_ net^.tls*_}}
+fleet{0.meta.id*-_ 0.net.tls*-_ 1.meta.id*-_ 1.net.tls*-_}
+fleet{0.{meta.id*-_ net.tls*-_} 1.{meta.id*-_ net.tls*-_}}
+fleet{0.meta^.id* 0.meta^.id*}
+fleet{0.meta^.id 0.meta^.id}
+fleet{0.meta^.id* 0.meta^.id* 1.meta^.id*}
+vhm{0.{0}* 0.{0}*}
+vhm{0.{0} 0.{0}}
+ot{0.a^.b^.c^.m* 0.a^.b^.c^.n}
+ot{0.a^.b^.c^.{m* n}}
+ot{0.a.b.c.m* 0.a.b.c.n}
+ot{0.a^.b^.c^.m^ 0.a^.b^.c^.n}
+ot{0.a^.b^.c^.m*_ 0.a^.b^.c^.n}
+ot{0.a^.b^.c^.{m*_ n}}
+ot{0.a.b.c.m*- 0.a.b.c.n}
+ot{0.{a.b.c.m*- a.b.c.n}}
+ot{0.a.b.c.m^ 0.a.b.c.n}
+ot{0.a^.b^.c^.m*-_ 0.a^.b^.c^.n}
+ot{0.{a.b.c.m*-_ a.b.c.n}}
+vhm{0.{0}* 0.{0}}
+vhm{0.{0}^ 0.{0}}
+ot2{0.a^.b* 1.a^.b*}
+ot2{0.a^.b* 1.a^.b}
+ot{0.a^.{b*}}
+oo{0.{0.a^.b*}}
+ot2{0.a^.{b*} 1.a^.{b*}}
+fleet{0.{meta^.id* net^.tls*} 1.{meta^.id*}}
+fleet{0 1}:{meta^.id* net^.tls*}

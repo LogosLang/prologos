@@ -1,0 +1,4 @@
+0: users : [PVec {:userName String}] defined.
+1: ERROR: Unbound variable
+2: ERROR: Unbound variable
+3: @[@["Lisa"] @["John"]] : [PVec ⟨String⟩]

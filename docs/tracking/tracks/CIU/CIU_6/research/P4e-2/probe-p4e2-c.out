@@ -1,0 +1,35 @@
+PERF-COUNTERS:{"cell_allocs":1299,"constraint_count":0,"constraint_retries":0,"elaborate_steps":163,"inert_dependent_skips":0,"infer_steps":332,"meta_created":20,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":723,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":0,"solver_row_scans":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":66,"zonk_steps":333}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":49,"atms_nogood_count":2,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":49,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: values : [PVec [PVec Int]] defined.
+1: vv : [PVec [PVec Int]] defined.
+2: t3 : [PVec [PVec [PVec Int]]] defined.
+3: m : {:a {:x Int} :b {:y Int}} defined.
+4: mv : {:a [PVec Int] :b [PVec Int]} defined.
+5: rr : ⟨{:a Int} {:b Int}⟩ defined.
+6: rc : [PVec {:a Int}] defined.
+7: groups : [PVec [PVec {:name String}]] defined.
+8: teams : [PVec {:members [PVec {:name String}]}] defined.
+9: @[1 2 3 4 5 6 7 8 9] : [PVec Int]
+10: ERROR: panic: select: index 2 out of bounds for the vector of length 2 (at `2`)
+11: @[1 2 3 4] : [PVec Int]
+12: @[@[1 2] @[3] @[4]] : [PVec [PVec Int]]
+13: @[1 2 3 4] : [PVec Int]
+14: @[1 2 3] : [PVec Int]
+15: @[@[1 2 3]] : ⟨[PVec Int]⟩
+16: {:y 2, :x 1} : {:x Int :y Int}
+17: {:a-x 1, :b-y 2} : {:a-x Int :b-y Int}
+18: @[1 2 3] : [PVec Int]
+19: {:a 1, :b 2} : {:a Int :b Int}
+20: ERROR: select: `*` — `*` (flatten) joins the layer's contents keywise, and two of them carry the same key, so the join would silently drop one (layer `⟨{:a Int} {:a Int}⟩`). Star a narrower layer, or select the colliding fields as separate branches
+21: @["a" "b" "c"] : [PVec String]
+22: @["a" "b" "c"] : [PVec String]
+23: ERROR: Unbound variable
+24: ERROR: Unbound variable
+25: tw : {:name String :teams [PVec {:m [PVec Int]}]} defined.
+26: ERROR: select: `:m*` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `[PVec {:m [PVec Int]}]` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually
+27: ERROR: select: `:m*` — `*` (flatten) cannot join Map-valued contents under `:` (broadcast): every element of `[PVec {:m [PVec Int]}]` shares ONE element type, so a keywise join would contribute the same keys once per element and collide for any length above 1 (the length is not statically known). Flatten a single element's layer instead, or select the fields individually
+28: @[1 2 3] : [PVec Int]
+
+--- 6 errors ---

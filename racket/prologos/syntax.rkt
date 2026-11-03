@@ -188,6 +188,8 @@
  select-branch-deep-star? select-steps-star-tail? select-branch-star-conts/deep
  select-step-makes-no-layer? select-branch-has-star?/deep
  select-steps-yield-bare-join? select-branch-ordinal-facts select-level-ordinal-fact select-branch-level-star-conts
+ ;; 1b-vi close (DEFERRED 185): Q_U46's reserved gap, ONE text for the parser and typing seats
+ select-ordinal-star-message
  ;; [Q_U44] canonical key order — ONE definition, shared by both twins.
  canonical-keyword-key? canonical-keyword-key<?
  select-step-cont select-cont-collapse? select-cont-rename
@@ -1172,6 +1174,25 @@
   (let ([r (reverse d)])
     (and (pair? r) (pair? (cdr r)) (select-star-step? (car r))
          (memq (select-step-kind (cadr r)) '(key caret)) #t)))
+;; ⭐ 1b-vi close (DEFERRED 185, SB-4): a DISSOLVED key strictly above sₙ — where "keep a
+;; key before the star" (drop that `^`) is spellable. `ot2{0.a* 1.a}` has none, and
+;; `vhm{0.{0}* 0.{0}}` has neither this nor a key tail (probe-1bvi-ai:31, sb34:10).
+(define (select-delivered-dissolve-above-tail? d)
+  (let ([r (reverse d)])
+    (and (pair? r) (pair? (cdr r)) (select-star-step? (car r))
+         (for/or ([s (in-list (cddr r))])
+           (and (eq? (select-step-kind s) 'caret)
+                (select-cont-dissolves-level? (select-step-cont s))))
+         #t)))
+;; ⭐ 1b-vi close (DEFERRED 185, SB-3) — [Q_U46]'s RESERVED GAP, worded ONCE. An ordinal
+;; step adds no level, so a star after one has no preceding-step layer to delete. Two
+;; seats reach it: typing (`y{a[0]*}`, the `star-deep-prefix` kind) and the parser (a
+;; star item right after an ordinal head, `vhm{0*}` / `vhm{0.{0*}}`, which the reader
+;; cannot tell from `{0 *}` — Q_U27). The remedy text is deliberately unchanged: what
+;; "flatten element N" should be spelled is the question P4e-2's `.*` opens.
+(define (select-ordinal-star-message label op)
+  (format "select: `~a` — `~a` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b~a}`), or select the element first and flatten separately"
+          label op op))
 ;; the LEVEL's summary — #f, or a list of the flags that hold:
 ;;   'passes    some delivered branch passes a landing through an ordinal ('head / 'mid)
 ;;   'head      some does so through a HEAD
@@ -1179,18 +1200,39 @@
 ;;   'key-tails … and every one's sₙ is a named key (the `^` remedy is spellable)
 ;;   'wrap      some delivered branch is an ordinal head that does not ('head-wrap)
 ;;   'all-head  EVERY delivered branch is an ordinal head ('head / 'head-wrap)
+;;   'multi     … and some ordinal heads SEVERAL of them (one element, several branches)
+;;   'groupable … and every head's rest can be wrapped in braces (non-empty, not opening
+;;              with a sub-block: `vhm{0.{{0}*}}` does not parse)
+;;   'head-key-tails  every PASSING head ('head) has a named-key sₙ — `^` instead of the
+;;                    star is spellable for each (DEFERRED 185)
+;;   'head-dissolves  every passing head dissolves a key above sₙ — "keep a key before the
+;;                    star" is spellable for each (DEFERRED 185)
+;; ⭐⭐ 1b-vi-F [Q_U62] = B (SB-1, SB-2): with 'multi, "end EVERY branch with `^`" keeps each
+;; BRANCH apart, not each element (measured: a 4-tuple, probe-1bvi-ae:71), and "a tuple of
+;; the elements" is a tuple of the branches; under B the remedy that keeps each element ONE
+;; component is grouping its branches in one sub-block after its ordinal (ae:42, ae:36).
 (define (select-level-ordinal-fact branches)
   (let* ([ds (append-map select-branch-delivered branches)]
          [fs (map select-delivered-ordinal-fact ds)]
          [passes? (lambda (f) (memq f '(head mid)))]
          [head? (lambda (f) (memq f '(head head-wrap)))]
          [all? (and (pair? fs) (andmap passes? fs))]
+         [all-head? (and (pair? fs) (andmap head? fs))]
+         [idxs (if all-head? (map (lambda (d) (cadr (car d))) ds) '())]
+         [multi? (let dup? ([xs idxs]) (and (pair? xs) (or (and (member (car xs) (cdr xs)) #t) (dup? (cdr xs)))))]
+         [groupable? (and all-head?
+                          (andmap (lambda (d) (and (pair? (cdr d)) (not (select-sub-step? (cadr d))))) ds))]
+         [heads (for/list ([d (in-list ds)] [f (in-list fs)] #:when (eq? f 'head)) d)]
          [flags (append (if (ormap passes? fs) '(passes) '())
                         (if (memq 'head fs) '(head) '())
                         (if all? '(all) '())
                         (if (and all? (andmap select-delivered-key-tail? ds)) '(key-tails) '())
                         (if (memq 'head-wrap fs) '(wrap) '())
-                        (if (and (pair? fs) (andmap head? fs)) '(all-head) '()))])
+                        (if all-head? '(all-head) '())
+                        (if multi? '(multi) '())
+                        (if groupable? '(groupable) '())
+                        (if (and (pair? heads) (andmap select-delivered-key-tail? heads)) '(head-key-tails) '())
+                        (if (and (pair? heads) (andmap select-delivered-dissolve-above-tail? heads)) '(head-dissolves) '()))])
     (and (pair? flags) flags)))
 ;; ⭐ 1b-vi verify (VM-10) — the star conts whose LANDINGS REACH THIS LEVEL, for the
 ;; level gates' prose. `select-branch-star-conts/deep` walks into EVERY sub-block, so a

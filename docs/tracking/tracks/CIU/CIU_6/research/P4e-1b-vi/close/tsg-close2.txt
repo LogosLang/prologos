@@ -1,0 +1,106 @@
+# tsg-close2 — CIU 6 1b-vi close, item 2: the tree-sitter star family (DEFERRED 144)
+# Measured 2026-11-02 under a scratch HOME (installs never touched ~/.emacs.d), emsdk off PATH
+# (so no wasm was built: VS Code's copy needs ./install.sh with emsdk on the owner's machine).
+# OLD = the grammar at cc520b1d (installed in ~); NEW = 04e3c5c5.
+
+## 1. corpus trees (tree-sitter test)
+# RED on the OLD grammar. 57-59 are the star trees that shipped; 60-61 are the ordinal-headed
+# trees, removed with the rule (section 5). The {0.5} decimal control passes on both grammars.
+     57. ✗ [31mStar family at the closer seat: `*_` is ONE flatten step (DEFERRED 144)[0m
+     58. ✗ [31mStar family at the closer seat: `*-` is ONE flatten step, not `*` then the operator `-`[0m
+     59. ✗ [31mStar family: `*-_` after a broadcast and after a group[0m
+     60. ✗ [31mOrdinal-headed branch: a path whose base is an ordinal (D4 P3c, Q_U61)[0m
+     61. ✗ [31mOrdinal head, then a sub-block, then a star after the braces (Q_U62 = B)[0m
+# GREEN: NEW
+Total parses: 60; successful parses: 60; failed parses: 0; success percentage: 100.00%; average speed: 3389 bytes/ms
+# the precedence: the same regex WITHOUT prec(1, …) broke the existing test 54
+     54. ✗ [31mFull path: nominal, broadcast, flatten, broadcast[0m
+
+
+## 2. per-file A/B against the OLD grammar (grammar-ab.sh diff)
+  baseline saved: 142 files · ERROR 2634 · MISSING 77
+  TOTALS   ERROR 2634 -> 2634      MISSING 77 -> 77
+  0 file(s) better · 0 WORSE · 142 unchanged
+
+## 3. corpus gate (check-corpus.sh), OLD then NEW — identical, and FAILING in both
+  files 141 | clean 37 (26%) | dirty 104 | ERROR 2463 | MISSING 75 | lines 36207
+  LOCALITY: 0 file(s) SWALLOWED (one error >=20% of the file); worst single error covers 14% of its file
+  ERROR-BYTES 13782 of 1155356 (1.2% of the corpus unparsed)
+FAIL: MISSING 75 exceeds budget 71 — a rule matched and could not be satisfied; difference it against a rebuilt pre-change grammar rather than netting it off against an ERROR drop
+--
+  files 141 | clean 37 (26%) | dirty 104 | ERROR 2463 | MISSING 75 | lines 36207
+  LOCALITY: 0 file(s) SWALLOWED (one error >=20% of the file); worst single error covers 14% of its file
+  ERROR-BYTES 13782 of 1155356 (1.2% of the corpus unparsed)
+FAIL: MISSING 75 exceeds budget 71 — a rule matched and could not be satisfied; difference it against a rebuilt pre-change grammar rather than netting it off against an ERROR drop
+
+## 4. the (flatten_step) capture over tsprobe/star.prologos
+# probe: def a := cfg{db}* | def b := cfg{db}*_ | def c := cfg{db}*- | def d := cfg{db}*-_ | def e := xs:tags*_ | def f := [g x]*- | def h := cfg{db*_ k}
+# OLD
+L1 "*"
+L2 "*"
+L3 "*"
+L4 "*"
+L5 "*"
+L6 "*"
+# NEW
+L1 "*"
+L2 "*_"
+L3 "*-"
+L4 "*-_"
+L5 "*_"
+L6 "*-"
+
+## 4b. the acceptance file's closer-seat lines: node kinds in the first 17 tree lines, OLD then NEW
+L509 `app-config{database}*_`
+  OLD application path_expr flatten_step
+  NEW path_expr flatten_step path_expr
+L574 `app-config{database}*-`
+  OLD application path_expr flatten_step operator
+  NEW path_expr flatten_step path_expr
+L577 `app-config{database}*-_`
+  OLD application application path_expr flatten_step operator
+  NEW path_expr flatten_step path_expr
+
+## 5. NOT SHIPPED: ordinal-headed branches. The rule (a path whose base is a number, as a
+## select branch), in-tree, per-file A/B against OLD:
+  TOTALS   ERROR 2634 -> 2623      MISSING 77 -> 74
+  WORSE   racket/prologos/lib/examples/foray.prologos          E87/M3 -> E84/M4
+  better  racket/prologos/examples/2026-07-26-ciu-t6-path-selection.prologos E43/M4 -> E35/M0
+  1 file(s) better · 1 WORSE · 140 unchanged
+# seven formulations, foray.prologos's widest ERROR under each (OLD: L618-L622, 4 lines):
+[cur] tree tests: 62 ok, 0 failed  
+[cur] foray widest ERROR: L957-L1208 (251 lines)
+[cur] corpus: ERROR 0 MISSING 0 | 0 file(s) SWALLOWED | 0.0% of the corpus unparsed | PASS (budget: swallows<=0, unparsed<=1.21%, missing<=71) 
+[cur] ab:  | 
+[base] tree tests: 62 ok, 0 failed  
+[base] foray widest ERROR: L957-L1208 (251 lines)
+[base] corpus: ERROR 0 MISSING 0 | 0 file(s) SWALLOWED | 0.0% of the corpus unparsed | PASS (budget: swallows<=0, unparsed<=1.21%, missing<=71) 
+[base] ab:  | 
+[steps] tree tests: 62 ok, 0 failed  
+[steps] foray widest ERROR: L957-L1208 (251 lines)
+[steps] corpus: ERROR 0 MISSING 0 | 0 file(s) SWALLOWED | 0.0% of the corpus unparsed | PASS (budget: swallows<=0, unparsed<=1.21%, missing<=71) 
+[steps] ab:  | 
+[dyn] tree tests: 62 ok, 0 failed  
+[dyn] foray widest ERROR: L957-L1208 (251 lines)
+[dyn] corpus: ERROR 0 MISSING 0 | 0 file(s) SWALLOWED | 0.0% of the corpus unparsed | PASS (budget: swallows<=0, unparsed<=1.21%, missing<=71) 
+[dyn] ab:  |
+(the [*] corpus lines above are void: check-corpus could not locate the corpus from a copied tree)
+named / prec1 / noprec (fast.sh):
+[named] foray widest: L957-L1208 (251)
+[prec1] tests: 62 ok 0 failed | foray widest: L957-L1208 (251)
+[noprec] tests: 62 ok 0 failed | foray widest: L957-L1208 (251)
+# foray MISSING nodes, NEW (star only) vs NEW + ordinal rule (var-cur): +1 invented identifier at L957
+MISSING ] L580
+MISSING ] L614
+MISSING identifier L1339
+--
+MISSING ] L580
+MISSING ] L614
+MISSING identifier L957
+MISSING identifier L1339
+# L957 is `users:<{0.userName^}` (";; :< broadcast pick/unwrap (APL)") — not valid Prologos: the
+# compiler answers `Unbound variable` for it and for `users:<{userName^}` (probe-957.out lines 1-2).
+# Its `users` is the multi-line def at L942, inside the context window that matters (below).
+# In ISOLATION (that line + one def) both grammars give the same tree; the 251-line ERROR needs the
+# preceding context (blanking L940-956 shrinks it to 7 lines; blanking L950-956 does not):
+# error-recovery churn, not a wrong rule.
