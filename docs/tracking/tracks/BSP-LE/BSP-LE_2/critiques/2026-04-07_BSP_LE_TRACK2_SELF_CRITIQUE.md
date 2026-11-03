@@ -1,8 +1,8 @@
 # BSP-LE Track 2 D.1 — Self-Critique (P/R/M Lenses)
 
 **Date**: 2026-04-08
-**Design**: [D.1](2026-04-07_BSP_LE_TRACK2_DESIGN.md)
-**Methodology**: [CRITIQUE_METHODOLOGY.org](principles/CRITIQUE_METHODOLOGY.org)
+**Design**: [D.1](../2026-04-07_BSP_LE_TRACK2_DESIGN.md)
+**Methodology**: [CRITIQUE_METHODOLOGY.org](../../../../principles/CRITIQUE_METHODOLOGY.org)
 
 ---
 

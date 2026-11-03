@@ -168,6 +168,6 @@ Track 4C must satisfy the ten load-bearing principles:
 
 - [Track 4B Design (D.2)](../PPN_4B/2026-04-05_PPN_TRACK4B_DESIGN.md) — predecessor design
 - [Track 4A PIR](../PPN_4A/2026-04-04_PPN_TRACK4_PIR.md) — side-effect boundary finding
-- [Cell-Based TMS Design Note](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — BSP-LE Track 1.5
+- [Cell-Based TMS Design Note](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — BSP-LE Track 1.5
 - [Attribute Grammar Research](2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md) — theoretical foundation
 - [PPN Master](../2026-03-26_PPN_MASTER.md) — series roadmap

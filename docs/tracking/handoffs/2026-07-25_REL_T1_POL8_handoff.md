@@ -101,7 +101,7 @@ the `[]`/`()` delimiter conventions ARE the POL.9 design**).
    record. **§2.0** (post-fix reading of the traversal table + the OPEN meta
    half) and **§4.2/§4.3** (the compile-limit measurements + the retraction)
    are the parts that still bind future work.
-6. `docs/tracking/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md` (143 L) — retirement
+6. `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md` (143 L) — retirement
    owner for the A.2b/A.4 DFS-routing scaffolds; needed to keep saying honestly
    what is deferred where.
 7. `docs/tracking/2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md` (185 L) — where

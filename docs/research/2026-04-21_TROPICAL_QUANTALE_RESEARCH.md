@@ -8,8 +8,8 @@
 - [`qauntale_outputs/`](../../qauntale_outputs/) — quantale-as-PLP-annotation research (different use case; foundational-quantale-theory overlap)
 - [`2026-03-28_MODULE_THEORY_LATTICES.md`](../research/2026-03-28_MODULE_THEORY_LATTICES.md) — module-theoretic foundations for propagator networks
 - [`2026-04-02_SRE_TRACK2H_DESIGN.md`](../tracking/2026-04-02_SRE_TRACK2H_DESIGN.md) — TypeFacet quantale (sister quantale; Galois-bridge candidate)
-- [`2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — cell-based TMS design
-- [`2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — hypercube worldview + Gray code + bitmask subcube
+- [`2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — cell-based TMS design
+- [`2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — hypercube worldview + Gray code + bitmask subcube
 
 ---
 
@@ -985,8 +985,8 @@ For Phase 9: NO surface exposure. Only infrastructure. Language-level exposure i
 - [`docs/research/2026-03-28_MODULE_THEORY_LATTICES.md`](./2026-03-28_MODULE_THEORY_LATTICES.md)
 - [`docs/tracking/2026-04-02_SRE_TRACK2H_DESIGN.md`](../tracking/2026-04-02_SRE_TRACK2H_DESIGN.md)
 - [`docs/tracking/principles/DESIGN_PRINCIPLES.org`](../tracking/principles/DESIGN_PRINCIPLES.org) § Hyperlattice Conjecture
-- [`docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](./2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
-- [`docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](./2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
+- [`docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
+- [`docs/tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
 - [`qauntale_outputs/quantales-problog-semirings-brief.md`](../../qauntale_outputs/quantales-problog-semirings-brief.md) (sibling research strand)
 
 ---

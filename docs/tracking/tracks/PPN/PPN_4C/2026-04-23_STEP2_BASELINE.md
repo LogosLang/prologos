@@ -4,9 +4,9 @@
 **Purpose**: Pre-Step-2 performance baseline; hypotheses for PU refactor's impact; validation criteria for post-Step-2 A/B comparison. Part of the measurement discipline codified this session (see §6).
 **Context**: Step 2 of 1A-iii-a-wide (PU refactor + hasse-registry integration). Per D.3 §7.5.4 deliverables.
 **Prior art**:
-- [`2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md`](../../../2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md) — original thesis + 25-site struct-copy audit
-- [`2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md`](../../../2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md) — the allocation-efficiency track design
-- [`2026-03-21_BSP_LE_TRACK0_PIR.md`](../../../2026-03-21_BSP_LE_TRACK0_PIR.md) — delivered: hot/warm/cold struct split, mutable drain loop, batch cell registration
+- [`2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md`](../../BSP-LE/BSP-LE_0/audits/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md) — original thesis + 25-site struct-copy audit
+- [`2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md`](../../BSP-LE/BSP-LE_0/2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md) — the allocation-efficiency track design
+- [`2026-03-21_BSP_LE_TRACK0_PIR.md`](../../BSP-LE/BSP-LE_0/2026-03-21_BSP_LE_TRACK0_PIR.md) — delivered: hot/warm/cold struct split, mutable drain loop, batch cell registration
 - [`2026-04-17_PPN_TRACK4C_PRE0_REPORT.md`](2026-04-17_PPN_TRACK4C_PRE0_REPORT.md) — PPN 4C's Pre-0 baselines at track start
 **Design doc**: [`2026-04-21_PPN_4C_PHASE_9_DESIGN.md`](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) §7.5.4 Step 2 deliverables
 
@@ -414,9 +414,9 @@ The architectural work (PPN 4A/B, 4C Phases 1-3, T-3, Step 1, T-1, T-2) has move
 - Step 2 design: [D.3 §7.5.4](2026-04-21_PPN_4C_PHASE_9_DESIGN.md)
 - Step 2 mini-design dialogue: D.3 §7.5.4 (to be extended with §7.5.15 after Step 2)
 - Prior art:
-  - [2026-03-20 CELL_PROPAGATOR_ALLOCATION_AUDIT](../../../2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)
-  - [BSP-LE Track 0 Design](../../../2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md)
-  - [BSP-LE Track 0 PIR](../../../2026-03-21_BSP_LE_TRACK0_PIR.md)
+  - [2026-03-20 CELL_PROPAGATOR_ALLOCATION_AUDIT](../../BSP-LE/BSP-LE_0/audits/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)
+  - [BSP-LE Track 0 Design](../../BSP-LE/BSP-LE_0/2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md)
+  - [BSP-LE Track 0 PIR](../../BSP-LE/BSP-LE_0/2026-03-21_BSP_LE_TRACK0_PIR.md)
   - [PPN 4C Pre-0 Report](2026-04-17_PPN_TRACK4C_PRE0_REPORT.md)
 - Design principles:
   - [`propagator-design.md`](../../../../../.claude/rules/propagator-design.md) § Cell Allocation Efficiency

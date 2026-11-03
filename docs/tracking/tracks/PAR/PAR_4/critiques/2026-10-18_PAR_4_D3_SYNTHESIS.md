@@ -320,6 +320,7 @@ W2-10-2's separation is accepted. It is information flow, and it is needed at K 
 
 Who owns the fix for DEFERRED 177, PAR 4's P1a or BSP-LE 3, is an owner decision (O-17), because it is the solver's
 correctness, not PAR 4's speed.
+**Decided 2026-10-19 (O-17 (a), D.2 §15)**: BSP-LE Track 3 owns rows 1–3, as its Stage A. P1a keeps rows 4 and 8.
 
 ### 5.8 P1b: the K = 1 core
 
@@ -362,8 +363,8 @@ The rest moves to the sequel. O-13 is re-posed narrowed.
 | **O-14** | remove the production thread executor (`driver.rkt:567`) in P0.5 | remove; keep the executor seam | **DECIDED (a) 2026-10-18**, with G-4 (§8) |
 | O-15 | scope, reframed by G-4: how the exploration portfolio (§8) and PAR 4's K = 1 work are organised | PAR 4 = K = 1 + the shared substrate; a separate PAR track runs the portfolio concurrently, starting with the profile | **DECIDED (a) 2026-10-18**: the second track is **PAR 4B** |
 | O-18 | checkpoint 2 of PAR 4 (docs and probes only) before PAR 4B branches from main | checkpoint first | **posed 2026-10-18**, D.2 §15 |
-| O-16 | budgets and the surface contract: what `:fuel` and `:timeout` count; the dead strategy keys; override semantics (re-opens O-2) | after O-15 | queued |
-| O-17 | who owns DEFERRED 177's fix: PAR 4 P1a rows 1–3, or BSP-LE 3 | after O-15 | queued |
+| O-16 | budgets and the surface contract: what `:fuel` and `:timeout` count; the dead strategy keys; override semantics (re-opens O-2) | after O-15 | **DECIDED (a) 2026-10-19** (D.2 §15): a contract in logical time; the labels ship on only within noise, else they are a debug toggle; evidence `benchmarks/par4/o16/` |
+| O-17 | who owns DEFERRED 177's fix: PAR 4 P1a rows 1–3, or BSP-LE 3 | after O-15 | **DECIDED (a) 2026-10-19** (D.2 §15): BSP-LE Track 3 owns it as Stage A, a concurrent track; P1a gives up rows 1–3 |
 | O-11, O-12, O-13 | re-posed with this round's amendments: O-11 gains (c); O-12 changes shape at K = 1 (no fence; the replay classifies row 8); O-13 narrows to the K = 1 core | with D.3 | queued |
 
 Minor cross-track proposals go to the owner with D.3 rather than as decisions: PC-5 and PC-6, BC-2/3/4/6, the

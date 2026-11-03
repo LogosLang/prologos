@@ -13,12 +13,12 @@
 - 7 phases: struct split (hot/warm/cold), mutable worklist drain, batch cell registration
 - Wall-time neutral (+2%) but GC eliminated on hot path (0ms during quiescence)
 - Phase 5 rejected (transient CHAMP too expensive at N=2-3), later rehabilitated by CHAMP Performance
-- PIR: ~docs/tracking/2026-03-21_BSP_LE_TRACK0_PIR.md~ (~00a873f~)
+- PIR: ~docs/tracking/tracks/BSP-LE/BSP-LE_0/2026-03-21_BSP_LE_TRACK0_PIR.md~ (~00a873f~)
 
 ** CHAMP Performance Track (COMPLETE)
 - 7 phases: vector-copy!, eq?-first, value-only fast path, owner-ID transients
 - 16x improvement at N=2 (95.5us -> 6.0us)
-- PIR: ~docs/tracking/2026-03-21_CHAMP_PERFORMANCE_PIR.md~ (~b748e5d~)
+- PIR: ~docs/tracking/tracks/BSP-LE/BSP-LE_0/2026-03-21_CHAMP_PERFORMANCE_PIR.md~ (~b748e5d~)
 
 ** CIU Track 0: Trait Hierarchy Audit (~f62fc06~)
 - 8 findings: F-6 (HKT impl broken) identified as linchpin for entire CIU vision

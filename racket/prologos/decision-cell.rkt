@@ -38,7 +38,7 @@
 ;;; not here. This module defines lattice VALUES and OPERATIONS only.
 ;;;
 ;;; Design reference:
-;;;   docs/tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md §2.5a, §2.6
+;;;   docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md §2.5a, §2.6
 ;;;   constraint-cell.rkt (convention model)
 ;;;
 

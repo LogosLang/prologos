@@ -1,7 +1,7 @@
 # BSP-LE Track 2B External Critique Response
 
 **Date**: 2026-04-10
-**Critique**: `docs/tracking/2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md`
+**Critique**: `docs/tracking/tracks/BSP-LE/BSP-LE_2B/critiques/2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md`
 **Design**: D.7 → D.8
 
 ---

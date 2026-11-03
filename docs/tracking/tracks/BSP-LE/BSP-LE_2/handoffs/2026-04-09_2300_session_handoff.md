@@ -96,7 +96,7 @@ Phase 11 scope:
 
 ## File Index (Hot-Load for Next Session)
 
-- Design doc: `docs/tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md` (D.12)
+- Design doc: `docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-07_BSP_LE_TRACK2_DESIGN.md` (D.12)
 - Handoff Protocol: `docs/tracking/principles/HANDOFF_PROTOCOL.org` (updated with rules docs)
 - Dailies: `docs/tracking/standups/2026-04-09_dailies.md`
 - Propagator solver: `racket/prologos/relations.rkt` (install-goal-propagator, install-clause-propagators, solve-goal-propagator, scope cells, tabling)

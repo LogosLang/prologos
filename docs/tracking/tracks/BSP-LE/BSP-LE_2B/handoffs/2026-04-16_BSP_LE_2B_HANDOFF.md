@@ -3,7 +3,7 @@
 ## §1: Current Work State
 
 **Track**: BSP-LE Track 2B — Parity Deployment + Parallel Search
-**Design**: D.13 (`docs/tracking/2026-04-10_BSP_LE_TRACK2B_DESIGN.md`)
+**Design**: D.13 (`docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-10_BSP_LE_TRACK2B_DESIGN.md`)
 **Last commit**: `98ac1b94` — dailies update (final session commit: `82b66c42` Phase 6 tracker)
 **Suite health**: 398/398 files, 7750 tests (397 pass, 1 known parity issue in test-wf-comparison-01.rkt)
 **Dailies**: `docs/tracking/standups/2026-04-12_dailies.md`
@@ -48,7 +48,7 @@
 
 | Document | Lines | Why |
 |---|---|---|
-| `docs/tracking/2026-04-10_BSP_LE_TRACK2B_DESIGN.md` | ~1500 | D.13 design: Phase R + all optimizations. Progress tracker is source of truth. |
+| `docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-10_BSP_LE_TRACK2B_DESIGN.md` | ~1500 | D.13 design: Phase R + all optimizations. Progress tracker is source of truth. |
 | `docs/tracking/standups/2026-04-12_dailies.md` | ~300 | Full session log: every phase, every lesson, every benchmark result. |
 | This handoff document | — | State transfer |
 

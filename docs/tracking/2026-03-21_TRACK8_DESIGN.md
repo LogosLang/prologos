@@ -4,7 +4,7 @@
 **Status**: Draft (D.4 — unified vision revision: all elaboration on the network)
 **Parent**: Propagator Migration Series ([Master Roadmap](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md))
 **Audit**: [Track 8 Infrastructure Audit](2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org)
-**Informed by**: [CIU Track 0 Trait Hierarchy Audit](2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md), [Allocation Audit](2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)
+**Informed by**: [CIU Track 0 Trait Hierarchy Audit](2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md), [Allocation Audit](tracks/BSP-LE/BSP-LE_0/audits/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)
 **Prior art**: Tracks 1–7 (complete), PUnify Parts 1–2 (cell-tree unification)
 **Supersedes**: Track 8 audit §5 (architectural vision) — this document makes it concrete
 
@@ -316,7 +316,7 @@ The worldview check is O(1): `(set-member? believed-set assumption-id)`. The bel
 
 No circular dependency — `cell-ops.rkt` depends only on `propagator.rkt` and `elab-network struct definitions` (which can be factored into a separate types module if needed).
 
-**Design-for note — accumulate-during-quiescence pattern** (from [CHAMP Performance Design](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate-During-Quiescence): The `cell-ops.rkt` API accommodates an optional transient parameter for owner-ID transient threading during quiescence.
+**Design-for note — accumulate-during-quiescence pattern** (from [CHAMP Performance Design](tracks/BSP-LE/BSP-LE_0/2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate-During-Quiescence): The `cell-ops.rkt` API accommodates an optional transient parameter for owner-ID transient threading during quiescence.
 
 **Design-for note — worldview threading**: The current ATMS worldview (believed assumption set) is threaded via `(current-speculation-stack)`. The `cell-ops` API reads the stack to determine the worldview. No additional parameter needed — the existing `parameterize` in `with-speculative-rollback` provides the worldview context.
 
@@ -352,7 +352,7 @@ No circular dependency — `cell-ops.rkt` depends only on `propagator.rkt` and `
 
 **Prerequisite**: B1 (cell-ops extraction) + B2 (callback elimination). Without callbacks, `cell-write` in `cell-ops.rkt` can accept a transient parameter directly.
 
-**Design** (from [CHAMP Performance Design](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate-During-Quiescence):
+**Design** (from [CHAMP Performance Design](tracks/BSP-LE/BSP-LE_0/2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate-During-Quiescence):
 
 1. Enter `run-to-quiescence-drain` → convert cells CHAMP to owned transient (O(1) — get edit token)
 2. Quiescence loop: propagator fire functions call `cell-write` → `tchamp-insert-owned!` (in-place mutation of owned nodes)
@@ -473,7 +473,7 @@ This means Part C is NOT inventing a new mechanism. It's applying the session-ty
 
 ### Categorical Motivation: Kan Extensions
 
-The BSP-LE categorical analysis ([BSP-LE Master Roadmap](2026-03-21_BSP_LE_MASTER.md), standup 2026-03-21 §Outside Conversation) identified two adjoint mechanisms:
+The BSP-LE categorical analysis ([BSP-LE Master Roadmap](tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md), standup 2026-03-21 §Outside Conversation) identified two adjoint mechanisms:
 
 **Left Kan extension (speculative forwarding)**: The cross-domain bridge fires on partial S0 fixpoint information — a type cell just solved, but S0 hasn't fully quiesced. Monotonicity guarantees soundness. The trait resolution bridge IS the left Kan extension: it speculatively resolves the dict as soon as the type constructor is known, without waiting for all type cells to stabilize.
 

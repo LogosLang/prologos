@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 185**
+> ### **NEXT FREE: 206**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -707,6 +707,18 @@ era — gate: the §3b blame-latch citation verified concrete at F1b.5-p0 (else
 re-anchor; an invented placeholder gate is forbidden). s4 does NOT close this
 entry (auto-discharge is the deferred half).
 
+**✏ 2026-10-20 (REL 2 Stage-1 validation grid, findings VG-1, VG-2, VG-4; reproducers for the lines above).** The
+three doors onto one schema disagree on 6 of 13 defect rows (`docs/tracking/tracks/REL/REL_2/research/census/2026-10-20_REL_2_STAGE1_VALIDATION_GRID_DRAFT.md`
+§3; (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)):
+- `:check` is not run on `defr : Schema` rows: `defr g10 : Pos` (`:check (> _ 0)`) with `|| "Heat" -5` stores `-5`
+  (`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-grid-defr.out` `39:`, `40:`), while `validate` and `def` refuse it.
+- `validate` checks nothing under a schema-typed field, not even that the value is a Map:
+  `[validate Who {:name "Ann" :addr 5}]` → `ok` (`vg-grid-validate.out` `19:`); a bad inner field → `ok` (`17:`).
+  The static doors catch both. The witness tag for a schema-named field is `'any` (`racket/prologos/typing-core.rkt:563-564`).
+- A field with `:default`, absent from a `||` row, is refused by count at `defr` (`vg-grid-defr.out` `33:`), while
+  `validate` and `def` fill it.
+REL 2's bulk import (`defr R : S :from src`) would inherit all three unless every door shares one checker.
+
 ## CIU T6: the cross-module schema channel — staleness + cache-hit registration (probe-found at F1b.5-p0, 2026-07-17)
 
 > **TRIAGED 2026-07-27 (GitHub #78 X.close): gaps 2 and 3 are RESOLVED; gap 1
@@ -1090,7 +1102,7 @@ skip+warn policy; these lift the skips / harden the substrate.
 ## HIGH PRIORITY: Propagator/Cell Allocation Efficiency Track
 
 ### Design Track for Efficient Prop/Cell Allocation
-- **Audit complete**: `docs/tracking/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md` (commit `f7bd03d`)
+- **Audit complete**: `docs/tracking/tracks/BSP-LE/BSP-LE_0/audits/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md` (commit `f7bd03d`)
 - **Thesis**: Any even modest gains in allocation efficiency will have disproportionate effect across the entire infrastructure — every part of the system creates cells and propagators at scale
 - **Key findings**: `struct-copy prop-network` (13-field copy) is dominant cost; 25 call sites; 6 optimization opportunities identified preserving pure data-in/data-out contract
 - **Top 3 optimizations**: (1) mutable worklist/fuel in quiescence loop, (2) field-group struct splitting (hot/warm/cold), (3) batch cell registration via existing transient CHAMP builder
@@ -1949,7 +1961,7 @@ worldview-preserving tabling (so guard generators materialize per-branch tags). 
 ### Cross-references
 
 - Landed slice: commit `6b56397d`; design [`2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md`](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §5 A.4.
-- **Track 3 seed (both issues + prototyped designs)**: [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md).
+- **Track 3 seed (both issues + prototyped designs)**: [`2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md`](tracks/BSP-LE/BSP-LE_3/2026-07-20_BSP_LE_TRACK3_ONNET_SEED.md).
 
 ## Rel T1 Aspect C, C.d — `?x:Int` runtime domain-constraint (types-as-predicates) → UCS Track 6 (captured 2026-07-21)
 
@@ -1973,7 +1985,7 @@ readers/languages. The UCS track inherits the substrate + bridges it to the exis
 - **Handoff note (the full settled design + verified coordinates + known gaps)**: [`2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md`](2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md).
 - Rel T1 design: [`2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md`](2026-07-19_REL_T1_RELATIONAL_USABILITY_DESIGN.md) §7.5 (RESOLVED) / §7.6 (C.d) / §7.7 (deferred + non-monotone S(-1) cap).
 - Grounding-audit: `wf_ab037f07-570` (guard machinery + fix options).
-- BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](2026-03-21_BSP_LE_MASTER.md).
+- BSP-LE Master Track 3 retirement obligation: [`2026-03-21_BSP_LE_MASTER.md`](tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md).
 - **Process note**: the A.4 investigation was lengthened by a WS-syntax probe error (one-line fact rows `|| 5 3` parse as one wrong-arity row → spurious empty results, masqueraded as a tabling failure). Probes need multi-line fact rows.
 
 ## Solver term conversion drops pvec/map literals — unify with a collection literal yields `unknown` (captured 2026-07-25, surfaced by Rel T1 B3.2's mini-audit)
@@ -4241,6 +4253,12 @@ target — what each SHOULD produce wants a ruling before either is changed.
 
 Found while scoping member 4; not investigated further.
 
+**Addendum 2026-10-20 (REL 2 Stage-1 form census, finding FM-24).** The typing half has changed: the column now types
+`Int`, not `Goal` (`@[] : [PVec {:q Int}]`, `docs/tracking/tracks/REL/REL_2/research/census/forms/fm12-anon-rel.out` `0:`). The empty answer remains on five
+spellings (command position, `|`-separated, explicit `solve`, kept with `def`, arity 2: `0:`–`4:`, `9:`), with 0 errors.
+The rule-bodied twins answer (`(rel [?q] &> (= q 2))` → `@[{:q 2}]`, `5:`; an anonymous rule over a named fact relation,
+`8:`). (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)
+
 ### 75. ⬜ Q_U19 route 2 — `xs:{name}^alias` is UNGUIDED, and it needs a GROUPER-SIDE adjacency mint (D4.P4d slice 4d; attempted and REVERTED)
 
 `xs:{name}^alias` and `xs:{name}^` report a bare `Unbound variable` — the caret
@@ -5874,6 +5892,19 @@ symptom a **guided error**; this entry is the LAW's repair, which belongs with
 normalizer, not after: a normalizer that silently changes a program's legality
 is the worst shape this class can take.
 
+> **ADDENDUM (2026-10-19, CIU 6 [Q_U62](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) = B, critique DC-2; probe
+> `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-ah` lines 17–24, branch `ciu6-path-selection` @ `93f36b3a`.
+> The probe reaches main with the next checkpoint merge.)** A second star side condition, this time on Q_U45's
+> L★ (`x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*` for Map contents). Under Q_U62 = B ("braces scope a landing"), L★ holds at key
+> heads (`t5{a.b.c.{m* n*}}` ≡ `t5{a.b.c.{m n}*}`, kept and dissolved) and at an ordinal head with a kept key. It
+> FAILS across an ordinal head's braces when every ancestor between them dissolves:
+> `ot{0.a^.b^.c^.{m* n*}}` → `@[{:y 2, :x 1}]` (line 23) vs `ot{0.a^.b^.c^.{m n}*}` → `{:y 2, :x 1}` (line 24).
+> This is by design: under B the star's position relative to the braces is how the one-component reading and
+> the spliced reading are told apart. So a P5 rewrite that moves stars across braces (L★ as a normal form, or a
+> message printing a factored spelling) must not apply L★ at an ordinal head whose chain to the braces names no
+> key. Both side conditions, this entry's L2 one and this L★ one, belong to P5 and should be written before
+> P5's normalizer.
+
 ### 116. ⬜ THE BRACKET ORDINAL `m[0]` IS REDUNDANT WITH `m.0` — but ONLY for a LITERAL index; `m[i]` is dynamic indexing with no dot-band spelling
 
 Raised by the owner 2026-08-12 during the D4.P4e-1b-iii-C co-design ("deprecate
@@ -6771,7 +6802,7 @@ this lands; they are the acceptance tests.
 
 ---
 
-### 144. ⬜ THE TREE-SITTER GRAMMAR'S `flatten_step` IS A BARE `*` — the star-continuation family (`*_` LIVE at 1b-v-B2b; `*-`/`*-_` at 1b-vi) mis-parses at the CLOSER seat in the editor
+### 144. ✅ **DISCHARGED `04e3c5c5`** (branch `ciu6-path-selection`; reaches main at the 1b-vi close checkpoint) — THE TREE-SITTER GRAMMAR'S `flatten_step` IS A BARE `*` — the star-continuation family (`*_` LIVE at 1b-v-B2b; `*-`/`*-_` at 1b-vi) mis-parses at the CLOSER seat in the editor
 
 Found by the grammar-drift tripwire firing on `940c9c88` (CIU T6 slice
 1b-v-B2b), which is exactly what it exists for.
@@ -6813,6 +6844,15 @@ shows up in the corpus gate without anyone remembering it.
 (`angle_group`'s `token.immediate('*')` is irrelevant: the compiler refuses a
 glued star inside `<…>` per Q_U31, and a grammar that accepts more than the
 compiler is the harmless direction.)
+
+**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2), on the branch until the checkpoint).
+The fix shape above landed as `token.immediate(prec(1, /\*[-_]*/))`. The `prec` is load-bearing: `operator`
+contains the string `'*'`, a string wins a same-length tie against a regex, and without it corpus test 54
+(`record.orders:items*:sku`) broke. Three new corpus trees are red on the old grammar and green now (60 / 60).
+The per-file A/B is 0 better / 0 worse / 142, because the old trees were wrong without being errors. The
+`@operator` capture now covers `*_`, `*-` and `*-_` whole. Measurements: `tsg-close2.txt` under
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/close/` (on the branch). Ordinal-headed select branches, the
+other grammar gap the close measured, did not ship: see [205](#205-entry) below.
 
 ---
 
@@ -7039,6 +7079,18 @@ PAR 4 P0 harness. Two defects: (a) the depth-limit error is not converted to a p
 (b) the benchmark's query exceeds the DFS depth limit. **When**: before the next comparative
 A/B. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
 
+**Addendum 2026-10-20 (REL 2 Stage-1 counters; the A.2b section's gate is the second half).** The depth limit is the
+ceiling on transitive closure today. `defr tc [?x ?z] &> (edge x z) &> (edge x y) (tc y z)` over a chain of L edges
+(`docs/tracking/tracks/REL/REL_2/research/counters/fact-scale-e2e.out`, lines 152–183, (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)):
+- under the default `:auto` the query routes to DFS (the A.2b body-local gate, § *Rel T1 A.2b DFS-routing scaffolding*
+  above); at L = 10, 30, 50 it answers correctly while reading 1 120 / 27 960 / 127 600 rows for all pairs (Θ(L³)); at
+  L = 100 and 300 the WHOLE FILE aborts with `solve: Depth limit exceeded (100)`, single-source queries included;
+- forced `:strategy atms` answers silently with the base case only: L of L(L+1)/2 pairs, 1 of L single-source answers
+  (lines 156, 174, 180), which is the incompleteness the A.2b gate exists to avoid.
+So no route answers TC over a chain of 100 or more edges. Part (a) of this entry (convert the error to a per-command
+error) would at least keep the rest of the file. The semi-naive route REL 2's Stage-1 survey proposes (synthesis SV-2)
+was measured on the propagator network in `docs/tracking/tracks/REL/REL_2/research/counters/tc-delta-carrier.out` (L up to 1000, correct closure).
+
 ### 154. ⬜ THE DETERMINISTIC COUNTERS ARE BLIND TO PROPAGATOR WORK UNDER THE PRODUCTION SCHEDULER — `prop_firings` counts only the sequential drain (`propagator.rkt:2758`), and `perf-inc-prop-alloc!` is NEVER CALLED (`prop_allocs` ≡ 0)
 
 `solve-adversarial` under BSP: `cell_allocs` 4 079, `prop_firings` 0, `prop_allocs` 0. The
@@ -7047,6 +7099,19 @@ see the propagator network at all. **Fix shape**: count fires in `fire-and-colle
 (BSP) as well as the drain; call `perf-inc-prop-alloc!` in `net-add-propagator`; add
 `bsp_rounds`. PAR 4 needs these as phase-gate counters (P0 record §6). **When**: with PAR 4 P1
 at the latest. Record: [`tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md`](tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md).
+
+**Addendum 2026-10-20 (REL 2 Stage-1; re-grounding findings RG-58 and RG-61).** Two more instruments see less than
+their names say, both measured (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical):
+- `solver_row_scans` at the Tier-2 install counts only the rows that pass the viability filter
+  (`racket/prologos/relations.rkt:2610-2615`, the increment at `:2614` sits after `#:when`). A point query on a
+  two-variant store reads `solver_row_scans` = 1 while its wall time grows linearly: 92 / 82 / 97 ns per row at
+  1 000 / 10 000 / 100 000 rows (`docs/tracking/tracks/REL/REL_2/research/counters/install-walk.{rkt,out}`). The July artifact's "rows=N+1 → 1" (D.2.d)
+  measured the counter's position, not the walk.
+- The route counter `par4-solve-routes` records the dispatch decision (`racket/prologos/stratified-eval.rkt:296`),
+  not the engine: an all-ground query routed `atms` is handed to DFS (`relations.rkt:3108-3109`) with 0 cells
+  (`docs/tracking/tracks/REL/REL_2/research/regrounding/rg-unify-probe.out` row C3). A route census needs the counter paired with cell allocations.
+REL 2 used the BSP observer (`current-bsp-observer`, `propagator.rkt:576`) for rounds, fires, propagators and cells
+(`docs/tracking/tracks/REL/REL_2/research/counters/fact-scale-counters.{rkt,out}`).
 
 ### 155. ✅ **DISCHARGED `51a24f4f`** (SW-25: runs write `data/benchmarks/runs/`; two writers, not one) — RUNNING A MICRO-BENCHMARK DIRTIES THE TREE — `bench-parallel-demos.rkt` rewrites the TRACKED `data/benchmarks/parallel-demo-results.json` (PAR 2's recorded result, `ce4cde52`)
 
@@ -7143,6 +7208,19 @@ with cell 1, so the result is not a fixpoint of its own S0 propagators.
   (or invalidated bits) that the projection reads, so cell 1 has one writer, α(assumptions, decisions, nogoods).
 - **Evidence** (on main since PAR 4 checkpoint 2 `8a11ee1a`): `racket/prologos/benchmarks/par4/d3-wave2/W2-4/` (`q3-cell1.rkt`,
   `q3-tier1-sweep.rkt`). W2-4-2 adds the `truths` rows to (a)'s parity set. Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §6.
+
+**Addendum 2026-10-19: the parts are split between two tracks** (PAR 4 O-17 (a) and PAR 4 D.3).
+- **(a) stays in PAR 4's P0.5**: undeclared writes go through the merge, but only where the merge is a join (C2-8).
+  Includes W2-4-2's `truths` parity rows.
+- **(b), the guard retracting through cell 1's replacement merge (`relations.rkt:2353`), and the S1 NAF handler's
+  AND-NOT on cell 1 (PD-10, the addendum above) go to BSP-LE Track 3, Stage A.** Both are the worldview row's
+  mechanism (PAR 4 P1a row 1). O-17 placed that row in BSP-LE 3 with DEFERRED 177's fix. C2-8 already kept the
+  guard's write out of P0.5, because cell 1's merge is not a join.
+- The fix shape above stands. BSP-LE 3's kickoff
+  (`docs/tracking/tracks/BSP-LE/BSP-LE_3/handoffs/2026-10-19_BSP-LE_3_KICKOFF.md`, on branch `bsple3-tabling`) lists this
+  entry among its inputs.
+- **Record**: PAR 4 D.3 §6.1 and §6.10 (`docs/tracking/tracks/PAR/PAR_4/2026-10-19_PAR_4_D3_DESIGN.md`, on branch
+  `par4-arena-executors` until PAR 4's next checkpoint).
 
 ### 158. ⬜ PROPAGATORS INSTALLED INSIDE A FIRE LOSE THEIR FLAGS — the BSP scheduler re-installs them from `(inputs outputs fire-fn)` only, dropping `PROP-FIRE-ONCE`, `#:assumption`, `#:component-paths` and srcloc; a fire-once propagator installed in a fire fires on every input change
 
@@ -7626,6 +7704,22 @@ further fused ω steps or a sub-block, so an ω ancestor under a deep star is un
 > (`ow{top:cfg.x}` → "field :x is not present in the record {:eu …}"); the waypoint can widen to every in-block
 > step after ω when this entry's decision is taken.
 
+> **ADDENDUM (2026-10-19, CIU 6 Q_U63 finding RV-4; probe
+> `docs/tracking/tracks/CIU/CIU_6/research/P4e-2/probe-p4e2-c` lines 26–28, branch `ciu6-path-selection` @ `21ac833a`).**
+> The same class meets a STAR. With `tw := {:teams @[{:m @[1]} {:m @[2 3]}] :name "x"}`:
+> - the path `tw.teams:m*` → `@[1 2 3]`;
+> - the block `tw{teams:m*}`, and `tw{teams:m* name}`, are refused with "`*` (flatten) cannot join Map-valued
+>   contents under `:` …";
+> - in a block the broadcast does not apply its step (as `w4{a:b}` above), so the star meets the team records.
+>
+> **Why it now matters more:** Q_U63 (the ravel question, PENDING) leans to `x:*`, a broadcast of the identity then
+> a join. In block position that spelling (`x{a:*}`) sits on exactly this route, so this entry's fix gates
+> block-position ravel under that option.
+>
+> **Update (2026-11-02):** that option is DECIDED (CIU 6 Q_U63 = J, sub-decision JD-3). Until this entry is fixed,
+> `x{a:*}` gets a guided waypoint refusal naming the path form `x.a:*`, built at P4e-2. It widens to the meaning when
+> this entry lands.
+
 ### 168. ⬜ A STAR GLUED TO AN ARROW IN A TYPE IS SILENTLY NOT AN ARROW — `spec s4 Nat *-> Nat` reports "spec type for s4 has no arrow"; ~~`<(x : Nat)*- Nat>` reports a bare "Type mismatch"~~ **Withdrawn** — `<(x : Nat)*- Nat>` reports a nameless "Unbound variable" (see the correction below)
 
 **Found by** the CIU 6 1b-vi grounding audit (2026-10-13; probe
@@ -7830,8 +7924,8 @@ not determined.
 
 **Addendum 2026-10-19 (PAR 4 O-16 DECIDED (a), part 3).** Every budget exhaustion becomes a classified outcome of
 the command that ran out, on one channel, and never a whole-file abort. The fix shape above already has that form.
-Record: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on branch
-`par4-arena-executors` until PAR 4's next checkpoint).
+Record: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on main since PAR 4
+checkpoint 3 `dba9f502`).
 
 **Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-10-13_PPN_4C_4B5b_GROUNDING_AUDIT.md` GA-5 (on branch
 `ppn4c-elaboration-on-network` until its next checkpoint merge); probes `…/PPN_4C/research/4B5b/p23-*`–`p26-*`.
@@ -8035,6 +8129,26 @@ follow is now decided (PAR 4 D.1 §14 O-3, `1e1684e2`, on main since PAR 4 check
 
 The entry stays open until the fixes land.
 
+**Addendum (2026-10-19, owner decision O-11 = (c), "observation needs no request")**: the fix shape changes in
+form, not in coverage (PAR 4 D.3 §7 and §15 O-11, `docs/tracking/tracks/PAR/PAR_4/2026-10-19_PAR_4_D3_DESIGN.md`,
+commit `7fd5ff22`, on branch `par4-arena-executors` until PAR 4's next checkpoint).
+- **(b)**: every quiescence of every network **always** writes an epoch record keyed (network, epoch) and retains
+  the epoch's start state x⁰ₑ. No parameter, cell or callback requests it. Under PAR 4 P2 there is no Tier 1, so no
+  S0 run is silent (item 4's first half).
+- **(a)**: round records (cell, old value, held value, writers, round) are produced **on query, by replaying** from
+  x⁰ₑ under BSP's inner loop. They replace items 1–2's records rather than patching the observer block. The
+  **boundary step**, i.e. the stratum handlers' writes, is the difference between the replayed end state and the
+  next epoch's start (item 4's second half). ATMS events happen at that step (item 5).
+- **Item 3 dissolves**: records are keyed per network and epoch, and x⁰₀ is the true initial state. That replaces
+  `lsp/server.rkt:586`'s initial = final.
+- **(c)** (the LSP and editor side) now means: query instead of installing one accumulator around `process-file`
+  (`lsp/server.rkt:519`, `:547`; also `prop-observatory.rkt:179`, `:204-205`). PAR 4 P6 deletes the callback form
+  (`current-bsp-observer` `propagator.rkt:576`, `make-trace-accumulator` `:594`) once the consumers have moved.
+  (c) and (d) remain outside PAR 4 and still need a roadmap home.
+- **New condition**: a query-time replay must reproduce the run it describes. PAR 4 P2 gates on it (FID-1, with a
+  poisoned-parameter power row). Until then, query-time rounds of epochs whose fires read ambient state are
+  classified, not shown as the run.
+
 ### 177. ⬜ ⭐ THE ATMS SOLVER RETURNS ANSWERS THAT DFS REJECTS — `(= x 1) (= x 2)` in one clause gives `{:x 2}`; `(= x 1) (= y 2) (= x y)` gives `{:x 1, :y 2}`; a caller's `x = 1` is invisible inside a branch, which then answers `{:x 2}` as well
 
 **Found by** PAR 4's D.3 adversarial critique round. Critic C9 (red team) found it; C4 independently measured the
@@ -8115,6 +8229,118 @@ wrong answers fixed sooner.
 - **Owner decision pending**: whether PAR 4 P1a or BSP-LE 3 owns the fix (O-17 in the synthesis). Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §5.7, §6
   (on main since PAR 4 checkpoint 2 `8a11ee1a`).
 
+**Addendum 2026-10-19: owner decision O-17 (a). BSP-LE Track 3 owns the fix, as its Stage A.** This supersedes the
+**When** line above.
+- The fix runs as a concurrent track: branch `bsple3-tabling`, worktree `.claude/worktrees/bsple3-tabling`, kickoff
+  `docs/tracking/tracks/BSP-LE/BSP-LE_3/handoffs/2026-10-19_BSP-LE_3_KICKOFF.md` on that branch.
+- **Stage A** is the six parts (a)–(f) above, plus the DFS-vs-ATMS answer-set differential with a deliberate-error
+  row. It checkpoints to main before any tabling work. Track 3's tables share the label lattice (PUnify Part 3 §9.6),
+  with the read rule pinned to label ⊆ W.
+- **PAR 4 P1a gives up rows 1–3.** PAR 4 owes the Tier-1 predicate seam in P0.5 (W2-6-3: BSP takes the Tier-1 flush
+  when the worldview cell is zero, `propagator.rkt:3410-3430`), and the projection (`:978-987`) and tag-gate
+  (`:1993`) sites on request.
+- **An exhaustion inside a branch is not a nogood** (PAR 4 O-16 part 3; DEFERRED 184's solver half).
+- **Record**: PAR 4 D.2 §15 O-17 (on main since PAR 4 checkpoint 3 `dba9f502`).
+
+**Addendum 2026-10-19 (BSP-LE 3 Stage 1).** Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/2026-10-19_BSP-LE_3_STAGE1_DIFFERENTIAL.md` §2-§4 and §7; instrument and data in `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage1/`
+(`166afd41`, `0b303034`); both on branch `bsple3-tabling` until BSP-LE 3's next checkpoint. The answer-set
+differential this entry's test layer asks for now exists, and it has power:
+- seeded mutations of real outputs flag exactly their line with the expected class (171 of 171), while reorderings
+  and fresh-name renamings flag nothing (47 of 47);
+- the generated programs have a third leg, the perfect model of the ground program, and a seeded wrong rule in that
+  oracle is caught (356 and 252 lines).
+
+Findings:
+- **Measured reach.**
+  - In-repo, under `:strategy auto`, 28 of 357 route records take ATMS. Every one that has a reference agrees with DFS,
+    except four lines in PAR 4's probe files that were written to reproduce this entry. "In-repo programs do not hit
+    it" holds.
+  - On 2156 generated queries (120 programs × 4 variants):
+    - DFS matches the perfect model on every query;
+    - forced ATMS is wrong on 881 (41 %);
+    - a plain `solve` is wrong on 337 (16 %), every one of them routed through Check 1 (a `not` goal).
+
+    On the generator profile calibrated to the corpus's clause shapes, a plain `solve` is wrong on 48 of 1092 (4.4 %).
+- **Correction: the "control" row of the 2026-10-18 addendum is masked.** `(rel [?x ?y] (pick ?x) (= ?y 1) (= ?x ?y))`
+  agrees only because `1` is `pick`'s first clause. With `pick`'s clauses reversed it answers `@[{:x 2, :y 1}]` against
+  DFS's `@[{:x 1, :y 1}]`, and with the constant `2` it fails as W2-7 Q6 already showed. It is a wrong-answer row, not
+  a control. Under the metamorphic closure, 20 generated query positions agree in one variant and fail in another.
+- **Correction: the wrong answers depend on the scheduler.** Both schedulers are wrong, but not identically. Under
+  `:execution :sequential` (the Gauss-Seidel drain), answer sets differ from BSP's on 10 of 78 known-row queries, and
+  generated queries are wrong on 1090 lines against BSP's 881. So "order-differential instruments … cannot see this"
+  (above) holds only where the two schedulers' wrong answers coincide, and a fix verified under BSP alone is not
+  verified under the drain.
+- **ATMS answers also depend on clause order**: 92 of 1078 clause-order pairs of generated queries change their answer
+  set (DFS: 0).
+- **One more path to the row-1 mechanism: a repeated variable in a call.** `&> (e2 x x)` over the single fact `(2, 3)`
+  answers `{:x 2}` under ATMS, where DFS answers `@[]`. The same query on the facts-only relation itself takes the
+  direct-fact fast path, which is wrong under EVERY strategy: filed as 187.
+
+**Addendum 2026-10-19 (BSP-LE 3 Stage 2).** Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/audits/2026-10-19_BSP-LE_3_STAGE2_AUDIT.md` (branch `bsple3-tabling`, `40b9e57a`), §2 and §5.
+The six fix parts are confirmed. (a) alone changes 0 of 310 re-reads; (a)+(c) changes 116, all of them reads whose
+join holds ⊤. (b) in its additive form preserves every join, and (c) is one arm (`decision-cell.rkt:953`). They are
+**not sufficient**. These families of ATMS-path wrong answers lie outside (a)-(f), and each is visible under `:auto`
+today:
+- **SG-3, no failure channel.** A goal that fails without two writes meeting in one key writes nothing: no viable
+  fact (`relations.rkt:2619-2620`), no viable clause (`:2718`), or ground = ground never compared (`:2167`). For
+  example, with `defr q1 [?x] &> (= 1 x)`, the query `(rel [?a] (= ?a 5) (q1 2))` answers `@[{:a 5}]` where DFS answers
+  `@[]`. 7 of 7 probes are wrong, all of them *extra*.
+- **SG-4, the table consumer is on the default path.** Tabling is `'by-default` (`solver.rkt:78`), so a relation's
+  second call in one query reads a table. The consumer treats a bound argument as free (`relations.rkt:2810-2811`).
+  `(e3 ?a ?b) (e3 ?b ?c)` gives `{:a 1, :b 1, :c 1}`; DFS gives `{:a 1, :b 2, :c 3}`. 4 of 4 probes are wrong.
+- **SG-5, `is` is evaluated once, at install**, by a fire-once with no inputs (`:2175`, `:2183`). For example,
+  `(double 21 ?r)` prints `{:r unknown}`. It is 59 of the 68 `unresolved` corpus lines in Stage 1.
+- **SG-6, non-ground scope-cell values** (`resolve-term`, `:2052-2055`). A flat ⊤ would turn these over-general
+  answers into missing ones.
+- **SG-7, bare names.** With a `not` and two branching calls, only the first call's variable is bound. The mechanism
+  is not yet measured.
+
+Whether Stage A widens to cover these, or narrows its gate, is owner decision BL-4 (pending), in
+`docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md`. Two more families are filed separately,
+because they are not label semantics: **190** (the drain has no stratum layer) and **191** (`false` prints `none`).
+The scheduler dependence in the Stage-1 addendum above has its mechanism in 190.
+
+**Addendum 2026-10-19 (BSP-LE 3 owner decision BL-1: multiplicity is part of the contract).** Ledger:
+`docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` BL-1 §10 (branch `bsple3-tabling`, `a74d2294`).
+The owner reaffirmed Rel T1 POL.1: *"We have intentionally went with multisets/bags for our default `solve`, mirroring
+very much the semantics of `findall`. I would expect the order in the result of such to change based on search strategy
+involved, but I'd be surprised if an exhaustive search would change the overall count or multiplicity."* Stage A's gate
+therefore checks **bags**: multiset equality against DFS and the ℕ-semiring derivation count, insensitive to order. The
+consequences for this entry:
+- **Bag-only differences are wrong answers**, not presentation:
+  - forced ATMS returns the right set with the wrong multiplicity on 161 generated lines (BSP) and 200 (drain);
+  - under `:auto`, `(rel [?x] (= x 1) (pick x) (not …))` prints `{x 1}` three times where DFS prints it once (fixture
+    M6).
+- **The parity instrument checks less than the contract.** `racket/prologos/tests/test-solver-parity.rkt:74-82`
+  compares `list->set`, so it must compare multisets.
+- **The fix must give each derivation its own label** (BL-1 §10 MC-2). Counts are read off a set of (answer,
+  derivation label) pairs at the answer boundary, so labels must be in bijection with derivations: per call instance,
+  with failed derivations as nogoods.
+
+**Addendum 2026-10-19 (BSP-LE 3, owner decision BL-7): ground fact rows are data.** The owner, verbatim: *"Ground fact
+rows are data, principally. So I don't see the need for them to be taken as assumptions and moved off any
+fast-path."* `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § *BL-7 decision* (branch `bsple3-tabling`, `0c0d1aa3`).
+- Today the on-network path gives every matching fact row its own ATMS assumption and worldview bit
+  (`racket/prologos/relations.rkt:2644-2660`), and every matching clause one too (`:2725-2743`). Bindings are written
+  one tuple at a time into shared scope cells, so alternatives are kept apart by worldview bits.
+- **The fact-row site is now outside the decided meaning.** Stage A's D.1 owes a binding carrier that brings many rows
+  to later goals as data. The conjecture is relation-valued goal answers, a bag of binding rows per goal. D.1 places it
+  in Stage A or with Stage B's tables.
+- **The clause site is BL-8** (pending, posed at D.1). If it goes the same way, assumptions remain only at `not` and
+  guards (`:2215`, `:2261`).
+- Non-ground `||` rows are accepted silently today: **192**.
+
+**Addendum 2026-10-20 (REL 2 Stage-1 acyclicity census, finding AY-9; a fourth shape).** A NAF after TWO generator
+variables answers wrongly under the default `solve`; with one generator it is right
+(`docs/tracking/tracks/REL/REL_2/research/census/acyclicity/ay-naf-route.{prologos,out}`, file lines, (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)):
+- `(val x) (val y) (not (= x y))`: default `@[]` (line 10), forced atms `@[]` (12), depth-first two rows (11);
+- `(val x) (val y) (not (bad x y))`, NAF over a base relation: default `@[{:a 2, :b b} {:a 1, :b b}]` with `b`
+  unbound (14), forced atms the same (16), depth-first three rows (15);
+- control, one generator: `@[{:a 2}]` on all three routes (18–20).
+By reading: `naf-per-binding-mask` declines when the generator count is not 1 (`racket/prologos/relations.rkt:187`), and
+the fallback is wrong. `:auto` takes ATMS because the relation's clause carries a `not`. One corpus rule has this shape,
+`racket/prologos/examples/2026-03-18-track7-acceptance.prologos:536`, and its query is commented out (`:540`).
+
 ### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
 
 **Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
@@ -8163,7 +8389,7 @@ The fix shape is now "**deleted by PAR 4 P2**", which deletes the Tier-1 branch 
 if P2 slips. Tier-1 dispatch reads cell 1 (`propagator.rkt:3410`), so PAR 4 P1a row 1 lands with or after the
 deletion (W2-6-3). Record: `docs/tracking/tracks/PAR/PAR_4/critiques/2026-10-18_PAR_4_D3_SYNTHESIS.md` §5.2, §6.
 
-### 179. ⬜ Q_U56'S GUIDED `*->` TEXT MISSES THE BLOCK-CLOSER POSITION — `env{prod dev}*->` reports the comparison-keyword hint ("comparison keywords are spelled lt/le/gt/ge …"), not the star-family diagnostic
+### 179. ✅ **DISCHARGED `04e3c5c5`** (branch `ciu6-path-selection`; reaches main at the 1b-vi close checkpoint) — Q_U56'S GUIDED `*->` TEXT MISSES THE BLOCK-CLOSER POSITION — `env{prod dev}*->` reports the comparison-keyword hint ("comparison keywords are spelled lt/le/gt/ge …"), not the star-family diagnostic
 
 **Found by** the CIU 6 1b-vi verify (2026-10-18; lens VS, finding VS-7; D4 §5.P4e-1b-vi `#p4e-1b-vi-verify`), re-measured
 on the main thread: probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v5-misc.prologos` line 15, branch
@@ -8180,7 +8406,16 @@ give the closer-band star followed by `>` Q_U56's message ("drop the `>`"), in t
 reader raise aborts the whole file). **When**: no gate; with the star-family grammar work (DEFERRED 144) at CIU 6 T6's
 close, or with the next Q_U56-family message work.
 
-### 180. ⬜ THE STAR ARRIVAL INSTRUMENT CANNOT TELL A ONE-TOKEN `*-` FROM `*` THEN `-` — `star-last-token-type` / `star-mints?` answer `postfix-star` / `#t` for `c{a}*-` and `c{a}* -` alike (and for `-_`), so the flipped arrival pins' "is ONE token" lost its power at the 1b-vi mint
+**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2)). The mechanism is now measured: the
+fold fuses the closer star and leaves `>` as the next sibling, `(($select-path ($select env prod dev)
+$postfix-star-collapse) >)`, so `>` was an argument. Inside a keyword form it gave "map-get expects 2 arguments,
+got 3" instead. The consumer named in the fix shape cannot see a `>` outside the braces, so the arm sits in
+`parse-list`, the one seat every list form passes before head dispatch (after `$angle-type`, so type territory
+keeps Q_U31's seat). It covers the closer, dot and broadcast bands. A spaced `*- >` is the same datum, so the
+text names the comparison spelling too. `env{prod} > 1` (no star) and `env{prod}*- >= 1` keep the comparison hint.
+Probe `research/P4e-1b-vi/close/probe-179` (+ `.pre-fix.out`).
+
+### 180. ✅ **DISCHARGED `04e3c5c5`** (branch `ciu6-path-selection`; reaches main at the 1b-vi close checkpoint) — THE STAR ARRIVAL INSTRUMENT CANNOT TELL A ONE-TOKEN `*-` FROM `*` THEN `-` — `star-last-token-type` / `star-mints?` answer `postfix-star` / `#t` for `c{a}*-` and `c{a}* -` alike (and for `-_`), so the flipped arrival pins' "is ONE token" lost its power at the 1b-vi mint
 
 **Found by** the CIU 6 1b-vi verify (2026-10-18; lens VI, finding VI-10), re-measured on the main thread: probe
 `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/verify/v9-arrival.rkt` + `.out` (branch `ciu6-path-selection`; on main
@@ -8191,6 +8426,12 @@ lexeme not compared); its readers are the arrival gate and the `p4e-star-type` p
 equals the injected IR, 68 rows) both hold. This is instrument POWER: a regression that split `*-` into `*` and `-` would
 pass the arrival gate. **Fix shape**: require the minting token's LEXEME to equal the table lexeme under test (the gate
 already iterates the table). **When**: with DEFERRED 144, or the next edit of the arrival matrix.
+
+**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2)). The fix shape landed as
+written: `star-last-token-type` / `star-mints?` take an optional spelling, and with one the last star-family token
+must BE that lexeme, or the answer is `'split`. The arrival gate passes the lexeme under test. The battery's
+"is ONE token" pins compare `(lexeme . type)` with split controls. A mutation that ignores the spelling turns the
+new test case red.
 
 ### 181. ⬜ ⭐ A FIRE THAT RAISES HANGS THE PRODUCTION BSP EXECUTOR — on any round of ≥ 8 fires, `make-parallel-thread-fire-all` (installed at load, `driver.rkt:567`) loses the exception with its thread and the joiner blocks forever in `channel-get`; the LSP, whose error port goes nowhere, wedges with an empty log
 
@@ -8274,10 +8515,10 @@ decided with O-16.
 - **The override fix shape above stands**: an override is a record update.
 - **The DFS depth abort** (this entry's headline, and DEFERRED 153) becomes a per-command outcome (O-16 part 3).
 - **Natural home**: BSP-LE Track 5, Solver Language ("make `solver-config` knobs operational", `:timeout` included;
-  `docs/tracking/2026-03-21_BSP_LE_MASTER.md:203-213`). Who implements it is not decided; O-17 asks the same question
+  `docs/tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md:203-213`). Who implements it is not decided; O-17 asks the same question
   for 177.
-- **Record**: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on branch
-  `par4-arena-executors` until PAR 4's next checkpoint).
+- **Record**: PAR 4 D.2 §15 O-16 (`docs/tracking/tracks/PAR/PAR_4/2026-10-15_PAR_4_D2_DESIGN.md`, on main since
+  PAR 4 checkpoint 3 `dba9f502`).
 
 ---
 
@@ -8335,7 +8576,819 @@ the library.
 - Inside an ATMS branch this meets DEFERRED 177's fix: ⊤ under ev_W is a nogood only for a *logical* contradiction.
 - The typing half is elaboration on the network (PPN 4C's ground).
 
-**When**: the solver half goes with whoever owns 177's fix (PAR 4 O-17); the typing half with PPN 4C, or a sweep.
-First, the census of `TYPING-FUEL-LIMIT` trips.
+**When**: the solver half goes with 177's fix, which BSP-LE Track 3 owns as its Stage A (PAR 4 O-17 DECIDED (a),
+2026-10-19). The typing half goes with PPN 4C, or a sweep. First, the census of `TYPING-FUEL-LIMIT` trips.
 
 **Record**: PAR 4 D.3 synthesis §5.6; PAR 4 D.2 §15 O-16, facts 1 and 4, and part 3.
+
+### 185. 🟡 PARTLY FIXED (CIU 6 1b-vi close, `a9788c0a`) — OPEN: the reader seats (→ P4e-2) · ON A PATH MADE ONLY OF ORDINALS, SELECTION REFUSALS GIVE KEY- AND POSTFIX-SHAPED ADVICE THAT CANNOT BE SPELLED — `vhm{0.{0}* 0.{0}}`'s L4 offers "keep a key before each star" and a `^` that does not parse; `vhm{0.{0*}}` says "`*` is postfix"
+
+**Found by** CIU 6: finding SB-3 when [Q_U62](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) was opened (2026-10-18;
+probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-ae` line 66), and SB-4 at 1b-vi-F (2026-10-19;
+probe `…/probe-1bvi-ai` lines 19, 31, 32; branch `ciu6-path-selection` @ `3fcb720a`, reaching main with the next
+checkpoint merge). Subject: `vhm := @[@[{:x 1}] @[{:y 2}]]`.
+- **SB-4, measured.** `vhm{0.{0}* 0.{0}}` is an L4 refusal (correct) whose all-ordinal arm offers two remedies.
+  Neither can be spelled on this path:
+  - "keep a key before each star (`x{0.a.b* 1.a.b*}`, a tuple of records)": the path has no key;
+  - "end the branch with `^` instead of its star": `vhm{0.{0}^ 0.{0}}` is a parse error ("a `^` operates on the
+    segment to its LEFT …", line 32).
+
+  The remedy that works is to drop the star: `vhm{0.{0} 0.{0}}` → `@[@[{:x 1}] @[{:x 1}]]` (line 19). The own-block
+  route ("Selecting the flatten in its own block") is also offered and stands. The arm is VF-3's
+  (`typing-errors.rkt`, `star-l4-mixed`, the `'all-head` case). It is on main since `83fe4fb4`.
+- **SB-3, measured.** `vhm{0.{0*}}` reports "`*` — `*` is postfix; it attaches to the END of a segment" (ae line 66),
+  although the star does end segment `0`. [Q_U46](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u46)'s gap 1 made a star
+  after an ordinal a guided error that names the reason (an ordinal makes no layer); this spelling misses that route.
+  It predates 1b-vi.
+
+**Impact**: misleading advice only. No wrong value, and every refusal is correct. **Fix shape**: choose each remedy by
+whether the user's own branch can spell it. The arm has the branch: on a path with no key, offer dropping the star,
+and send `{N*}` to Q_U46's ordinal-star message. The class-level cure (1b-vi-F's VAG (b)) is a remedy generator that
+renders its suggestion on the user's branch and runs it, as the battery's remedy rows already do by hand.
+**When**: the 1b-vi close, or the next edit of the level arms, whichever comes first.
+
+> **ADDENDUM (2026-10-19, CIU 6 1b-vi close, branch `ciu6-path-selection` @ `a9788c0a`; reaches main with the
+> 1b-vi checkpoint merge).**
+> - **Re-measured before fixing: wider than filed, and one claim above is wrong.** "Q_U46's gap 1 made a star after
+>   an ordinal a guided error" held for ONE spelling, the bracket `y{a[0]*}`. The rest missed it:
+>   - `vhm{0*}` / `vhm{0.{0*}}` → "`*` is postfix";
+>   - `y{a.0*}` → "stray `.`";
+>   - `vhm.0*`, `vv:0*`, `y.a.0*` → a bare "Unbound variable".
+>
+>   SB-4 is wider too: "keep a key before each star" is unspellable on `ot2{0.a* 1.a}` (no dissolved key).
+> - **Fixed:**
+>   - SB-4: each all-ordinal L4 remedy is gated on flags saying every passing head can spell it; with neither,
+>     "drop each `*`", which runs.
+>   - SB-3, block band: the parser gives Q_U46's refusal, from one definition shared with typing
+>     (`select-ordinal-star-message`).
+>
+>   Red steps were run against the old code; mutations each turned their own rows red.
+> - **OPEN:**
+>   - The READER seats (the path band and the dotted mid-branch), which need the recognizer. **When**: CIU 6
+>     P4e-2, which opens that recognizer for `.*`. Q_U27's rule applies: a reader mint lands alone, with a
+>     corpus A/B.
+>   - The refusal's remedy text ("star a named step instead, or select the element first and flatten
+>     separately") is unspellable on vector-only paths. What "flatten element N" should be is CIU 6 Q_U63
+>     (opened 2026-10-19), so that text waits for it.
+>   - The class-level cure stands as written above.
+>
+> **Update (2026-11-02):** CIU 6 Q_U63 is DECIDED J. Ravel is `x:*` (the identity broadcast, then the join), so
+> "flatten element N" is spelled `x.N:*`. The refusal's remedy text changes to it when P4e-2 builds `:*`; a remedy
+> is offered only once it runs. P4e-2 is re-scoped to carry this entry's reader seats as well (CIU 6 D4, P4e-2 row).
+
+### 186. ⬜ ⭐ A MODULE ALREADY IN THE REGISTRY BRINGS NONE OF ITS REGISTRY STATE TO A LATER IMPORTER — the second `process-file` of a file in one process loses imported instances and constructors (`e1 : Bool defined.` → `No instance of Eq for Int`); `core::csv` elaborated after its closure was imported directly fails E2001
+
+**Found by** PAR 4B SP-2, 2026-10-19 (branch `par4b-parallelism-portfolio` @ `c6b6dc19`; compiler code = main `a01f3fc7`
+= main `1120c2d4`). The module-level profile needs a module's elaboration to be a function of its source and its
+imports' results, and two censuses checked that. Every module was elaborated from source (`.pnet` reads off). Record:
+`docs/tracking/tracks/PAR/PAR_4B/research/2026-10-19_PAR_4B_STAGE1_PARALLELISM_PROFILE.md` §4.7 (on the branch until
+its next checkpoint merge).
+- **Re-run census, measured.** `process-file` the same file twice in one process and compare the results. This is how
+  the LSP checks a document (`lsp/server.rkt:536-566`, one `process-file` per check, no module-registry reset) and how
+  `racket driver.rkt a b` runs (`driver.rkt:3967`). 20 of 52 library modules and 3 of 19 comparative files differ on
+  the second run, always toward errors.
+  - constraints-adversarial, 4 → 10 errors. `e1 : Bool defined.` → `No instance of Eq for Int` (also Bool and
+    String), and `d8 : Int defined.` → `Could not infer type`.
+  - `data::list`, 0 → 3 errors: `Eq expects 3 arguments, got 1`; `unreachable match arm …` (a constructor read as a
+    variable); `Unbound variable`.
+
+  Repro: `racket/prologos/benchmarks/par4b/profile/sp2-rerun-diff.rkt FILE` prints every differing result; its output
+  on five files is `…/research/profile/sp2/repro/rerun-diff.out` (30 differing results). Not reproduced in the editor
+  itself.
+- **Order census, measured.** For each module b, a top-level file imports b's closure directly, in topological order,
+  and then b. 1 of 52 fails: `prologos::core::csv`, with `E2001: Required capability ReadCap not available in scope`.
+  The same module loads clean alone and through its own imports. Minimal repro (`…/sp2/repro/csv-after-capabilities.prologos`,
+  `.pnet` reads off): `ns r :no-prelude` / `require [prologos::core::capabilities :refer []]` /
+  `require [prologos::core::csv :refer []]`. With fresh `.pnet` caches it passes, because csv is then not elaborated.
+  The census detects errors only; a module that elaborates differently without erroring would not be seen.
+
+**Mechanism.** The paths are from code reading; that they cause these symptoms is CONJECTURE. `load-module` has three
+paths, and only two carry registry state to the importer:
+- the `.pnet` hit restores every registry into parameter AND cell (`restore-registries!`, `driver.rkt:3132`, #78);
+- the source path re-propagates the module's registries to the caller's parameters (`:3336-3361`);
+- the memory hit returns the cached module-info and nothing else (`:3039-3045`).
+
+Before SW-27, a source load's registrations leaked to the process root, which hid the gap. Since SW-27 (160,
+`51b6b1f9`), a unit's registrations end with the unit. So a module first loaded inside unit 1 is a memory hit in
+unit 2: it brings its env (share-by-reference, `:3040-3044`) but not its instances, constructors or capabilities.
+
+The csv case happens inside ONE unit. It may instead be the parameter-only propagation at `:3361` meeting cell-primary
+readers (`macros.rkt:8210-8211`), which is #78's polarity on the miss path. Not verified.
+
+**Why it matters.** It breaks HIT ≡ MISS (#78's invariant) on the third path. Any build that reuses a loaded module
+computes something else on a hit: the LSP's second check, an incremental rebuild, or a parallel module build whose
+workers keep what they loaded. PAR 4B's module-level ceilings (profile §4) assume the opposite.
+
+**Fix shape.** Make the memory hit restore what the `.pnet` hit restores: the module-info keeps its registry deltas, as
+the `.pnet` does (`pnet-restore-rows`), and `restore-registries!` runs on both hits. Then re-run both censuses, which
+become the regression gates (0 of 52 and 0 of 19 on re-run; 0 of 52 on order).
+
+**Related**: 160 (SW-27, the scope that exposed it), 171 (REPL sessions: the converse, registrations escaping), #78.
+
+**Owner**: PM (`load-module`). PAR 4B does not edit `driver.rkt`.
+
+**When**: before any PAR 4B XV-5 or XV-8 spike relies on reusing loaded modules. The LSP path argues for sooner.
+
+*Addendum 2026-10-19 (PAR 4B SP-3; branch `par4b-parallelism-portfolio` @ `1c2c7c56`, compiler code = main `a01f3fc7`):*
+a THIRD trigger, measured. A file processed after a DIFFERENT file that imported the same modules is degraded on its
+FIRST run: `process-file benchmarks/par4/preload-empty.prologos` (a one-`def` file that loads the prelude), then the
+target. 3 of 19 comparative files differ from a fresh process, and they are the re-run census's three:
+constraints-adversarial 4 → 10 errors, type-adversarial 20 → 28, scheduler-adversarial 18 → 19. The other 16 are
+identical (result hashes equal). This is the setup of PAR 4's W2-1 / W2-8 probes and of PAR 4B SP-1, so their
+heavy-file profiles were taken on the degraded elaboration. Re-measured fresh: work/span 1.29 / 1.58 against 1.26 /
+1.49 in the same session; the run structure is unchanged (66 / 61 runs) and 2 / 3 commands fire differently
+(profile record §5.6, branch `02e720b5`). It also means a batch run that processes several user files in one process
+(`racket driver.rkt a b`, `driver.rkt:3967`) degrades every file after the first that shares imports with an earlier
+one; that consequence is from reading, not measured.
+
+**Addendum 2026-10-20 (REL 2 Stage-1 form census, finding FM-23): a WS user file with the prelude.**
+`require [prologos::core::csv …]` fails with `E2001: Required capability ReadCap not available in scope` when
+`racket/prologos/data/cache/pnet/prologos/core/csv.pnet` is absent, twice in a row, and passes once a no-prelude load
+has written that cache (`docs/tracking/tracks/REL/REL_2/research/census/forms/fm08-cache-sequence.{sh,out}`, steps 0–5; `fm08-csv.cold1.out` `0:` against
+`fm08-csv.warm.out` `0:`; (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)). The script deletes the cache before and after, so it replays from the cold state.
+
+### 187. ⬜ THE DIRECT-FACT FAST PATH IGNORES A REPEATED QUERY VARIABLE, UNDER EVERY STRATEGY — `solve (e2 ?a ?a)` over the single fact `(2, 3)` answers `@[{:a 3, :a 3}]` instead of `@[]`; `(e3 ?a ?b ?a)` returns both `(1 2 1)` and `(1 2 3)`
+
+**Found by** BSP-LE 3's Stage-1 differential: the generated workload, program census-f2 `p27`, in all four of its
+metamorphic variants. Reproduced by hand at `2d04ae79` with `tier1-repeat.prologos`, in `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage1/` `w2-known/` (on branch
+`bsple3-tabling`). The direct-fact fast path is `tier-1-direct-fact-return`; it is not BSP's Tier-1 flush of 178.
+Output under each forced strategy and under `:auto` (`w2/tier1-repeat.{dfs,atms,auto}.out`):
+
+| query | facts | every strategy | expected |
+|---|---|---|---|
+| `(e2 ?a ?a)` | `(2, 3)` | `@[{:a 3, :a 3}]` | `@[]` |
+| `(e2d ?a ?a)` (control) | `(2, 3)`, `(2, 2)` | `@[{:a 3, :a 3} {:a 2, :a 2}]` | `@[{:a 2}]` |
+| `(e3 ?a ?b ?a)` | `(1, 2, 1)`, `(1, 2, 3)` | both rows | `@[{:a 1, :b 2}]` |
+| `(rel [?a] (e2 ?a ?a))` (the dispatch, not the fast path) | `(2, 3)` | DFS `@[]`, ATMS `@[{:a 2}]` | `@[]` |
+
+**Mechanism** (read in code; the route record confirms that the path is taken):
+- `stratified-solve-goal` calls the fast path BEFORE the strategy dispatch (`racket/prologos/stratified-eval.rkt:242`
+  on main). It applies to a relation with one variant, facts, and no clauses
+  (`racket/prologos/relations.rkt:3018`).
+- Its per-row fold binds a query-variable position with `hash-set` (`relations.rkt:3046`), without checking an earlier
+  binding of the same variable. So the last column wins, and a row is rejected only when a ground argument differs.
+- Because the fast path precedes the dispatch, DFS cannot serve as a reference here. The forced-DFS leg prints the
+  same wrong answer, with route record `tier1`.
+- The doubled key in the printed answer is a separate anomaly, present on every route: 188.
+
+**Reach**: a `solve` on a facts-only relation that repeats a variable. In-repo: 0 top-level queries. The census
+pattern matches 2 of 2 positive strings and 0 of 2 negatives; its one hit is a `(= ...)` look-alike.
+
+**Fix shape**: in the fold, when the variable is already bound, keep the row only if the value is `equal?` to the
+existing binding, and reject it otherwise. It is the fast path's copy of 177's row 1, a binding overwritten instead of
+joined.
+
+**When**: in BSP-LE 3 Stage A's slice "the fixes that need no new machinery" (the kickoff's §4, Stage 4 item 2), if
+the owner places it there. The differential then gains a fast-path leg against the oracle.
+
+**Owner**: BSP-LE 3 (the solver files, under the contract in the kickoff's §3).
+
+**Addendum 2026-10-19 (BSP-LE 3, BL-2).** `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § BL-2 (branch `bsple3-tabling`, `e07ab6d7`); probe `research/decisions/bl2/bl2-fixtures.prologos`, under dfs, atms and auto.
+- **A further shape**: a repeat beside a ground argument. `solve (e3 1 ?b ?b)` over `(1, 2, 1)` and `(1, 2, 3)`
+  prints `@[{:b 1, :b 1} {:b 3, :b 3}]`, where it should print `@[]`.
+- **The general path is right under DFS.** The same goals through the strategy dispatch (wrapped in `rel`) give DFS's
+  correct answers, e.g. `solve (rel [?a] (e2 ?a ?a))` → `@[]`, and `:auto` routes them to DFS. So the defect lives only
+  in the fast path's fold. That fold is a second implementation of matching a goal against a fact, the ninth unify
+  variant in BSP-LE 3's Stage-2 census.
+- **Options posed in BL-2**:
+  - patch the fold;
+  - narrow the fast path to linear goals, declining a repeated variable;
+  - retire the dispatch-level fast path.
+
+  92 of 336 in-repo `:auto` routes take the fast path.
+- **Decision BL-2 (owner, 2026-10-19): narrow, now; retirement is a design item after Stage A** (`7e3163ee`,
+  ledger BL-2 §8). The fix lands at BSP-LE 3 checkpoint 2, behind a named read-surface seam that owner guidance G-5
+  (one lookup mechanism for facts, tables and schema'd records; Rel Track 2's seed) later replaces.
+
+### 188. ⬜ A REPEATED QUERY VARIABLE PRINTS TWICE IN EVERY ANSWER — `solve-with dfs-s (q ?a ?a)` prints `@[{:a 2, :a 2}]`, on the direct-fact fast path, DFS and ATMS alike
+
+**Found by** the controls for 187 (`dupkey-control.prologos`, `w2/dupkey-control.auto.out` in `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage1/`, `0b303034`, on
+branch `bsple3-tabling`). A clause relation `q` over the facts `(2, 3)` and `(2, 2)` prints:
+- `@[{:a 2, :a 2}]` through DFS, which is the right answer set with the key twice;
+- `@[{:a 2, :a 2} {:a 2, :a 2}]` through ATMS;
+- `@[{:a 3, :a 3} {:a 2, :a 2}]` through the fast path (187).
+
+**Mechanism**: from reading, not measured further.
+- `extract-query-info` (`racket/prologos/reduction.rkt:400-402` on main) keeps duplicate free-argument names.
+- `answers->champ-list` (`reduction.rkt:295-305`) inserts one entry per query-variable occurrence, and the result
+  holds two `:a` entries.
+- Not measured: whether `champ-insert` should have replaced the first entry. The keys come from
+  `query-var->champ-key` and are equal in content, so a non-replacing insert would be a CHAMP defect with wider reach.
+- Also not measured: what a reader (`get`, path selection) does with such a map.
+
+**Fix shape**: drop duplicate query variables in `extract-query-info`, keeping the first occurrence. Before relying on
+that, measure `champ-insert` on two equal fresh keys.
+
+**When**: with 187.
+
+**Owner**: BSP-LE 3 for the query-variable list. Whoever owns `champ.rkt`, if the insert is at fault.
+
+**Addendum 2026-10-19 (BSP-LE 3, BL-2): the mechanism above is wrong, as measured.** The row CHAMP holds **one** `:a`.
+`research/decisions/bl2/bl2-champ.rkt` → `.out` runs the production `answers->champ-list` with query variables
+`(a b a)`, and the result has size 2 and prints `{:a 1, :b 2}`. `champ-insert` compares keys with `equal?`
+(`racket/prologos/champ.rkt:74-77`), so two fresh `:a` keys insert to size 1 (power row: `:a` and `:b` give 2).
+- The duplicate is **display only**, in the REPL echo. `solve-echo-ordered-vars` builds its key order from the goal's
+  free arguments with repeats kept (`racket/prologos/driver.rkt:604`), and `pp-row-ordered` (`:619-631`) prints each
+  name's entry, so a repeated name prints twice.
+- Echoing the value without the ordered echo (`def rows := solve-with dfs-s (q ?a ?a)` then `rows`) prints
+  `@[{:a 2}]`.
+- **Fix site**: the shared definition `row-query-vars` (`racket/prologos/reduction.rkt:282`), which should drop repeats
+  keeping the first occurrence. It serves the row builder and the echo, so `driver.rkt` (PAR 4's file) stays untouched.
+  `extract-query-info` is not the fix site, and `champ.rkt` has no defect.
+- Placement and timing: decision BL-2, `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § BL-2 (branch `bsple3-tabling`, `e07ab6d7`); probe `research/decisions/bl2/bl2-fixtures.prologos`.
+- **Decision BL-2 (owner, 2026-10-19): narrow, now; retirement is a design item after Stage A** (`7e3163ee`,
+  ledger BL-2 §8). The fix lands at BSP-LE 3 checkpoint 2, behind a named read-surface seam that owner guidance G-5
+  (one lookup mechanism for facts, tables and schema'd records; Rel Track 2's seed) later replaces.
+
+### 189. ⬜ A PRELUDE MODULE THAT FAILS TO LOAD IS DROPPED IN SILENCE — a user file then elaborates without it, and the only symptom is a later `Unbound variable` or `No instance`
+
+**Found by** PAR 4B SP-3, 2026-10-19 (branch `par4b-parallelism-portfolio` @ `1c2c7c56`; compiler code = main
+`a01f3fc7`), while a scratch copy of `racket/prologos` that had lost `lib/prologos/data/` ran every user file with a
+3-module registry instead of 39 and printed nothing about it.
+
+**Measured** (scratch copy of the tree, `.pnet` reads off). Append `def sp3-broken := [sp3-no-such-function 1N]` to
+`lib/prologos/data/nat.prologos`, then:
+- a user file (`ns repro189`, prelude on) with `def two := [+ 1N 1N]` and `def same := [eq? 2N 2N]`: `two : Nat
+  defined.`, then `ERROR Unbound variable` for `same`. The registry holds 18 modules instead of 39. No result and no
+  stderr line names `data::nat` or the prelude;
+- the same module imported explicitly (`ns repro189b :no-prelude`, `imports [prologos::data::nat :refer-all]`):
+  `ERROR preparse: imports: Error loading module prologos::data::nat: Unbound variable`. The failure is reported;
+- with `nat.prologos` restored: 39 modules, both definitions elaborate.
+
+Repro files: `docs/tracking/tracks/PAR/PAR_4B/research/profile/sp3/repro189/` and the printer
+`racket/prologos/benchmarks/par4b/profile/sp3-show-results.rkt ROOT FILE`; record: profile §5.8 (branch `02e720b5`,
+on main at its next checkpoint merge).
+
+**Mechanism** (read, and the repro agrees). `process-ns-declaration` wraps each prelude import in
+`(with-handlers ([exn:fail? (lambda (e) (void))]) (process-imports req))` (`racket/prologos/namespace.rkt:972`; the
+library branch's `prologos::core` import likewise, `:965`). The comment gives the intent: "one failure doesn't prevent
+loading of subsequent modules". The cost is that the exception is discarded instead of reported, so one failing module
+silently removes every prelude import that depends on it. The same file's explicit `imports` path reports the error.
+
+**Why it matters.** Whoever edits the standard library and introduces an error sees every user file fail far from the
+cause (here 21 modules gone, reported as an unbound name in user code). A tool that copies or relocates the tree meets
+it as wrong results, not as an error. And a measurement silently runs on a smaller prelude: SP-3 caught it only
+because a result hash differed from the real tree's.
+
+**Fix shape.** Keep loading the remaining prelude modules, but return the failure: emit one diagnostic per failed
+prelude import (the module name and the underlying error, as the explicit path prints it), attached to the `ns` form.
+The repro above is the regression test: its user file must then report `data::nat`.
+
+**Related**: 186 (module loading that computes something else without saying so); 31 item 3 (`load-module` skipped
+a library module's error surf in silence until `7a5f7689`; this is the same class one level up, at the prelude
+import).
+
+**Owner**: PM (the module system). PAR 4B does not edit `namespace.rkt`.
+
+**When**: low cost; with or before the next standard-library change.
+
+### 190. ⬜ ⭐ UNDER `:execution :sequential`, `not` IS IGNORED: THE SEQUENTIAL DRAIN HAS NO STRATUM LAYER — `(= ?x 1) (not (blocked ?x))` with `blocked = {1}` answers `@[{:x 1}]` instead of `@[]`; with `:strategy auto`, 8 of 13 probe queries are wrong
+
+**Found by** BSP-LE 3's Stage-2 census (WORLDVIEW_NOGOODS, GQ-2). Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/audits/2026-10-19_BSP-LE_3_STAGE2_AUDIT.md` SG-1 (branch `bsple3-tabling`,
+`40b9e57a`). Probe: `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage2/worldview/gq2-naf.prologos`, plus the
+variant `gq2-naf-autoseq.prologos` with comparator `gq2-autoseq-cmp.py`/`.out`.
+
+| query (`blocked = {1}`, `pick` = `x=1 \| x=2`) | DFS | BSP (`:parallel`) | drain (`:sequential`) |
+|---|---|---|---|
+| `(= ?x 1) (not (blocked ?x))` | `@[]` | `@[]` | **`@[{:x 1}]`** |
+| `(= ?x 2) (not (blocked ?x))` (control) | `{2}` | `{2}` | `{2}` |
+| `(pick ?x) (not (blocked ?x))` | `{2}` | `{2}` | **`{1, 2}`** |
+
+- Forced ATMS: the drain is wrong on 11 of 13 queries, BSP on 3 of 13.
+- `solver s :strategy auto :execution :sequential`: Check 1 routes 9 of the 13 to ATMS, and **8 are wrong**, every one
+  of them ATMS-routed. The routing code never reads `execution` (`racket/prologos/stratified-eval.rkt:299-336`).
+
+**Mechanism** (read in code at `026973fc`, `racket/prologos/propagator.rkt`):
+- The stratum-handler registry is registered at `:3358-3359`. It is read in one place, `:3587`, inside
+  `run-to-quiescence-bsp` (`:3401`).
+- The drain (`run-to-quiescence-inner` → `run-to-quiescence-drain`, `:2720-2785`) has no stratum dispatch.
+- So the NAF request cell fills (`relations.rkt:2234-2238`) and is never read. The NAF bit stays set, and the
+  conjunction passes the answer read.
+- Every elaboration value-tier handler is skipped under the drain as well.
+- PRECEDENT: PAR 4 P0 §4.4 (`docs/tracking/tracks/PAR/PAR_4/2026-10-13_PAR_4_P0_MEASUREMENTS.md:293-299`) found that
+  the drain "has no stratum layer", measured on the suite. This entry is the user-visible consequence on the solver
+  path.
+- It is the mechanism of the scheduler dependence in 177's Stage-1 addendum (1090 against 881 wrong lines).
+
+**Fix shape**: move stratum dispatch into `run-to-quiescence`, so that both schedulers run S0 to quiescence and then
+the strata (PAR 4 D.2 §6.6's "DIRECT S0 inside BSP's stratum loop" is the same shape). Alternatively, as a waypoint,
+refuse `:execution :sequential` for queries that reach a `not`, or route them to DFS.
+
+**When**: before BSP-LE 3 Stage A's checkpoint claims the scheduler half of RC-6's prediction. Which track lands it is
+part of owner decision BL-4.
+
+**Owner**: PAR 4 (`propagator.rkt`), with BSP-LE 3 (the solver's refusal waypoint).
+
+### 191. ⬜ A BOOLEAN `false` ANSWER PRINTS AS `none`, UNDER EVERY STRATEGY — `defr flag [?b] || true false` then `solve (flag ?b)` prints `@[{:b true} {:b none}] : [PVec {:b Bool}]`
+
+**Found by** BSP-LE 3's Stage-2 census (ANSWERS_CORPUS, probe 4 row f0). Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/audits/2026-10-19_BSP-LE_3_STAGE2_AUDIT.md` SG-8. Output:
+`docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage2/answers/p4-variants.{dfs,atms,auto}.out`, line 8, identical on
+all three legs.
+
+**Mechanism** (read in code at `026973fc`):
+- `normalize-solver-value` maps `false` to Racket `#f` (`racket/prologos/relations.rkt:405`). The direct-fact path
+  uses it (`:3042`).
+- The answer row builder reads `(hash-ref answer qv #f)` and prints `none` when the value is `#f`
+  (`racket/prologos/reduction.rkt:302-303`). An absent value and the Boolean `false` are therefore the same value
+  there.
+- A clause binding `(= b false)` prints `false` correctly (row f1), because it never passes through the normalizer.
+
+The printed `none` contradicts the row's own type, `{:b Bool}`.
+
+**Fix shape**: read with a sentinel that cannot be a value (`(hash-ref answer qv absent)`), or keep `false` as its
+expression in `normalize-solver-value`. Then add a test row with a `false` fact under each strategy.
+
+**When**: low cost, any time. It is independent of 177. The sibling class (a bug under every strategy, found by the
+differential) is 187/188.
+
+**Owner**: BSP-LE 3 (the solver files) or whoever next touches `reduction.rkt`'s answer printing.
+
+**Addendum 2026-10-19 (BSP-LE 3, BL-2).**
+- **Line correction**: `false` → `#f` is `racket/prologos/relations.rkt:406`. `:405`, cited above, is the `true` arm.
+- **191 is fast-path-only for `solve`**. Through the strategy dispatch, `solve (rel [?b] (flag ?b))` prints
+  `@[{:b true} {:b false}]` under DFS. Only the fast path normalizes the answer value; the dispatch keeps the term.
+- The VALUE is wrong, not only its display: `def flags := solve (flag ?b)` then `flags` prints
+  `@[{:b true} {:b none}]`.
+- Form and placement are decision BL-2. Its lean is to bind the fact's own term in the fast path and normalize only to
+  compare, which removes the `#f` at its source. `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § BL-2 (branch `bsple3-tabling`, `e07ab6d7`); probe `research/decisions/bl2/bl2-fixtures.prologos`.
+- **Decision BL-2 (owner, 2026-10-19): narrow, now; retirement is a design item after Stage A** (`7e3163ee`,
+  ledger BL-2 §8). The fix lands at BSP-LE 3 checkpoint 2, behind a named read-surface seam that owner guidance G-5
+  (one lookup mechanism for facts, tables and schema'd records; Rel Track 2's seed) later replaces.
+  191 is latent in the corpus: `racket/prologos/lib/examples/foray.prologos:505-507` (`defr movies : VHS`) holds three
+  `false` fact rows. The only query grounds that column (`:1247`), but `solve (movies r title year)` would print `none`.
+
+**Addendum 2026-10-20 (REL 2 Stage-1 isomorphism family).** The `none` value poisons downstream functional code. A
+fast-path `solve` result kept with `def`, then filtered on its Bool column, prints an unreduced term as the value, with
+0 errors, on 4 of 10 queries: every query that tests the flag, `true` included (`docs/tracking/tracks/REL/REL_2/research/iso/iso.out` lines 259–268, class
+`STUCK`; (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)). **Control**: the same table kept from a `solve` through the strategy dispatch (form `pvd`) agrees with
+the oracle on all 10 (lines 269–278).
+
+### 192. ⬜ A NON-GROUND TERM IN A `||` FACT ROW IS ACCEPTED SILENTLY, AND ITS COLUMN PRINTS `unknown` — `defr n2 [?x ?y] || 1 ?y` then `solve (n2 ?a ?b)` prints `@[{:a 1, :b unknown} {:a 2, :b 3}] : [PVec {:a Int :b Int}]`, and `solve (n2 1 5)` prints `@[]`
+
+**Found by** BSP-LE 3's decision BL-7 (owner, 2026-10-19: *"Ground fact rows are data, principally … Our `defr` with
+`||` denote a grounded table of facts"*), `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-10-19_BSP-LE_3_DECISIONS.md` § *BL-7 decision* (branch `bsple3-tabling`, `0c0d1aa3`). Probe: `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/decisions/bl7/bl7-ground-rows.{prologos,out}`,
+default `solve`, main's code. Line numbers below are the `.out`'s printed indices.
+
+**Observations**:
+- A bare name (`|| 1 y`) and a logic variable (`|| 1 ?y`) are both accepted at `defr`, with no error or warning.
+- The row prints `:b unknown` while the row type says `:b Int` (`1:`, `3:`). This holds through the fast path and
+  through the strategy dispatch alike (`11:`–`13:`).
+- The row is not a universally quantified Prolog fact either: `solve (n2 1 5)` prints `@[]` (`4:`).
+- Controls:
+  - ground rows (`6:`), a facts-plus-rules relation (`8:`) and a recursive relation (`10:`) are right;
+  - the Prolog fact `n4(1, _)` spelled as a rule, `defr n4 [?x ?y] &> (= x 1)`, gives `@[{:a 1}]` for
+    `solve (n4 ?a 5)` (`15:`).
+- **Demand**: 0 of 1109 `||` rows in 187 `.prologos` files hold a non-ground term. The scan has power: it finds both of
+  the probe's rows (`research/decisions/bl7/census-ground-rows.{py,out}`). `.rkt` test strings are not scanned.
+
+**Mechanism** (read in code at `0c0d1aa3`, not traced at runtime):
+- `extract-facts-and-clauses` stores each row's AST terms as they are (`racket/prologos/relations.rkt:903-930`). Nothing
+  checks that a row is ground.
+- The schema'd relations' gate `check-relation-schema-facts-only` (`racket/prologos/driver.rkt:525`) refuses rule
+  clauses. Its message says "fully-ground rows" (`:530-531`), but it does not check groundness, and unschema'd relations
+  have no gate.
+- `ground->prologos-expr` prints any term it does not recognize as `unknown` (`racket/prologos/reduction.rkt:355`),
+  consistent with the output.
+
+**Fix shape** (follows from the decided meaning): refuse a non-ground term in a `||` row at registration.
+- The message names the relation, the row and the column, and points at the `&>` spelling (`n4` above).
+- A bare name that resolves to no definition is the same error.
+- Test both forms beside a ground control.
+- Bulk import (`:from`, `:source`) must enforce the same rule at load.
+
+**When**: low cost, any time; before Rel Track 2's bulk import.
+
+**Owner**: Rel Track 2. Registration and ingest are its files (kickoff
+`docs/tracking/tracks/REL/REL_2/handoffs/2026-10-19_REL_2_KICKOFF.md` §3.1, branch `rel2-fact-store`). The `driver.rkt`
+gate is PAR 4's file, so it is requested by note.
+
+**Addendum 2026-10-20 (REL 2 Stage-1 validation grid VG-3, re-grounding RG-55, form census FM-18).**
+- A schema does not stop it: `defr g5 : Film` with `?y` as a value is accepted and prints `:y unknown` typed `Int`
+  (`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-grid-defr.out` `21:`, `22:`); a bare name too (`23:`); `validate` and `def` cannot even
+  receive one (`vg-grid-validate.out` `13:`, `vg-grid-def.out` `15:`). The fix must refuse under a schema as well.
+- A name that DOES resolve, a constructor, is stored exactly like this entry's `y`: filed as 195. The fix has to
+  resolve constructors before it can refuse unresolved names. (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)
+
+### 193. ⬜ THE WS READER IS STILL QUADRATIC IN FILE LENGTH — `pos->line-col` (`parse-reader.rkt:2500-2506`) rescans the source from position 0 for every token: a 10 000-row fact block spends 85 % of its load there, and a 100 000-row block takes 468 s to load while its `defr` command takes 0.9 s
+
+**Found by** REL 2's Stage-1 counters, the production-shaped leg: `docs/tracking/tracks/REL/REL_2/research/counters/`
+`fact-scale-e2e.out` (registration table) and `reader-profile.{rkt,out}`, on branch `rel2-fact-store` (`b051acf3`),
+main's code (`07424c3b`). The corpus is `racket/prologos/tools/gen-fact-corpus.rkt`'s.
+
+**Observations** (measured; single runs under ambient load, not under the suite lock):
+
+| `data` rows | file bytes | whole file | the `data` defr command |
+|---:|---:|---:|---:|
+| 1 000 | 21 385 | 249 ms | 7.7 ms |
+| 10 000 | 236 957 | 4 785 ms | 79.6 ms |
+| 100 000 | 2 662 672 | 467 855 ms | 915.5 ms |
+
+- Sampling profile (2 ms): `pos->line-col` is 13 % of the samples at 1 000 rows, 69 % at 3 000 and 85 % at 10 000
+  (3 530 of 4 162 ms). Between 3 000 and 10 000 rows its time grows 11.7× for 3.3× the rows (quadratic: 11.1×).
+- **Control**: the same 10 000-row file with every fact-row line turned into a `;` comment (236 593 bytes, the same
+  characters, almost no tokens) loads in 54 ms against 4 660 ms. The cost is per token, not per byte.
+- `parse_ms` reports 194 ms for the 10 000-row file. The quadratic sits in the preparse reader path
+  (`read-all-syntax-ws`, `racket/prologos/driver.rkt:2841`), which no phase timer covers.
+
+**Mechanism** (read in code): `pos->line-col` counts newlines from index 0 up to `pos`
+(`racket/prologos/parse-reader.rkt:2500-2506`). It runs once per token in `token-entry->stx` (`:2622`) and in the
+compat token builder (`:2427`), and at about twenty sites in `:4397-4671`. Tokens × mean position is Θ(n²) in the file
+length. PARSE T1 (`0e34bc15`, 2026-08-15, record `docs/tracking/2026-08-15_1218_WS_PARSE_CUBIC.md`) fixed the same
+shape in the tree path: `find-content-line-for-pos` binary-searches the vector `compute-line-starts` builds
+(`parse-reader.rkt:1926`, `:1955`). This path was not covered. Its test files were 28 KB at most, where this loop is
+smaller (an estimate, not measured).
+
+**Why filed**: a literal `||` block is the only way to put rows into a relation from a `.prologos` file today, and the
+REL 2 goal (owner guidance G-6: 100K–1M rows at interactive latency) cannot load that way. Every large source file pays
+it, not only fact blocks.
+
+**Fix shape**: build the line-start vector once per source string (`compute-line-starts` exists) and binary-search it
+in `pos->line-col`, or carry line and column through the tokenizer. Keep the old loop as the differential oracle, as
+PARSE T1 did (`racket/prologos/tests/test-parse-reader.rkt`). Give the preparse reader a phase timer: this is the second
+blind spot of its kind, after PARSE T1's dead `parse_ms`.
+
+**When**: any time. Before REL 2's Pre-0 benchmark at 100K rows (its D.1), if that benchmark loads literal blocks.
+
+**Owner**: the reader's (`parse-reader.rkt`); not REL 2, which does not edit it. The owner places it.
+
+### 194. ⬜ GROUND ROW VALUES OF SIX KINDS COME BACK FROM `solve` AS `unknown`, AND FUNCTIONAL CODE RECEIVES `unknown` — a Rat, Posit32 or Char column, a record, a PVec or a nested schema'd record: `solve` prints `@[{:v unknown} {:v unknown}] : [PVec {:v Rat}]`, and a kept result's `rr[0].v` is `unknown : Rat`
+
+**Found by** REL 2's Stage-1 tabular-form census (charge C, finding FM-17,
+`docs/tracking/tracks/REL/REL_2/research/census/2026-10-20_REL_2_STAGE1_FORMS_CENSUS_DRAFT.md`), probe `docs/tracking/tracks/REL/REL_2/research/census/forms/fm14-row-terms.{prologos,out}`
+(on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical). Indices are the `.out`'s printed result numbers.
+
+**Observations** (measured):
+- Rat, Posit32 and Char columns print every value as `unknown` under the right column type (`26:`, `28:`, `30:`).
+- So do a record column typed `{:x Int :y Int}` (`10:`), a PVec column (`17:`) and a nested schema'd record typed `Pt` (`21:`).
+- The same through the `rel` dispatch (`41:`) and through DFS as a rule subgoal (`47:`).
+- Kept with `def`, the VALUE is `unknown`: `rr[0].v` prints `unknown : Rat` (`43:`), `r3[0].r` prints `unknown : {:x Int :y Int}` (`45:`). 0 errors.
+- **Controls**: the store holds the Rat, since a select by it matches, `(kr2 ?k 1/2)` → `@[{:k "a"}]` (`40:`). Int, String,
+  Nat, Keyword and `true` columns round-trip (`fm01-positional.out`, `fm02-schemad.out`).
+
+**Mechanism** (read in code): `ground->prologos-expr` (`racket/prologos/reduction.rkt:331-355`) recognizes Racket
+keywords, symbols, lists, strings, booleans and integers, plus a fixed set of AST nodes (`:351-353`). Anything else
+becomes `(expr-fvar 'unknown)` (`:355`). `expr-rat`, `expr-posit32`, `expr-char` and `expr-rrb` are not in the set.
+For record values: CONJECTURE that a map literal in a row reaches this function as an unreduced literal node rather
+than `expr-champ` (which is in the set); not traced. A select BY a record value also fails (`12:`); not traced.
+Distinct from 192 (these rows are ground) and from 191 (another arm of the same answer path).
+
+**Fix shape**: the answer marshal is total over the stored value domain: a closed stored term is returned as itself, and
+a fallback exists only for a position that is genuinely unbound (192's fix removes those from rows). A round-trip test
+per value kind, using the probe's fixtures. In REL 2 this is the store's read surface (one value domain, one normal
+form at ingest), not a printer fix.
+
+**When**: before REL 2's bulk import (`:from` sources carry every one of these kinds); low cost before that.
+
+**Owner**: Rel Track 2. The site is next to 191's in `reduction.rkt`'s answer builder, so BSP-LE 3 (which lands 191's
+fix under decision BL-2) is asked by note to leave a seam or take these kinds too.
+
+### 195. ⬜ A CONSTRUCTOR NAME IN A `||` ROW OR A RELATIONAL GOAL IS A LOGIC VARIABLE — enum, `Option` and `none` values can be neither stored nor selected: `|| "a" Eng` prints `unknown`, `solve (emp ?n Eng)` binds a fresh variable `:Eng`, `[some 1]` is stored as `[?some 1]` and never matches an equal query, and `solve (k10d ?n none)` returns every row
+
+**Found by** three REL 2 Stage-1 charges independently (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical):
+re-grounding RG-55/RG-56 (`docs/tracking/tracks/REL/REL_2/research/regrounding/rg-fact-side-controls.{prologos,out}`, `rg-unify-probe.out` part B), the
+form census FM-18 (`docs/tracking/tracks/REL/REL_2/research/census/forms/fm14-row-terms.out`) and the validation grid VG-10
+(`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-controls2.out`, `vg-grid-defr.out`). Indices are printed result numbers.
+
+**Observations** (measured):
+- Rows: four spellings of a constructor value, bare `red`, `(the Color red)`, `[the Color red]` and the qualified
+  name, all print `:k unknown` (`rg-fact-side-controls.out` `10:`–`13:`; Int control `15:`). The stored terms are
+  `(expr-logic-var red free)` and `(expr-ann (expr-logic-var red free) (expr-logic-var Color free))`
+  (`rg-unify-probe.out` rows B-cbare, B-cthe).
+- A user enum, `data Dept := Eng | Mkt` then `|| "a" Eng`, prints `:d unknown` with column type `_` (`fm14` `49:`).
+- Goals: `solve (emp ?n Eng)` → `@[{:n "a", :Eng unknown} {:n "b", :Eng unknown}]` (`fm14` `50:`). A goal asking for a
+  constructor no row holds returns every row (`rg-fact-side-controls.out` `38:`). `solve (k10d ?n none)` →
+  `@[{:n "Ann", :none unknown} {:n "Bob", :none "x"}]` (`vg-controls2.out` `26:`).
+- Compounds: `[some 1]` in a row prints `[?some 1]` with column type `<error>` and 0 errors (`fm14` `4:`;
+  `rg-fact-side-controls.out` `19:`). Asking for it returns `@[]` (`20:`) where the Int control hits (`25:`).
+- Under a schema, an `Option String` field refuses the well-typed `[some "A"]`:
+  `field :nick expects [prologos::data::option::Option String], got [?some "A"]` (`vg-grid-defr.out` `37:`), while
+  `validate` and `def` accept the same record.
+
+**Mechanism** (read in code): `defr` bodies, rows included, elaborate with `current-relational-fallback? #t`
+(`racket/prologos/elaborator.rkt:3873-3874`). Under it every bare name becomes a free logic variable before global
+resolution, *"even if they happen to be bound in the global env"* (`:804-826`). The comment's escape for a global,
+*"use `[...]` (functional expression) or `is`"* (`:808-809`), does not hold in rows: `[the Color red]` is stored with
+both names as logic variables. A rule body's `[some 1]` elaborates to `(expr-goal-app some …)` and a row's to
+`(expr-app (expr-logic-var some free) …)`, so the two never compare `equal?` (`rg-unify-probe.out` B-op, B-opw).
+
+**Relation to 192**: 192's fix shape refuses *"a bare name that resolves to no definition"*. A constructor does
+resolve, and it is stored exactly like 192's `y`. The fix therefore has to decide what a constructor means in a row,
+and in a goal, before it can tell the two apart.
+
+**Fix shape** (a decision): in a row, a name that resolves to a constructor (or any closed global value) is that
+value; the goal side agrees; bare unresolved names stay variables in rule bodies, where they are the relation's
+parameters. Tests: the probe fixtures beside their Int controls.
+
+**When**: with 192's fix, and before REL 2's bulk import (enum and Option columns arrive from CSV, JSON and SQLite).
+
+**Owner**: Rel Track 2 (the decision and row ingest). The elaborator arm is shared; its change is requested by note.
+
+### 196. ⬜ THE DIRECT-FACT FAST PATH TAKES A SYMBOL LITERAL FOR A QUERY VARIABLE OF THE SAME NAME — `solve (sy (symbol-lit n) ?n)` returns both rows of `defr sy [?k ?n] || (symbol-lit alice) 1 / (symbol-lit carol) 2`, under every strategy
+
+**Found by** REL 2's Stage-1 re-grounding (charge R, finding RG-57,
+`docs/tracking/tracks/REL/REL_2/research/regrounding/2026-10-20_REL_2_STAGE1_REGROUNDING_DRAFT.md`), probe
+`docs/tracking/tracks/REL/REL_2/research/regrounding/rg-fact-side-controls.{prologos,out}` (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): `solve (sy (symbol-lit n) ?n)` → `@[{:n 1} {:n 2}]` (`30:`); the
+same under `solve-with dfs-s` (`32:`) and `solve-with atms-s` (`33:`), because the fast path runs before strategy
+dispatch (`racket/prologos/stratified-eval.rkt:242-245`). **Controls**: the same query through a rule wrapper gives
+`@[]` (`31:`), and renaming the query variable to `?m` gives `@[]` (`34:`).
+
+**Mechanism** (read in code): `normalize-solver-value` turns an `expr-symbol` into a raw Racket symbol
+(`racket/prologos/relations.rkt:404`). The fast path then takes any raw symbol that is a member of `query-vars` as that
+variable and binds it (`:3044-3046`). It is the query-side twin of the fact-side hazard RG-54 records for raw-symbol
+test stores.
+
+**Fix shape**: decide variable-ness from the goal's term kind (`expr-logic-var` positions), never from a normalized
+value's name. Test: the probe's two rows and controls.
+
+**When**: low cost, any time. BSP-LE 3's BL-2 fix (DEFERRED 191) edits the same lines (`:3042-3048`) at its checkpoint
+2, so the two belong in one change.
+
+**Owner**: BSP-LE 3 (the fast path's current editor), else Rel Track 2, whose read surface replaces the fast path.
+
+### 197. ⬜ ANY LINE IN A `defr` BODY WITHOUT A SENTINEL BECOMES A RULE CLAUSE — `:from fl`, `:source "f.csv"`, the vision doc's own `:tabled false`, `:frobnicate 42` and a `:-` body all register silently; every query then fails with `Unknown relation: :from` (or `:tabled`, `:`), and a relation with `||` rows AND such a line loses its rows
+
+**Found by** three REL 2 Stage-1 charges (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical): the form census FM-20
+(`docs/tracking/tracks/REL/REL_2/research/census/forms/fm04-from.out`, `fm05-source.out`), re-grounding RG-60 (`docs/tracking/tracks/REL/REL_2/research/regrounding/rg-tabled.out`) and the
+acyclicity census DC-2/DC-3 (`docs/tracking/tracks/REL/REL_2/research/census/acyclicity/ay-colon-dash.out`, `sudoku-demo-run.out`). Predicted earlier by
+the REL 2 ledger's plan note RN-3 and the §0 probe (`docs/tracking/tracks/REL/REL_2/research/s0/rel2-s0.out` `14:`).
+
+**Observations** (measured; printed result indices unless a file line is named):
+- Unschema'd: `defr f3 [?t ?y ?s]` / `:from fl` prints `f3 : _ defined.` (`fm04` `5:`); `solve` gives
+  `ERROR: solve: Unknown relation: :from` (`6:`). `:frobnicate 42` the same (`9:`, `10:`). With `||` rows plus a
+  `:from` line, the query errors and the rows are lost (`15:`, `16:`). `:source` the same (`fm05` `3:`, `4:`).
+- Schema'd: refused with a message about a construct the user did not write: *"a schema-typed relation must be
+  facts-only (fully-ground rows); it has rule clauses (&>)"* (`fm04` `3:`, `4:`).
+- The vision's example `:tabled false` (`docs/tracking/principles/RELATIONAL_LANGUAGE_VISION.org:347-350`) registers
+  (`rg-tabled.out` `1:`), then `ERROR: solve: Unknown relation: :tabled` (`3:`, `7:`); controls without the line
+  answer (`4:`, `8:`).
+- A body starting with `:-` registers, and every query fails with `ERROR: solve: Unknown relation: :`
+  (`ay-colon-dash.out` file lines 7–9; control with `&>`, lines 10–13). `racket/prologos/examples/2026-03-28-sudoku-demo.prologos`
+  has four such relations and cannot run (`sudoku-demo-run.out` lines 5–10; its query also fails *"solve expects 1
+  argument, got 16"*).
+
+**Mechanism** (read in code): a `defr` body with no `||` or `&>` sentinel falls into the implicit-`&>` arm, which
+parses every token as a relational goal (`racket/prologos/parser.rkt:7660-7668`). A keyword head is a goal on a relation
+named by the keyword.
+
+**Fix shape**: refuse a body line whose head is a keyword or `:-` with a message naming it (and, for `:-`, pointing at
+`&>`); reserve `:from` and `:source` for REL 2's import arm; implement or un-document `:tabled` (July artifact §9.5;
+RG-48). Tests: the four probes.
+
+**When**: low cost, any time; at the latest with REL 2's `:from` arm, which would otherwise inherit the silent clause.
+
+**Owner**: Rel Track 2 (the `defr` body grammar and the import arm).
+
+### 198. ⬜ A `:check` THAT PANICS IS BURIED SILENTLY — `[map [validate Risky _] rows]` returns a list holding `(panic "boom")` with 0 errors; `def k9 : Risky := …` commits and reads back as a stuck `[reduce (panic "boom") | ok x -> x | …]`; only a bare top-level `validate` reports `ERROR: panic: boom`
+
+**Found by** REL 2's Stage-1 validation grid (charge V, finding VG-8,
+`docs/tracking/tracks/REL/REL_2/research/census/2026-10-20_REL_2_STAGE1_VALIDATION_GRID_DRAFT.md` §6), probes
+`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-coerce-channel.{prologos,out}` and `vg-controls2.{prologos,out}` (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): the list
+`'[[ok {:n 1, :t "a"}] (panic "boom") [ok {:n 2, :t "c"}]]` (`vg-coerce-channel.out` `29:`; control without the row,
+clean, `31:`); the `def` door `k9 : Risky defined.` then the stuck term (`vg-controls2.out` `12:`, `13:`); the
+constructor door the same (`15:`); the bare `validate` reports the panic (`10:`). A `:check` on a `||` row never runs
+(`vg-coerce-channel.out` `32:`; that is the deep-walker charter's line on fact-row validation).
+
+**Mechanism** (read in code): by CIU T6's decision D27.3, a panic in a `:check` IS the `validate` node's result
+(`racket/prologos/reduction.rkt:2687-2688`). Its consumers do not propagate it: `seal-forcing-error` reports only when
+the forced normal form is itself `expr-panic?` (`racket/prologos/driver.rkt:287-295`), and the `expect-valid` match on a
+panic scrutinee stays stuck. CONJECTURE: no strictness arm makes `reduce` of a panic subject the panic.
+
+**Fix shape**: make panic strict wherever a value is demanded (a `reduce`/match on a panic subject is that panic), so
+D27.3's result surfaces at every door; test the three doors and the `map`.
+
+**Why it matters beyond CIU**: an across-rows error channel for bulk import (REL 2's open decision FS-2) assumes a
+total per-row validator; today a panicking row is silently a value.
+
+**When**: before REL 2's `:from` calls `validate` per row.
+
+**Owner**: CIU (the validator's consumers) or whoever owns `reduce` strictness; REL 2 depends on it.
+
+> **ADDENDUM (2026-11-02, CIU 6): the same class, in selection, measured and fixed.** On branch `ciu6-path-selection`
+> @ `55b7df16` (reaches main with the 1b-vi checkpoint merge), `ot2{2}*` printed
+> `(panic "select: index 2 out of bounds …").* : {…}` at 0 errors, while the starless `ot2{5.a}` aborted. An
+> `expr-select` whose subject whnf's to a panic matched no arm and stayed stuck. One arm in that case,
+> `[(expr-panic? subj*) subj*]` (`reduction.rkt`, the `expr-select` whnf case), fixed it, with red rows first. This
+> supports this entry's conjecture for `expr-select` only. The `reduce` / match case and `seal-forcing-error` were
+> not checked there. Probe: `docs/tracking/tracks/CIU/CIU_6/research/P4e-2/probe-p4e2-b.pre-fix-a9788c0a.out` line 4.
+
+### 199. ⬜ A ONE-TOKEN CONTINUATION LINE RE-CHUNKS `||` ROWS SILENTLY — `|| "John" "Smith" "Jr"` then `"Jane"` on the next line, under arity 2, is accepted as the two rows `{:f "John", :l "Smith"} {:f "Jr", :l "Jane"}`, with or without a schema
+
+**Found by** REL 2's Stage-1 validation grid (charge V, finding VG-9), probe
+`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-controls.{prologos,out}` (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): schema'd `k3` (`17:`, `18:`) and unschema'd `k3c` (`21:`, `22:`)
+both accept and re-chunk. **Control**: with two tokens on the second line the block is refused, *"3 terms do not fill
+rows of arity 2 — separate rows with `|` or newlines"* (`19:`). The grid's `g4` on `Film` is the same shift
+(`vg-grid-defr.out` `17:`, `18:`).
+
+**Mechanism** (read in code): a token that is not a pair is a flat term whatever its line
+(`racket/prologos/parser.rkt:7573-7578`), and flat terms are chunked by arity (`:7206-7213`). The message promises that
+newlines separate rows.
+
+**Fix shape**: once a block uses newline rows, a line is a row, and a line whose term count is not the arity is
+refused with its line number. The same parser grouping is where dictionary rows (REL 2 form census FM-19,
+`parser.rkt:7529`, `:7573-7580`) need a fix, so the two land together.
+
+**When**: low cost, any time; with REL 2's dictionary rows at the latest.
+
+**Owner**: Rel Track 2 (`||` row grouping).
+
+### 200. ⬜ AN `Int` CONSTANT DOES NOT SELECT A `Nat` VALUE ADMITTED UNDER AN `Int` COLUMN — `defr c1 : Film` with `|| "Heat" 1995N` is accepted and prints `:y 1995N` typed `Int`, and `solve (c1 "Heat" 1995)` gives `@[]`
+
+**Found by** REL 2's Stage-1 validation grid (charge V, finding VG-6), probes
+`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-coerce-channel.{prologos,out}` and `vg-controls2.{prologos,out}` (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): `@[{:t "Heat", :y 1995N}] : [PVec {:t String :y Int}]` then
+`@[] : _` (`vg-coerce-channel.out` `5:`, `6:`). `validate` and `def` accept the Nat under `Int` too (`7:`, `8:`), and
+`1995N : Int` (`10:`). An `Int` under a `Rat` column is stored as `3` (`11:`, `12:`). **Controls**, one variable each:
+Nat row with a Nat constant `@[{}] : _` (`vg-controls2.out` `2:`); Int row with an Int constant `@[{}]` (`4:`); Int row
+with a Nat constant `@[]` (`5:`). Seen once and not controlled: `[= 1995N 1995]` prints a stuck `reduce` term typed
+`Bool` (`7:`).
+
+**Mechanism** (by reading): the checks accept `Nat` where `Int` is declared (subsumption) without converting the value,
+and the matchers compare representations (`equal?` on the stored AST; the fast path's `normalize-solver-value`,
+`racket/prologos/relations.rkt:401-406`, has no `Nat` arm). One column then holds two key spaces.
+
+**Fix shape** (a decision, REL 2's open decision FS-2 on coercion): convert to the declared type at admission, or make
+the store's equality and index numeric-aware. Test: the probe rows.
+
+**When**: before REL 2's bulk import, which admits numbers from text sources.
+
+**Owner**: Rel Track 2.
+
+### 201. ⬜ A RECORD TYPE IN A `spec` IS ACCEPTED AND THEN SATISFIED BY NOTHING — `spec t3f {:title String} -> String` prints `t3f : {:title String} -> String defined.`, and applying it to a record with exactly that field fails: *"argument of type {:title String} does not match the expected parameter type {:title String}"*
+
+**Found by** REL 2's Stage-1 validation grid (charge V, finding VG-11), probe
+`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-openness-types.{prologos,out}` (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): `7:` and `8:`. The same record type as a `def` annotation is
+refused, *"Expression is not a valid type"* (`5:`); the open-row display spelling `{:title String | _}` is a reader
+error (`6:`).
+
+**Mechanism** (read in code, partly): `syntax.rkt:680` says record types are *"internal-only: inferred + displayed, NOT
+parsed"*, and `parser.rkt` builds no `expr-Record` (`docs/tracking/tracks/REL/REL_2/research/census/validation/vg-census.out` §D). Why the `spec` path
+accepts the spelling was not traced.
+
+**Fix shape**: refuse a record type in a `spec` with the `def` door's message until record types are writable. Whether
+they become writable is a design question REL 2 meets: a `solve` result's row type is printed but cannot be written
+(form census FM-21), which bounds REL 2's open decision FS-4 (importing a `solve` result).
+
+**When**: low cost, any time.
+
+**Owner**: the type checker's owner (spec elaboration); REL 2 asks.
+
+### 202. ⬜ TWO RECORD-SCHEMA DIAGNOSTICS NAME NOTHING — `def d3c : FilmC := {…}` with one extra key says only `ERROR: Type mismatch` (while `validate` names `:director` as `unexpected-field`), and sealing an open row into a `:closed` schema says only `ERROR: Could not infer type`
+
+**Found by** REL 2's Stage-1 validation grid (charge V, finding VG-14) (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical).
+
+**Observations** (measured; printed result indices): `docs/tracking/tracks/REL/REL_2/research/census/validation/vg-grid-def.out` `13:` against
+`vg-grid-validate.out` `11:`; `vg-openness-types.out` `17:` (control `18:`: the same record with exactly the schema's
+fields seals). The `:closed` control with exactly its fields is accepted (`vg-controls.out` `28:`), so the extra key is
+the cause in the first case.
+
+**Fix shape**: report the offending field(s), as `validate` already does, at the `def` and `the` doors. Not traced.
+
+**When**: low cost, any time. **Owner**: CIU (the seal's diagnostics).
+
+### 203. ⬜ A RELATION DEFINED IN A REQUIRED MODULE IS LOST ON A `.pnet` CACHE HIT, AND ON A SOURCE LOAD IT IGNORES THE NAMESPACE — `solve (edge ?x ?y)` against `rel2xmod::facts`'s `defr edge` answers both rows when the module is elaborated from source, and fails with *"edge is bound as a value, not a relation"* once the module's `.pnet` exists; the importer reaches `edge` without naming it in `:refer`
+
+**Found by** REL 2's Stage-2 audit, probe `docs/tracking/tracks/REL/REL_2/research/stage2/xmod/` (`xmod.sh` → `xmod.out`; on branch `rel2-fact-store`,
+`6d1c4f7c`; main's code `07424c3b`). One process per leg; only the cache state varies.
+
+**Observations** (measured; printed result indices per leg):
+- cache off: `0: 42 : Int` (control, an ordinary `def` from the same module), `1: @[{:x 1, :y 2} {:x 2, :y 3}]`;
+- cache on, cold (the module's `.pnet` deleted first): the same two lines; the leg writes `facts.pnet`;
+- cache on, warm: `0: 42 : Int`, then `1: ERROR: … solve: edge is bound as a value, not a relation — application is
+  written [edge …]; parens make a relational goal (define a relation with defr)`. A relation defined in the user file
+  itself answers on every leg (`3:`).
+- `user.prologos` refers only `answer`, yet `edge` answers on the cold legs: relations are not scoped by the
+  namespace's exports. `user-refer.prologos` (`:refer [answer edge]`) answers the same.
+
+**Mechanism** (read in code, not traced): the only writer of the relation store is the `defr` arm of
+`process-command` (`racket/prologos/driver.rkt:1037-1038`), into the process-global parameter `current-relation-store`
+(`racket/prologos/relations.rkt:822`). `load-module`'s parameterize list ~~scopes some twenty registries per module~~ **rebinds 35 parameters per module (registries, stores, the module network; corrected 2026-10-20)** and
+not this one (`driver.rkt:3167-~~3200~~3231`), so a source load writes straight into the caller's store, bypassing exports.
+Nothing in `pnet-serialize.rkt` carries relation state, so a cache hit restores the module's environment (where `edge`
+is evidently some binding, hence the message) without its relation. The CIU T6 → Rel charter named the concern in July
+as an entry gate, *"the two-context/relation-registry audit (incl. relations from cached `.pnet` bodies)"* (this file,
+§ *CIU T6 → Rel: typed solution rows*, item (c)); this is its first measurement.
+
+**Why filed**: a relation's existence depends on build-cache state, and the failure names the wrong cause. Library
+code holds no `defr` today (REL 2 acyclicity census AY-10), which is why nothing has hit it; G-6's imports would
+(a relation defined by `:from` in a data module, queried from another).
+
+**Fix shape** (a decision for the scope half): relations become module-scoped state, serialized with the module and
+exported like other definitions. Where the store lives (a cell per relation, PM Track 12's parameters-to-cells
+migration, or REL 2's store) is REL 2's open question Q_B. Tests: the three legs as pins, plus the `:refer` variant.
+
+**When**: before any library module defines a relation, and before REL 2's `:from`.
+
+**Owner**: Rel Track 2 (store residency and scope), with PM Track 12 for the module-loading half; the owner places it.
+
+**Addendum 2026-10-24 — the owner placed it (REL 2 decisions FS-7 and Q_B), and the probe gained five legs** (`be79f051`
+on `rel2-fact-store`, same directory; main's code unchanged since `07424c3b`).
+- **The decisions, verbatim** (owner, 2026-10-24 08:42): *"FS-7: Fully Qualified Namespaces is an important design
+  criterium of the project. This should almost not be a question."* and *"Q_B: Reasonable line to draw. Let's provide
+  a kickoff to start PM 12 module loading in a new worktree and session."* The line Q_B approves: **REL 2 owns the
+  relation store's value, its cell and its merge; PM Track 12 owns the module-load plumbing** (per-module scope,
+  `.pnet` serialization and restore, name resolution). Ledgered in REL 2's decision ledger (branch `rel2-fact-store`,
+  § *FS-7 and Q_B decided*).
+- **New observations** (`xmod.out`, leg `user-collide`, one process per cache state):
+  - a relation is never reachable by a qualified name: `solve (rel2xmod::facts::edge ?x ?y)` and even the importer's
+    own `solve (rel2xmod::collide::edge ?x ?y)` fail with *"Unknown relation: … — its defr failed to register (see
+    the earlier error)"*, though no error occurred (cache off and cold; warm: *"… is bound as a value, not a
+    relation"*);
+  - the bare `edge` answers the imported rows until a local `defr edge` replaces them, silently (`4:` → `6:`).
+- **Mechanism of the new legs** (read in code, not traced): the `defr` arm binds the relation's env value under the
+  bare name and the FQN (`driver.rkt:1015-1019`), while the store is keyed by `expr-defr-name`, the bare name
+  (`relations.rkt:831`). A qualified goal finds the env binding, misses the store, and `raise-unknown-relation-error`
+  (`relations.rkt:1458-1474`) reads an env-bound `expr-defr` as a registration a gate rejected.
+- **Fix shape, completed**: the store is keyed by FQN and a goal's relation name goes through the same resolution as
+  any name (FS-7); the module scope and `.pnet` half is PM 12's. Pins: the `user-collide` legs as well.
+- **Owner** (replacing the line above): **PM Track 12** (kickoff on branch `pm12-module-loading`, opened 2026-10-24),
+  with REL 2 for the store's key type and value. The `:refer` half is general, not relational: **DEFERRED 204**.
+
+### 204. ⬜ ⭐ `:refer` DOES NOT LIMIT WHAT AN IMPORTER SEES — every definition of every loaded module is reachable by its bare name, and when two modules define the same bare name the importer silently gets whichever loaded last
+
+**Found by** REL 2 while gathering the evidence for decision FS-7 (fully qualified names), probe
+`docs/tracking/tracks/REL/REL_2/research/stage2/xmod/` (`xmod.sh` → `xmod.out`; on branch `rel2-fact-store`, `be79f051`;
+main's code `07424c3b`, no `.rkt` change on main since). One `process-file` per leg.
+
+**Observations** (measured):
+- `user-collide.prologos` requires `rel2xmod::facts :refer [answer]`; the module also defines `def other : Int := 7`.
+  Bare `other` prints `2: 7 : Int` with the cache off, cold and warm.
+- `user-prelude.prologos` (with the prelude, which requires `prologos::data::char :as char :refer []`,
+  `racket/prologos/namespace.rkt:729`): `char::numeric?`, bare `numeric?` and bare `from-code` all print their foreign
+  bindings (`0:`–`2:`).
+- `user-ambig.prologos` requires `rel2xmod::facts` (`other := 7`) then `rel2xmod::facts2` (`other := 8`), both
+  `:refer []`: bare `other` prints `2: 8 : Int`. `user-ambig-rev.prologos`, the same with the order reversed, prints
+  `2: 7 : Int`. The qualified names print 7 and 8 in both (controls). No error, no warning.
+
+**Mechanism** (read in code, not traced): the definition arm registers every definition under its bare name
+(`driver.rkt:1015`, `global-env-add name …`) as well as under its FQN (`:1016-1019`). Name lookup in the elaborator
+tries the own-namespace FQN (`elaborator.rkt:846-853`), then `resolve-name` (`namespace.rkt:580-611`: alias, refer
+map, refer-all namespaces, own namespace), and then **falls back to the bare name** (`elaborator.rkt:865-869`), which
+finds whatever module wrote that bare key last. `resolve-name`'s legacy mode (no `ns`, `namespace.rkt:583`) returns the
+symbol unchanged, so files without `ns` (sexp tests) may depend on the bare entries.
+
+**Why it matters**:
+- Fully qualified names are a design criterion of the project (owner, 2026-10-24, REL 2 FS-7, quoted in 203's
+  addendum). `PATTERNS_AND_CONVENTIONS.org` § *Modules and Namespaces* (`:18-22`) promises selective import with
+  `:refer` and *"qualified access prevents collision"* (`:35`); the prelude's `:as char :refer []` is written for
+  exactly that.
+- A silent, load-order-dependent binding is a wrong-answer class. It is the definition-level twin of the spec store's
+  bare key (160; the issue #66 entry, § *Spec-store bare-name keying*, `:1015`), whose owner note asks for specs
+  *"fully qualified to its namespace"* (`:7378`), and of 203's relation store.
+
+**Fix shape**: the global environment is keyed by FQN only, and resolution is the one route from a spelling to a
+definition. A module's bare names are visible inside that module and wherever `:refer` or `:refer-all` brings them;
+an ambiguous bare name (two refer-all sources) is an error naming both FQNs. **Blast radius unmeasured**: before any
+change, census the programs, tests and library modules that resolve a name only through the fallback (count hits of
+`elaborator.rkt:865-869` over the suite and the library, separated by `ns`/no-`ns`). The monotone-migration rule
+applies: today's meaning of a bare name that two modules define depends on load order, so making it an error removes
+no meaning a program could rely on; the singly-defined, unreferred case does have one, and the census sizes it.
+
+**When**: with PM Track 12's name-resolution work; before REL 2's FQN-keyed store lands (203).
+
+**Owner**: PM Track 12 (the module system; placed by the owner's Q_B decision, 2026-10-24).
+
+<a id="205-entry"></a>
+
+### 205. ⬜ THE TREE-SITTER GRAMMAR HAS NO ORDINAL-HEADED SELECT BRANCH — `{0.server^.ssl* name}` is an ERROR and `{0.{…}}` makes the parser INVENT an identifier; on `ciu6-path-selection` the corpus gate has FAILED since `3fcb720a` (MISSING 75 > budget 71), and every rule tried so far makes `foray.prologos`'s invalid L957 swallow 251 lines
+
+**Found by** CIU 6's 1b-vi close, item 2 (2026-11-02; [D4 § close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2)). Measurements:
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/close/tsg-close2.txt` §3 and §5, plus `probe-957` (on the branch
+until the 1b-vi close checkpoint).
+
+**The gap.** The compiler has accepted a select branch that starts with an ordinal since P3c (`(@ord N)` heads; Q_U61,
+Q_U62). The grammar's `_select_branch` has no such shape. So the CIU 6 acceptance file's ordinal-headed lines are
+ERRORs, and its M18 section (`guilds{0.{server^.ssl*}}`, `guild-pair{0.{…} 1.{…}}`, L638 / L642 ×2 / L650) makes the
+parser invent an identifier before `.{` (4 MISSING).
+
+**The gate.** `check-corpus.sh` on the branch reports MISSING 75 against a budget of 71. The +4 are exactly those
+lines, added at `3fcb720a` (1b-vi-F). No hook runs the corpus gate, since the pre-commit grammar check is a tripwire
+that only warns, so the failure went unseen for a slice and a half. The budget decision (raise to 75 with the reason
+naming this entry, or hold the checkpoint) is with the owner; see D4 § close-2.
+
+**Why not fixed at the close.** A rule (a path whose base is a `number`, as a select branch) fixes the acceptance file
+(E43/M4 → E35/M0). Seven formulations were tried: aliased to `path_expr`, a distinct node, `number` in `_path_base`,
+restricted steps, `prec.dynamic(-1)`, lower `prec`, and no `prec`. Every one makes `foray.prologos` worse (E87/M3 →
+E84/M4): a 251-line ERROR from L957, plus an invented identifier there.
+- L957 (`users:<{0.userName^}`, a ";; :< broadcast pick/unwrap (APL)" note) is not valid Prologos: the compiler
+  answers `Unbound variable`.
+- In isolation both grammars give it the same tree. Blanking L940–956, which holds its multi-line `def users`,
+  shrinks the ERROR to 7 lines.
+- So this is error-recovery churn in an already-broken file, the class `corpus-budget.txt` documents. The per-file
+  A/B rule still refuses it.
+
+**Fix shape — a conjecture, not measured.** Either make the recovery around an unclosed `:<` local (a scanner token,
+the recipe for a contested shape), or land the rule together with a `foray.prologos` change. The second is the
+owner's call, since the file is his work in progress on main. Then lower `max_missing` again.
+
+**When**: CIU 6 X.close at the latest. That is the closing-phase grammar obligation for P3c's syntax.
+
+**Owner**: CIU 6.

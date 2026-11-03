@@ -76,9 +76,9 @@
 
 ### §2.4 Session-Specific — CORE PHASE 9 REFERENCES (READ IN FULL)
 
-15. [`docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../../../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — **THE Phase 9 design note.** Phase 9A/B/C/D migration path. ~450 line scope estimate.
+15. [`docs/tracking/tracks/BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../../BSP-LE/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) — **THE Phase 9 design note.** Phase 9A/B/C/D migration path. ~450 line scope estimate.
 
-16. [`docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../../../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n worldview lattice, Gray-code traversal, bitmask subcube pruning, hypercube all-reduce. Phase 9 mini-design revisits these per §6.15.6 and §6.11.3.
+16. [`docs/tracking/tracks/BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../../BSP-LE/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md) — Q_n worldview lattice, Gray-code traversal, bitmask subcube pruning, hypercube all-reduce. Phase 9 mini-design revisits these per §6.15.6 and §6.11.3.
 
 17. [`docs/research/2026-03-28_MODULE_THEORY_LATTICES.md`](../../../../research/2026-03-28_MODULE_THEORY_LATTICES.md) — Module Theory lens. Phase 9 is where tropical-lattice fuel cell first instantiates. §6 e-graphs as quotient modules relevant to cost-optimization framing.
 

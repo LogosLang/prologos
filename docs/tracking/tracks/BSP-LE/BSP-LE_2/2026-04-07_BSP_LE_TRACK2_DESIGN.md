@@ -4,10 +4,10 @@
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: Cell-Based TMS (folding Track 1.5) + ATMS Solver + Non-Recursive Tabling
 **Status**: D.13 — Phase 11 unified speculation (TMS nesting root cause found, worldview cache persistence IS commit, O(1) commit/retract via cell writes)
-**Self-critique**: [P/R/M Analysis](2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md) (17 findings, D.2)
-**External critique**: [Architect Review](2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md) (16 findings, D.3)
+**Self-critique**: [P/R/M Analysis](critiques/2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md) (17 findings, D.2)
+**External critique**: [Architect Review](critiques/2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md) (16 findings, D.3)
 **Stage 1/2**: [Research + Audit](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
-**Prior art**: [Logic Engine Design](2026-02-24_LOGIC_ENGINE_DESIGN.org) §4-7, [PUnify Part 3](2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md), [Cell-Based TMS Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
+**Prior art**: [Logic Engine Design](../../../2026-02-24_LOGIC_ENGINE_DESIGN.org) §4-7, [PUnify Part 3](../../../2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md), [Cell-Based TMS Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
 
 ---
 
@@ -27,7 +27,7 @@
 | 10 | Solver config wiring | ✅ | `6fe6679c`. :execution (BSP/Gauss-Seidel), :tabling (:off skips registry), :timeout (fuel from ms). All knobs operational. |
 | 11 | Unified speculation + parity validation | ✅ | D.13. `f1f71412` tagged-only + union fix. `d0074a74` elab-bridge TMS removed. `58fc137b` stack fallback removed. Root cause: TMS nesting hid tagged path. Fix: tagged-only promotion + combined worldview bitmask + same-specificity merge. Commit=O(1) worldview persistence. Retract=O(1) bit clear + snapshot restore (scaffolding for off-network stores, PPN 4C scope). current-speculation-stack RETIRED. |
 | T | Dedicated test files | ⬜ | Per-phase |
-| PIR | Post-implementation review | ✅ | `docs/tracking/2026-04-10_BSP_LE_TRACK2_PIR.md`. A/B: 13/15 no regression, 2 flagged (high CV). Acceptance: <15% MET. |
+| PIR | Post-implementation review | ✅ | `docs/tracking/tracks/BSP-LE/BSP-LE_2/2026-04-10_BSP_LE_TRACK2_PIR.md`. A/B: 13/15 no regression, 2 flagged (high CV). Acceptance: <15% MET. |
 
 ---
 
@@ -1548,7 +1548,7 @@ Bottom-up to manage the mutual recursion:
      - Sub-goal propagators installed for the clause body via broadcast conjunction (Phase 7). These read PU-local variable cells (not compound outer cells). Outer arg cells are resolved (ground values, 3.2 precondition) — no compound structure to component-index.
      - Per-nogood commitment infrastructure (Phase 3) for any nogoods involving this branch's group — commitment cells use component-indexed writes (§3.1a compliant)
 
-     This is the N-to-M pattern from the [array-programming research](../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) §5: N candidates → M survivors, with PU allocation only for survivors. For deterministic cases (M=1), no PU is created — Tier 1 behavior.
+     This is the N-to-M pattern from the [array-programming research](../../../../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) §5: N candidates → M survivors, with PU allocation only for survivors. For deterministic cases (M=1), no PU is created — Tier 1 behavior.
 
 2. **`relations.rkt`**: New function `atms-amb-on-network`:
    - Creates M PUs via Phase 2's `make-branch-pu` (only for matching clauses)

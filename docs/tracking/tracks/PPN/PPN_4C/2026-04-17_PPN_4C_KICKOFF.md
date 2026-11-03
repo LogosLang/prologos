@@ -41,7 +41,7 @@ Then hot-load the Track 4C inputs (§3 below).
 | Document | Why it matters |
 |---|---|
 | [PPN Master §4](../2026-03-26_PPN_MASTER.md) "Cross-Cutting Lessons from BSP-LE Track 2B (for Track 4C Design)" | Load-bearing — 7 architectural insights explicitly curated for 4C design |
-| [BSP-LE Track 2B PIR](../../../2026-04-16_BSP_LE_TRACK2B_PIR.md) | Full context behind the 7 lessons; reference when the PPN §4 summary isn't enough |
+| [BSP-LE Track 2B PIR](../../BSP-LE/BSP-LE_2B/2026-04-16_BSP_LE_TRACK2B_PIR.md) | Full context behind the 7 lessons; reference when the PPN §4 summary isn't enough |
 | [PPN Track 4 PIR](../PPN_4A/2026-04-04_PPN_TRACK4_PIR.md) | Typing on-network; first 46% milestone |
 | [PPN Track 4B PIR](../PPN_4B/2026-04-07_PPN_TRACK4B_PIR.md) | Attribute evaluation; 90% on-network; the 6 bridges this track will retire |
 | [Track 4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md) | Existing scoping; starting point for Stage 3 design |

@@ -1,10 +1,10 @@
 # BSP-LE Track 2 D.2 — External Critique
 
 **Date**: 2026-04-08
-**Design**: [D.2](2026-04-07_BSP_LE_TRACK2_DESIGN.md) (1142 lines, post self-critique)
+**Design**: [D.2](../2026-04-07_BSP_LE_TRACK2_DESIGN.md) (1142 lines, post self-critique)
 **Self-critique**: [P/R/M Analysis](2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md) (17 findings, all incorporated)
-**Stage 1/2**: [Research + Audit](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
-**Methodology**: [CRITIQUE_METHODOLOGY.org](principles/CRITIQUE_METHODOLOGY.org)
+**Stage 1/2**: [Research + Audit](../../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
+**Methodology**: [CRITIQUE_METHODOLOGY.org](../../../../principles/CRITIQUE_METHODOLOGY.org)
 
 ---
 

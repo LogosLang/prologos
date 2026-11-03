@@ -1,7 +1,7 @@
 # BSP-LE Track 2B Self-Critique — P/R/M Three-Lens Analysis
 
 **Date**: 2026-04-10
-**Design**: D.6 (`docs/tracking/2026-04-10_BSP_LE_TRACK2B_DESIGN.md`)
+**Design**: D.6 (`docs/tracking/tracks/BSP-LE/BSP-LE_2B/2026-04-10_BSP_LE_TRACK2B_DESIGN.md`)
 **Methodology**: `docs/tracking/principles/CRITIQUE_METHODOLOGY.org`
 
 ---

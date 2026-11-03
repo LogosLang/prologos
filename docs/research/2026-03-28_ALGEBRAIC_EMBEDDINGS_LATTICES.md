@@ -269,7 +269,7 @@ The Hyperlattice Conjecture posits that the lattice of sub-structures of any dom
 - **SRE Master**: [`docs/tracking/2026-03-22_SRE_MASTER.md`](../tracking/2026-03-22_SRE_MASTER.md) — Structural Reasoning Engine; §3 above identifies immediate, near-term, and long-term implications.
 - **SRE Track 2F Audit**: [`docs/tracking/2026-03-28_SRE_TRACK2F_AUDIT.md`](../tracking/2026-03-28_SRE_TRACK2F_AUDIT.md) — the audit that prompted algebraic property tagging in the kind-variance table.
 - **PRN Master**: [`docs/tracking/2026-03-26_PRN_MASTER.md`](../tracking/2026-03-26_PRN_MASTER.md) — Propagator Rewrite Network; topology/frame connection (§2.8) relevant to PPN parsing lattice.
-- **BSP-LE Master**: [`docs/tracking/2026-03-21_BSP_LE_MASTER.md`](../tracking/2026-03-21_BSP_LE_MASTER.md) — Logic Engine; Boolean algebra/ATMS connection (§2.3) and matroid optimization (§2.7) directly relevant.
+- **BSP-LE Master**: [`docs/tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md`](../tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md) — Logic Engine; Boolean algebra/ATMS connection (§2.3) and matroid optimization (§2.7) directly relevant.
 - **NTT Syntax Design**: Referenced for speculative lattice kind declarations in the long-term vision (§3.3).
 
 ---
