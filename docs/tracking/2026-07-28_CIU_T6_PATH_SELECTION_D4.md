@@ -10295,7 +10295,8 @@ controls never flip. The rows run as two batched sources (the spellings; the equ
 the spellings at level 2 and level 3 with a parity assertion; the batch fails closed if its
 result count does not match its command count, so rows cannot silently misalign.
 Retirement: at the 1b-vi close the `pre` column and `1bvi-stage` are deleted — they are
-scaffolding for the slicing, not a permanent mechanism.
+scaffolding for the slicing, not a permanent mechanism. ✅ **Retired at `3f2db4ca`**
+([close-3](#p4e-1b-vi-close-3)); what the slice shipped: [§ what shipped](#p4e-1b-vi-shipped).
 
 | sub-slice | content | status |
 |---|---|---|
@@ -10310,7 +10311,8 @@ scaffolding for the slicing, not a permanent mechanism.
 | **gate** ✅ `83fe4fb4` | main merged in clean (`9d0dea51`; one shared file, main's 3 hunks exactly); full suite at `9d0dea51`: **10 426 / 502 files, all pass**, reconciled file by file against main's 10 394 (+8 `test-path-selection`, +24 `-acceptance` — exactly the branch's two test files); **checkpoint merge to main `83fe4fb4`**, its tree byte-identical to the gated tree; clean merge tree 697 / 697 + acceptance 112 / 112. NEXT: [Q_U62](#q-u62) (pending), then the 1b-vi close (the `pre` column and `1bvi-stage` retire, above) | ✅ |
 | **F** ✅ `3fcb720a` | [Q_U62 = B pinned; SB-1 / SB-2 under B](#p4e-1b-vi-f): B made a contract (50 `sub-block` laws + 12 hand rows); the dup refusal stops offering `^` where an element heads several branches (it kept the BRANCHES apart, a 4-tuple) and offers grouping where it resolves; the all-ordinal L4 offers grouping where spellable; S's scope stated in Q_U61; acceptance M18. Every remedy run per family (probe-1bvi-ai). SB-4 found (pre-existing; filed with SB-3 as DEFERRED 185, main `e751736c`). | battery + acceptance **701 / 701**; `run-file --check` 116 / 116; mutations F1–F7 each red on their own rows (F6 / F7, S+ at either twin seat: 64 / 63) |
 | **close-1** ✅ `a9788c0a` · `55b7df16` | [DEFERRED 185 at the close](#p4e-1b-vi-close): a star right after an ordinal head gets Q_U46's one refusal at both seats (SB-3, block band); the all-ordinal L4 offers only the remedies every passing head can spell (SB-4). Plus a buried panic found opening P4e-2 (RV-2): `ot2{2}*` printed the runtime miss as a value; a panic subject now propagates. Reader seats of SB-3 → P4e-2 (DEFERRED 185 addendum). | battery + acceptance **701 / 701**; red steps run against the OLD code (exactly the G rows); mutations G1–G4 + the panic arm each red on their own rows |
-| **close-2** ✅ `04e3c5c5` | [the star family in the editor grammar, with 179 / 180](#p4e-1b-vi-close-2): `flatten_step` reads `*_` / `*-` / `*-_` as one token (DEFERRED 144); Q_U56's `*->` text reaches the closer, dot and broadcast seats from `parse-list` (179); the arrival instrument compares the lexeme (180). Ordinal-headed branches tried and NOT shipped (foray churn, DEFERRED 205). FOUND: the corpus gate has failed since `3fcb720a` (MISSING 75 > 71, M18) — a decision for the owner before the checkpoint. | battery + acceptance + hygiene **702 / 702**; 60 / 60 tree tests; grammar A/B 0 better / 0 worse / 142; stage H red on the old parser; mutations M1–M4 and the 180 mutation each red on their own rows |
+| **close-2** ✅ `04e3c5c5` | [the star family in the editor grammar, with 179 / 180](#p4e-1b-vi-close-2): `flatten_step` reads `*_` / `*-` / `*-_` as one token (DEFERRED 144); Q_U56's `*->` text reaches the closer, dot and broadcast seats from `parse-list` (179); the arrival instrument compares the lexeme (180). Ordinal-headed branches tried and NOT shipped (foray churn, DEFERRED 205). FOUND: the corpus gate has failed since `3fcb720a` (MISSING 75 > 71, M18) → owner DECIDED (a): budget 75 at `a7dcde7d`, to be lowered when 205 lands. | battery + acceptance + hygiene **702 / 702**; 60 / 60 tree tests; grammar A/B 0 better / 0 worse / 142; stage H red on the old parser; mutations M1–M4 and the 180 mutation each red on their own rows |
+| **close-3** ✅ `3f2db4ca` | [the stage scaffolding retires](#p4e-1b-vi-close-3): rows become `(ID SPELLING EXPECT)`; the stage constant, the PRE / FLIPS-AT columns, the pre-mint classes and C's injection batch go; the parity pin becomes a law over its own domain (81 → 113 rows, size-pinned; held on all 32 new rows). [What 1b-vi shipped](#p4e-1b-vi-shipped). | 346 / 346 rows identical by mechanical dump; battery + acceptance + hygiene **702 / 702**; mutations: the 179 arm → exactly H-179a…h, the parser's mark → batch abort + 80 parity rows, the domain pin → exactly the domain problem |
 
 Per-phase completion, in order (DESIGN_METHODOLOGY Stage 4): tests → commit → this tracker
 → the track LOG (dailies: a pointer) → proceed.
@@ -11042,6 +11044,9 @@ a budget of 71, identically before and after this item (tsg §3). The +4 are exa
   - (b) hold the checkpoint until 205 lands.
   - **Lean: (a)**. The gap is old (P3c); M18 only measured it, and a gate that stays red stops being read.
     Against (a): a ratchet loosened for a known gap is how drift starts. That is why the reason must name 205.
+  - ✅ **DECIDED (a)** (owner, 2026-11-02 17:36: "OK with lean on (a)."). `max_missing` 71 → 75 at `a7dcde7d`,
+    with the reason in `corpus-budget.txt` and the commit naming DEFERRED 205; the gate PASSes at 75
+    ([close-3](#p4e-1b-vi-close-3)).
 
 **[DEFERRED 179](DEFERRED.md) (Q_U56's guided `*->` text missed the closer seat), fixed.**
 - **Mechanism, now measured** (the entry had it as a conjecture). The fold fuses the closer star onto its
@@ -11090,6 +11095,131 @@ a budget of 71, identically before and after this item (tsg §3). The +4 are exa
 | (b) complete | three bands of 179's shape; both instrument entry points; every remedy run (`env{prod}*-`, `rm:cfg*_`, `[map-get env{prod}*- :db]` → values) | `>=` and other `>`-led names after a star keep the comparison hint, by choice; the ordinal grammar is 205 |
 | (c) vision-advancing | the editor now reads the star family the compiler mints | the corpus gate cannot see wrong-but-error-free trees, which is exactly 144's class; only `test/corpus` can, and nothing forces a tree test per new surface form |
 | (d) drift risks | the corpus gate failed for a slice and a half unseen | a corpus run in the slice-close checklist, or a hook gate (filed with 205) |
+
+<a id="p4e-1b-vi-close-3"></a>
+##### §5.P4e-1b-vi CLOSE — item 3: the stage scaffolding retires  (`3f2db4ca`, 2026-11-02)
+
+1b-vi-A promised it: "at the 1b-vi close the `pre` column and `1bvi-stage` are deleted — they are
+scaffolding for the slicing" (the A paragraph above the tracker). Done, with the sub-decisions below taken
+inside the approved item.
+
+**Retired.**
+- `1bvi-stage`, `1bvi-stage-order`, `1bvi-reached?`.
+- The FLIPS-AT and PRE columns. Every row is now `(ID SPELLING EXPECT)`, where EXPECT is the old TARGET,
+  or PRE for a control.
+- The assertions that only meant something under a stage: "every row ahead still FAILS its target"
+  (non-vacuity), "PRE ≠ TARGET", and "a control carries no TARGET".
+- The pre-mint expectation classes (`midlex`, `postfix`, `unbound`, `abort` → `raised`). No expectation
+  uses them any more: all 346 are `same` 22 · `equiv` 89 · `wrapped` 68 · `line` 51 · `refused` 116.
+- 1b-vi-C's injection batch (`1bvi-inject-batch`, `1bvi-inject-problems`, the lexeme-row list,
+  `1bvi-injectable?`). It ran the hand-built IR through elaboration "before the mint". Since D, the level-3
+  rows run the parser's IR, and the parity pin says it is the same IR.
+
+**Kept, and made stronger.** The parity pin is now stated as a law,
+`parse(*- spelling) ≡ totalize(parse(* spelling))`, over the law's own domain. That domain is every row whose
+spelling has a total star and that the parser reads as a selection. Before, it was "the rows that flipped at
+D", an accident of slicing history.
+- The domain grew from 81 rows to 113. The 32 new rows are 14 verify-round hand rows (V-omK1/2/3/5, V-as2/3,
+  V-or2/3, V-orK9, V-l4a/b/K, V-dup-sealed, V-arrow2K) and the 18 `sub-block` laws with a total star. The law
+  held on all 32 on the first run.
+- The domain's size is pinned (113), so a parser that stopped building selections cannot pass vacuously.
+- The remedy check now runs every remedy any refused row offers; it used to cover live rows only. A guard
+  fails it if no row offers a remedy, since an empty population would give the check no power.
+- Unchanged: level 2 ≡ level 3, right-hand sides accepted and typed, the size pin (152 hand / 194 law), and
+  unique ids. Added: a well-formedness check on every expectation's kind and shape.
+
+**Sub-decisions, each weighed.**
+- **FLIPS-AT retires with PRE rather than staying as a provenance tag.**
+  - For keeping it: one cheap column saying which sub-slice made a row true.
+  - Against: it gates nothing once the stage is gone, so the next reader would have to work out that a live-
+    looking column is dead. Provenance already lives in row ids, group comments, the tracker above and
+    `git log -S`.
+  - Taken: retire.
+- **The injection retires.**
+  - For keeping it: an independent second route to the walkers.
+  - Against: its independence was at the IR level, and the parity law states exactly that equality. Running
+    the same IR through elaboration a second time adds cost and no claim.
+  - Taken: retire.
+- **The parity domain widens.** Monotone in strength: the old domain is contained in the new one (checked,
+  below).
+
+**Evidence.**
+- **Equivalence, mechanical** ([`retire-dump.rkt`](tracks/CIU/CIU_6/research/P4e-1b-vi/close/retire-dump.rkt)): the table was dumped from the old
+  module (id, spelling, TARGET-or-PRE) and from the new one (id, spelling, EXPECT). All 346 rows are
+  identical ([before](tracks/CIU/CIU_6/research/P4e-1b-vi/close/retire-table-before.txt), [after](tracks/CIU/CIU_6/research/P4e-1b-vi/close/retire-table-after.txt), lines 1–346). The old
+  parity domain (81) is contained in the new one (113), per the last line of each file. The committed script,
+  re-run in place, reproduces the after-file byte for byte.
+- **Power** (three mutations):
+  - turning off the 179 arm turns exactly H-179a…h red;
+  - removing the parser's total-collapse mark aborts both batches on the walkers' C-5 guard and turns 80
+    parity rows red, 12 of them from the new 32. The other 33 have no ancestor for the mark to wrap;
+  - pinning the domain at 112 gives exactly the one domain problem.
+  - A first run of that last mutation was contaminated, because the parser mutation before it had not been
+    restored between files. It was discarded and re-run alone.
+- **Gates:** battery + acceptance + hygiene 702 / 702; dependency cache verified. `test-path-selection.rkt`
+  is 118 lines shorter net. Per-test-case timing was not re-measured.
+
+**Also at this item: the corpus budget.** The owner decided (a) (2026-11-02 17:36, "OK with lean on (a)"). At
+`a7dcde7d`, `max_missing` went 71 → 75, with the reason in the file and the commit naming DEFERRED 205. The
+gate PASSes at 75.
+
+<a id="p4e-1b-vi-shipped"></a>
+##### §5.P4e-1b-vi — WHAT SHIPPED  (A → B → C → D-1 → D-2a → D-2b → E → verify → gate → F → close; 2026-10-13 … 11-02)
+
+**Total collapse is live** ([Q_U48](#q-u48), [Q_U57](#q-u57) P), in every band the star family mints.
+- `*-` deletes the layer the last step makes, and no ancestor contributes an output level. So
+  `app{database*-}` ≡ `app{database*}`, and `t5{a.b.c*-}` ≡ `t5{a^.b^.c*}`, typed
+  `{:m {:x Int} :n {:y Int}}`. Both are rows E1- and E7- of the table, where the right-hand side is
+  measured on every run.
+- `*-_` names each lifted field by the whole collapsed path: `app{server.ssl*-_}` is typed
+  `{:server-ssl-cert String :server-ssl-enabled Bool}` (row E2_).
+- Where nothing can collapse, `*-` ≡ `*` and `*-_` ≡ `*_` ([Q_U59](#q-u59)): path position, as in
+  `app.server.ssl*-`.
+
+**Refused, guided, with remedies that run.**
+- A rename on an ancestor of a total collapse, in both families (`*-` / `*-_`, `^-` / `^-k'`; [Q_U55](#q-u55)
+  A). Example: "`srv` can never appear under a total collapse" (row E5-).
+- `*->` and its siblings in selection territory ([Q_U56](#q-u56)), now at every seat: inside the braces since
+  D-2b, and at the closer, dot and broadcast seats since close-2.
+- A star right after an ordinal head gets Q_U46's one refusal (close-1, block band).
+
+**Ordinal heads.**
+- [Q_U61](#q-u61) S: an ordinal head passes a keyless star landing through, at every depth.
+- [Q_U62](#q-u62) B ("for now"): braces scope a landing. A star inside the braces lands in the element; a star
+  after the braces escapes it.
+
+**Stated as laws** ([Q_U60](#q-u60)): 194 generated rows (`*` 22 · `*-` 44 · `*-_` 26 · `^-` 26 · `^-z` 26 ·
+`sub-block` 50), plus the parity law over 113 rows (close-3). The table is 346 rows (152 hand, 194 law).
+
+**Representation** ([Q_U58](#q-u58) M): marked in the parser (`(collapsed . c₀)`, at `segment-select-items`' one
+success return) and acted on in both twins (typing, reduction).
+
+**Defects fixed on the way.**
+- VF-1, a whole-file abort.
+- VF-2, a value/type split between the twins.
+- VF-3, ordinal-level prose ([verify](#p4e-1b-vi-verify)).
+- RV-2, a buried panic printed as a value (close-1).
+- DEFERRED 185's block band (close-1).
+- DEFERRED 179, 180 and 144, the editor grammar (close-2).
+
+**Not shipped, and where it went.**
+- DEFERRED 185's reader seats → P4e-2.
+- DEFERRED 205, the grammar's ordinal-headed branches.
+- DEFERRED 167 (block-position ω; a waypoint refusal stands) and DEFERRED 115's L★ side condition (ah:23 ≠ 24)
+  → P5.
+- DEFERRED 168 (type territory).
+- DEFERRED 198's addendum (the buried-panic class elsewhere).
+
+**Decisions made during the slice:** Q_U55, Q_U56, Q_U57, Q_U58, Q_U59, Q_U60, Q_U61, Q_U62, the corpus budget
+(close-3), and [Q_U63](#q-u63) J, which is P4e-2's, decided during the close.
+
+**For the PIR.**
+- The corpus gate was not run when F added M18. No hook runs it, so it failed unseen for a slice and a half
+  (close-2).
+- Running every remedy a refusal offers caught advice that does not work at least twice. One was SB-1's `^`,
+  which kept the BRANCHES apart as a 4-tuple (F); the other was SB-4's unspellable remedies (close-1).
+- Counting the rows an instrument actually covers caught a vacuous pass (X-type, C). The parity domain's size
+  pin carries that lesson forward.
 
 ##### §5.P4e-1b-v — WHAT SHIPPED  (A → B1 → B1b → B2a → verify, 2026-08-13)
 

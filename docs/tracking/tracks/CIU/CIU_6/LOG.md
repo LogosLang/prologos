@@ -634,3 +634,27 @@ are in [`../README.md`](../README.md).
 - **Next**: close item 3 (retire the stage scaffolding; approved with the close, "Ok to proceed on 1"). The owner's
   decision on the corpus budget (raise to 75, citing 205, or hold the checkpoint) is needed before item 4 (merge
   main in, full suite, checkpoint).
+
+### 1b-vi close item 3 — the stage scaffolding retires; the parity pin becomes a law over its own domain — `3f2db4ca` (+ the corpus budget `a7dcde7d`) (2026-11-02)
+- **Why / decision**: the owner (2026-11-02 17:36) — *"OK with lean on (a). Let's proceed with the Next."* So (a)
+  the corpus budget is raised 71 → 75, naming DEFERRED 205 (`a7dcde7d`; the gate PASSes), and item 3 proceeds.
+  Item 3 was approved with the close ("Ok to proceed on 1"; the "walk through together" was about the later P4e
+  items, re-read from the 10-19 exchange).
+- **What**: [§ close-3](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-3).
+  - Retired: the stage constant, FLIPS-AT and PRE (rows are `(ID SPELLING EXPECT)`), the pre-mint classes, and C's
+    injection batch.
+  - The parity pin is now the law `parse(*-) ≡ totalize(parse(*))` over every total-star row the parser reads as
+    a selection: 81 → 113 rows, size-pinned. It held on all 32 new rows at once.
+  - The remedy check covers every refused row that offers remedies.
+  - Plus [§ what 1b-vi shipped](../../../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-shipped), the close note (item 4's first part).
+- **Evidence**:
+  - Equivalence by mechanical dump: 346 / 346 rows identical, and the old domain ⊆ the new one
+    (`research/P4e-1b-vi/close/retire-*`).
+  - Power: three mutations, each red only where intended.
+  - 702 / 702; dependency cache verified.
+- **Surprise / correction**:
+  - The first run of the size-pin mutation was contaminated by the previous mutation of `parser.rkt`, which my
+    loop had not restored between files. It was discarded and re-run alone; the record cites only the clean run.
+  - My first D4 draft double-unescaped braces and printed `{:m {:x Int} :n {:y Int}`. A brace-balance check
+    caught it before the commit, and the quoted values were then checked against the dump.
+- **Next**: item 4. Merge main in (`--no-commit`, gated), run the full suite, then the checkpoint merge to main.
