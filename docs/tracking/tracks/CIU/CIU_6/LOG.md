@@ -676,3 +676,20 @@ are in [`../README.md`](../README.md).
   - `.zo` fingerprints of four modules neither side changed match main's checkout.
 - **Next**: the checkpoint merge to main, from a throwaway worktree. The merge tree must equal this tip's tree. Then
   the DEFERRED citations on main move from "reaches main at the checkpoint" to the checkpoint's hash.
+
+### CHECKPOINT MERGED TO MAIN — the 1b-vi slice closes — `d2ad3dad` (2026-11-02)
+- **What**: `ciu6-path-selection` at `9f5a882e` was merged into main (`ce489cfd`) from a throwaway detached worktree.
+  The merge tree equals the gated tip's tree (`850ee147…`), and everything after the gate (`a28d648c`) is docs
+  only, so the full suite at the gate (10 431 / 502, all pass) is this merge's gate.
+- **Verification**:
+  - In the throwaway tree: a build with the limit; `.zo` files for reduction, parser, typing-core, unify and driver
+    are byte-identical to the gated tree's; battery 702 / 702; `run-file --check` 116 / 116.
+  - Main's checkout fast-forwarded. The owner's 16 WIP entries are unchanged (none is a `.rkt`, none overlaps the
+    checkpoint's files, and no racket process had its cwd there). After a rebuild it shows the same `.zo` and
+    702 / 702. The branch fast-forwarded to `d2ad3dad`, and the throwaway worktree is removed.
+- **On main**: DEFERRED `1f96d5da` flips every CIU 6 "on the branch / reaches main at the checkpoint" citation to
+  `d2ad3dad` (144, 179, 180; the addenda to 115, 167, 185, 198; 205, which also records the budget decision).
+  Dailies `1d40da0f`.
+- **Next**: P4e-2, which builds J: `x:*`, `.*` as a guided refusal naming `x:*`, the near-miss messages and the
+  `x{a:*}` waypoint (JD-2…4), and DEFERRED 185's reader seats. It opens with a grounding audit. After it, the rest of
+  P4e (transpose, disclose, DEFERRED 63, keyword projection) is walked through with the owner.
