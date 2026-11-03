@@ -912,25 +912,36 @@ what surprised, and what's next. See ~workflow.md~ §
 mini-audit happen through dialogue between contributor and user,
 cycling between design intent and code reality (see Per-Phase Protocol
 steps 1 and 2). The /outcomes/ of that dialogue — classifications,
-sub-phase partitions, migration patterns, resolved questions, audit
-findings — persist into the DESIGN DOC we are working from, as new
-subsections within the doc's structure. Dailies report what was DONE
+sub-phase partitions, migration patterns, resolved questions — persist
+into the DESIGN DOC we are working from, as new subsections within the
+doc's structure. The audit FINDINGS persist in their own audit document,
+cross-referenced from the design doc (revised 2026-11-03, owner; see
+Per-Phase Protocol step 2). Dailies report what was DONE
 after each commit (story, lessons, surprises, references to design-doc
 subsections where decisions landed). The design doc holds the current
-design; the dailies hold the story of getting there; standups hold the
-user's personal notes. Three distinct homes during the Stage 4
-conversational cadence — one for the design, one for the story, one
-for personal narrative.
+design; the audit documents hold the evidence it rests on; the dailies
+hold the story of getting there; standups hold the user's personal
+notes. Four distinct homes during the Stage 4 conversational cadence —
+one for the design, one for the evidence, one for the story, one for
+personal narrative (three until 2026-11-03, when the audit findings
+moved out of the design doc).
 
 Other documentation types (Stage 2 audit docs, Stage 3 self-critique
 and external-critique docs, research docs, tracking docs, PIRs, master
 roadmaps) serve their own purposes and form a rich interlinked web.
 They are distinct from the intra-Stage-4 conversational loop, which
-has just those three homes.
+has just those four homes.
 
 Codified 2026-04-23 after a process clarification: Stage 4 mini-design
 and mini-audit produce design outcomes that belong in the design doc,
 not in dailies and not in parallel per-phase audit files.
+Revised 2026-11-03 (owner): "Audit findings can be their own thing and
+not cloud-up the design doc (but cross-reference)". The mini-audit's
+findings now get their own audit document, and the design doc keeps
+the decisions and a cross-reference. The 2026-04-23 rule had folded
+them into the design doc. In practice that buried a phase's design
+target under its evidence: the first CIU 6 P4e-2 draft put thirteen
+findings into the design doc.
 
 *** Implementation Protocol
 
@@ -1000,10 +1011,18 @@ For each implementation phase:
    design tells you WHAT to measure; this step produces the numbers;
    the numbers often reshape the mini-design. Cycle between them.
 
-   /Outputs/: persist audit findings INTO the design doc as new
-   subsections alongside the mini-design decisions (see canonical
-   examples in [[file:../tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md]] §7.6.9,
-   §7.6.14). Not in dailies, not in separate per-phase audit files.
+   /Outputs/ (revised 2026-11-03, owner: "Audit findings can be their
+   own thing and not cloud-up the design doc (but cross-reference)"):
+   the findings go in their OWN document, the track's
+   `audits/YYYY-MM-DD_<SERIES>_<N>_<phase>_GROUNDING_AUDIT.md`, with its
+   probes and their outputs in `research/<phase>/`. The design doc
+   carries the DECISIONS the audit led to, each citing the finding it
+   rests on, plus one cross-reference to the audit document; the audit
+   links back to the design-doc section it serves. Not in dailies.
+   (Until 2026-11-03 the findings were written into the design doc as
+   subsections, as in
+   [[file:../tracks/PPN/PPN_4C/2026-04-21_PPN_4C_PHASE_9_DESIGN.md]] §7.6.9 and
+   §7.6.14. That form is superseded.)
 
 3. *Principles challenge mid-flight*: Every design decision made during
    implementation --- "should I add a field?", "should I use a hash or

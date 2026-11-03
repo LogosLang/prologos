@@ -71,9 +71,11 @@ let a reader jump to the reasoning past the mechanics.
 
 * Cadence — when to write
 
-- /Created at session start/ — the owner says "open the next working day
-  interval," which spawns a standup + a dailies; the dailies opens with its STATE
-  head SEEDED from the prior file's STATE head (a copy-forward, NOT a re-recap).
+- /Created at the first write of a local date/ (revised 2026-11-03, owner; see *File
+  rolling*). The dailies opens with its STATE head SEEDED from the prior file's STATE
+  head (a copy-forward, NOT a re-recap). When the owner says "open the next working day
+  interval", the standup is created as before. If the dailies for that date already exists,
+  it continues.
 - /Every commit triggers a dailies write/ — append a LOG entry AND refresh the
   STATE head (HEAD / suite / NEXT). Not batched — capture the WHY while fresh.
 - /Also write on a decision, surprise, correction, or blocker/ even without a
@@ -81,21 +83,32 @@ let a reader jump to the reasoning past the mechanics.
 - /Prior dailies are READ-ONLY/ (like the standups). Only the current file's
   STATE head is overwritten; the log is append-only.
 
-* File rolling — keep each file digestible
+* File rolling — one file per LOCAL date
 
-The corpus's worst failure is giant files (one dailies spanning 2+ weeks / 20+
-sessions, up to 6601 lines) — "read the latest dailies to re-ground" breaks when
-the current state is thousands of lines down. Roll a NEW dailies file when the
-current one hits any of:
+/Revised 2026-11-03 (owner): "our dailies should switch to following the local date hereforth."/
 
-- a soft cap of ~400–500 lines, OR
-- a track/topic shift, OR
-- a rewind.
+A dailies file covers exactly one LOCAL calendar date (the machine's time zone, `date +%F`) and is
+named for it: `docs/tracking/standups/YYYY-MM-DD_dailies.md`.
 
-The STATE head makes rolling cheap: seed the new file's head from the old file's
-head; the old file's log stays as immutable history. "Day" = creation-to-creation
-(a file may span calendar dates), but bounded by these roll triggers — the
-interval is no longer open-ended.
+- The FIRST dailies write on a new local date creates that date's file. Its STATE head is seeded by
+  copy-forward from the previous file's head, every live thread kept (a copy-forward, not a
+  re-recap). The previous file is read-only from then on, except for one closing pointer line to
+  the new file.
+- An entry belongs to the date on which it is WRITTEN. A session working across midnight writes its
+  next entry in the new date's file; when the work it reports happened on another date, the entry's
+  heading says so.
+- Several sessions share the file. Before creating it, check that no other session already has
+  (`ls docs/tracking/standups/`, `git log main -- docs/tracking/standups/`); if it exists, append to
+  it and re-read its STATE head first.
+- The old roll triggers no longer split a file. A track shift or a rewind is a LOG entry, and the
+  STATE head is cross-track. Size is a warning only: a day past ~500 lines means the entries are not
+  BOUNDED (see the LOG rules above), or the STATE head has outgrown "one line per thread".
+
+/Superseded rule, kept as the record:/ files rolled on a soft cap of ~400–500 lines, a track/topic
+shift or a rewind, and "Day" was creation-to-creation, so a file could span calendar dates. That
+was itself the fix for one dailies spanning 2+ weeks and up to 6601 lines. It still let
+`2026-10-13_dailies.md` run three weeks of dates (680 lines), because no trigger fired while the work
+stayed on one track. A date boundary always fires.
 
 * Relay Notes — the re-grounding mechanism (REWIND *or* FRESH SESSION)
 
