@@ -1,0 +1,1 @@
+../tracking/tracks/CIU/CIU_6/research/2026-07-06_ROWS_COALGEBRA_PROPAGATOR_NOTE.md
