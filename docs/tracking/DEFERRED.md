@@ -2940,7 +2940,7 @@ is DIGIT-headed segments (`?x:0` DOES mint); the one principled counter-example 
 pattern vars, zero instances in tree. So this item's "cannot decide it in EITHER direction"
 framing is HALF WRONG and Q_U18 is reopened — see D4 `#q-u18`.
 
-✅ **RESOLVED 2026-08-02 by [Q_U18](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u18).**
+✅ **RESOLVED 2026-08-02 by [Q_U18](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u18).**
 The unknown-head arm flips to **PRESERVE** (owner: "worth the trade"), because the
 sigil discriminator is ALREADY in the tokenizer — `?x:Nat` glues to ONE TOKEN and
 cannot mint. Owed with it: close the **digit-headed hole** (`?x:0` mints). Accepted
@@ -4762,7 +4762,7 @@ branch — while `select-step-output-name` has `[(sub) #f]` and never unwraps a 
 So a caret written bare after `:` is counted at two levels, and one written inside
 `:{…}` is confined and cannot reach the level `^-` is defined to collapse.
 
-⚠ **The fix is constrained by [Q_U22](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u22)**:
+⚠ **The fix is constrained by [Q_U22](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u22)**:
 `^` at a leaf stays ARITY-UNIFORM, so `cfg{servers:host^}` corrects to
 `{:servers @[⟨"localhost"⟩ …]}` (1-tuples), NOT to bare values. Fixing toward the
 bare-value reading would make `xs:{name^}` a second spelling of `xs:name`, which
@@ -4845,7 +4845,7 @@ by **exact string compare** — `""`→dissolve, `"_"`→synth, `"-"`→collapse
 the four, so it falls through and becomes a *rename target* named `_*`. Nothing
 rejects a star in a continuation, because `ident-continue?` admits `*`.
 
-**Why it is P4e-blocking, not merely cosmetic**: [Q_U24](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u24)
+**Why it is P4e-blocking, not merely cosmetic**: [Q_U24](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u24)
 spells the provenance splat **`*_`** — one glued continuation in the *same
 lexeme space*. The converse order is also live and also wrong: `cfg{database*^a}`
 splits the caret FIRST, leaving a name `database*`. **So `^`/`*` precedence must
@@ -4868,7 +4868,7 @@ cfg{database*^a}  → error naming field `:database*`, advising `.database*`  (=
 
 **✅ THE PRECEDENCE REQUIREMENT IS DISCHARGED — no new owner ruling needed.**
 This entry demanded that `^`/`*` precedence be ruled before `*` or `*_` lands.
-[Q_U29](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u29) already answers it, and a
+[Q_U29](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u29) already answers it, and a
 second independent principle covers the other direction:
 
 - **Star inside a caret continuation** (`^_*`, `^a*`, `^*`) — Q_U29: *a star in
@@ -4884,7 +4884,7 @@ two existing principles rather than needing a third, and matches
 `split-caret-lexeme`'s own ">1 caret" refusal shape. **Nothing meaningful is
 lost**: `name^alias*` would rename and then delete the layer the alias names
 (moot), and `name*^alias` would rename N lifted keys to one name (incoherent).
-`*_` is the STAR's own continuation ([Q_U24](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u24)),
+`*_` is the STAR's own continuation ([Q_U24](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u24)),
 not a caret interaction.
 
 **Fix, at P4e-0**: the continuation classifier REJECTS an unknown continuation
@@ -4905,7 +4905,7 @@ When the branch IS `*`, it advises `` `.*` ``. Measured at `4317c88d`:
 - also reachable via `cfg{database *}` and `cfg{database.{url}*}`
 
 **Two defects, one site**: (i) the advised spelling is not parseable TODAY;
-(ii) after [Q_U26](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) bare `.*` is
+(ii) after [Q_U26](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u26) bare `.*` is
 **RAVEL**, a different operator — so the hint would advise a spelling that
 parses and means something else. This is the *"the remedy points back at the
 user's own spelling"* rule (P4d slice 4c) violated in the one place P4e is about
@@ -4920,9 +4920,9 @@ found two more, both at `4317c88d`:
 
 1. **`elaborator.rkt`'s retired path-literal wildcard message** states *"In the
    current surface `*` is postfix FLATTEN and a sub-selection is a select block
-   `x{…}`"*. [Q_U23](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u23) makes `*` a
+   `x{…}`"*. [Q_U23](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u23) makes `*` a
    **sort-generic layer-delete** (not "flatten"), and
-   [Q_U26](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) makes bare `.*`
+   [Q_U26](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u26) makes bare `.*`
    **ravel** — so the sentence goes stale **twice** at P4e. A diagnostic that
    asserts a surface FACT is a maintenance liability; this is the class the
    track has already been burned by.
@@ -5328,8 +5328,8 @@ second adversarial verify.
 
 ### 101. ⬜ ⭐ THE NON-IDENTIFIER STAR CARRIERS ARE UNSPELLABLE — the P4e-0 mint was REVERTED, and the gap is filed rather than left silent
 
-`*` is ruled SORT-GENERIC ([Q_U23](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u23)) and its
-surface was ruled sort-generic too ([Q_U27](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u27)).
+`*` is ruled SORT-GENERIC ([Q_U23](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u23)) and its
+surface was ruled sort-generic too ([Q_U27](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u27)).
 **Only the IDENTIFIER band delivers that today.** `ident-continue?` admits `*`,
 so `database*` / `:tags*` / `c*d` arrive as ONE token and the parser splits
 them. Every other carrier still shatters:
@@ -5471,7 +5471,7 @@ coding error — a **scoping** result, and it is the reason the census called
 `xs:0*` / `x.0*` "unreachable under ANY spelling without a tokenizer repair"
 without saying the repair alone suffices.
 
-**What was built** (per [Q_U30](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u30)'s
+**What was built** (per [Q_U30](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u30)'s
 R4): both digit arms of `recognize-dot-ordinal` / `recognize-colon-annotation`
 stop before a trailing `*` instead of declining on it, and the star mint accepts
 `colon-annotation` / `dot-ordinal` as predecessors. It WORKED at the token layer —
@@ -5587,7 +5587,7 @@ and the `$mixfix` expander. The nested-shorthand `let` binding value is reached
 by none of them, so neither the fold nor any refusal seated in it ever fires.
 
 **⚠ WHY IT IS LOAD-BEARING BEYOND ITS OWN SIZE**: it BOUNDS
-[Q_U35](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u35)'s claim that refusing
+[Q_U35](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u35)'s claim that refusing
 "dissolves that whole blast radius instead of arming it site by site". That
 holds only WHERE THE FUSE SEAT RUNS. Q_U35 is not wrong; its scope is narrower
 than stated, and this is the counter-example.
@@ -5635,7 +5635,7 @@ ns p2 / def c := {:a 7} / defn h / ⇥ | c.a -> 1 / ⇥ | z -> 2
 ```
 
 **The gap in the rulings**:
-[Q_U32](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u32)'s measured domain is BARE
+[Q_U32](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u32)'s measured domain is BARE
 `*` (`| * ->`, `| 2 * ->`, `defn f | * ->`, `defn f | red* ->`) — carrier-plus-
 star is not in it. And Q_U32 is a **RULING ONLY**: no pattern-position refusal
 exists in the tree (`star-not-yet-message` + its three call sites are the whole
@@ -5675,7 +5675,7 @@ match '[1 2]       (no star)        4 outputs, fine
 ```
 
 A **SPACED** `*` is ordinary first-class-operator surface (it is exactly what
-[Q_U32](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u32)'s guard rail protects), so
+[Q_U32](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u32)'s guard rail protects), so
 this predates the whole P4e star work. Corroborating: three NON-MINTING controls
 (`xs:0*`, `x.0*`, `#p(a)*`) abort in `match-scrut` too. Slice A is not the cause,
 and neither is P4e-1a.
@@ -5885,7 +5885,7 @@ there rather than re-filed. Starless controls (`| 1 2 -> 3`) abort identically.
 
 ### 115. ⬜ L2's normal form is NOT legality-preserving across a `*` — `{p:a* p:b} ⟶ p:{a* b}` needs a side condition (P5 owns L2)
 
-Found in the [Q_U46](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u46) design round
+Found in the [Q_U46](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u46) design round
 (options panel `wf_f8461dda-659`), measured at `68604a07`.
 
 Spec §4's **L2 (Factoring / normal form)** is `{p:a p:b} ⟶ p:{a b}` when spines
@@ -5906,7 +5906,7 @@ symptom a **guided error**; this entry is the LAW's repair, which belongs with
 normalizer, not after: a normalizer that silently changes a program's legality
 is the worst shape this class can take.
 
-> **ADDENDUM (2026-10-19, CIU 6 [Q_U62](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) = B, critique DC-2; probe
+> **ADDENDUM (2026-10-19, CIU 6 [Q_U62](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u62) = B, critique DC-2; probe
 > `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-ah` lines 17–24, branch `ciu6-path-selection` @ `93f36b3a`.
 > The probe is on main since the 1b-vi checkpoint `d2ad3dad`.)** A second star side condition, this time on Q_U45's
 > L★ (`x{p₁* … pₙ*} ≡ x{p₁ … pₙ}*` for Map contents). Under Q_U62 = B ("braces scope a landing"), L★ holds at key
@@ -5938,7 +5938,7 @@ the premise.**
 So the redundancy holds **only for a literal index**. `v[i]` is DYNAMIC
 indexing and the dot band cannot express it: `.N` takes a literal ordinal or a
 field name, and a variable is neither. This is the `[k]` ordinal/dynamic sort
-that [Q_U12](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u12) lists as a deferred
+that [Q_U12](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u12) lists as a deferred
 sort — the dynamic half turns out to be already live.
 
 **Also measured**: `cfg2{a[0].b}` and `cfg2{a.0.b}` are byte-identical
@@ -5947,7 +5947,7 @@ the printer already normalizes the bracket away. **Zero corpus sites** for a
 bracket ordinal inside a select block.
 
 **⚠ IT DOES NOT SIMPLIFY THE STAR WORK, and that was the reason offered for
-doing it now.** [Q_U47](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u47)'s gap is
+doing it now.** [Q_U47](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u47)'s gap is
 about steps that contribute no output NAME. Deprecating `[0]` removes a
 *spelling* of the ord-step but leaves `.0`, and it does not touch the ordinal
 BRANCH HEAD (`vh{0 …}`), which is a different kind — MEASURED `vh{0}` →
@@ -5970,7 +5970,7 @@ verify. Sequenced in D4 §5.P4e-1b-sequencing as explicitly outside.
 ### 118. ⬜ ⭐ AN ω STEP WITH A *SYMBOL* INNER, INSIDE A SELECT BLOCK, ASSEMBLES A NARROWED ROW INSTEAD OF EXTRACTING THE FIELD — `x{k:s}` ≡ `x{k:{s}}` at zero errors, and the bands disagree
 
 Found by the same verify. **PRE-EXISTING.** Directly contradicts
-[Q_U20](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u20) as written ~60 lines above
+[Q_U20](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u20) as written ~60 lines above
 the offending call. The PATH band extracts correctly (`x.k:s`), the BLOCK band
 does not, so the two bands disagree on a shape C2 has just made live.
 
@@ -6188,7 +6188,7 @@ exact-lexeme test is SUFFICIENT: no token-splitting is required. ⚠ But the gat
 is a FOUR-part conjunction (lexeme · not-in-mixfix · non-empty output · a
 byte-adjacent predecessor whose type is a group closer), and the parser's
 `$postfix-star` arm additionally HARDCODES `'flatten` in both legs, never calling
-`split-star-lexeme` — so it is a TWO-SITE change. See [Q_U52](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u52).
+`split-star-lexeme` — so it is a TWO-SITE change. See [Q_U52](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u52).
 
 **WHY IT MATTERS FOR THE NEXT SLICE**: `*_`'s guard in `star-join-type` is
 reachable only from the fused band. Any claim that `*_` is "refused everywhere"
@@ -6221,17 +6221,17 @@ rv.*-  ⟹ ERROR: broadcast `.*-` was retired — its replacement is `:-` (e.g. 
 `ident-continue?` char — and `_` and `-` ARE `ident-continue?`. So it consumes
 `.*_` and `.*-` and reads them as `.*` plus a field named `_` / `-`.
 
-**WHY IT MATTERS**: [Q_U26](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) rules
+**WHY IT MATTERS**: [Q_U26](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u26) rules
 RAVEL to be bare `.*`. If the star's continuation grammar is `{"" _ - -_}` — as
-[Q_U48](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u48) and
-[Q_U51](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u51) imply — then `.*_` is
+[Q_U48](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u48) and
+[Q_U51](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u51) imply — then `.*_` is
 ravel-with-synth, and today it emits a message about a feature retired for
 entirely unrelated reasons. Ravel is itself unimplemented (`rv.*` is
 `Unbound variable`), so nothing is broken **yet**; the collision lands whenever
 P4e-2 implements ravel or 1b-vi mints `*-`.
 
 **OWED**: decide who owns `.*_` / `.*-` before either lands. Not 1b-v's — 1b-v
-touches the closer-adjacent band only ([Q_U52](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u52)).
+touches the closer-adjacent band only ([Q_U52](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u52)).
 
 ---
 
@@ -6306,11 +6306,11 @@ dcomp:{a}*      ⟹ ERROR: … same star-omega-nominal refusal …
 rowsv:tags*     ⟹ @[1 2 3]                  ← the DESCENT twin matches its ruling
 ```
 
-**THE TENSION.** [Q_U42](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u42) rules that
+**THE TENSION.** [Q_U42](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u42) rules that
 when the keywise join recurses into a shared key whose two values are VECTORS it
 **concatenates** — its argument being that the top-level rule already says vectors
 concatenate, and one operator must not say the opposite one level down.
-[Q_U50](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u50) rules that a **homogeneous
+[Q_U50](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u50) rules that a **homogeneous
 `PVec`** under ω refuses on POSSIBILITY, because one element type stands for every
 element — "the same keys N times, N unknown". `rowsv` is homogeneous, so it lands
 in Q_U50's refusal and Q_U42's promise at once.
@@ -6337,7 +6337,7 @@ disagreed jointly.
 
 ### 129. ✅ **DISCHARGED `940c9c88`** ⭐ THE READER'S SENTINEL EMIT IS SPELLING-BLIND — `token-entry->stx` maps the token TYPE to a hardcoded `'$postfix-star` and never consults the lexeme, so B2b's mint has a wrong-answer route B1's ordering argument does not cover
 
-> **FIXED at `940c9c88`** (slice 1b-v-B2b, per [Q_U53](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u53)):
+> **FIXED at `940c9c88`** (slice 1b-v-B2b, per [Q_U53](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u53)):
 > the emit is `(postfix-star-lexeme->sentinel lexeme)` — the SAME call the widened
 > gate makes on the SAME entry, so the miss-case is unreachable by construction.
 > No fallback, no raise. ⭐ Mutation-tested in the exact shape this entry
@@ -6378,7 +6378,7 @@ token type would silently re-blind the mint verifier — reinstating exactly the
 defect 127 repaired, in the instrument whose job is verifying this mint. The
 "keep ONE token type" advice STANDS; only its cost estimate was wrong.
 
-⭐ **RULED as [Q_U53](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u53)**: the emit's
+⭐ **RULED as [Q_U53](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u53)**: the emit's
 miss-case is not given a behaviour — it is made UNREACHABLE by widening the gate's
 lexeme conjunct to EXACT table membership, so gate and emit ask one question of one
 datum. A bare `#f`, a fallback, and a raise are each disqualified independently
@@ -6824,7 +6824,7 @@ Found by the grammar-drift tripwire firing on `940c9c88` (CIU T6 slice
 **2026-10-14 — THE FAMILY IS NOW FINAL** (CIU T6 1b-vi-D-2b, `9743e93e` on
 `ciu6-path-selection`; the tripwire fired again, as expected): the compiler mints
 all four — `*`, `*_`, `*-`, `*-_` — closer-adjacent and fused. The `*->` boundary is
-decided ([Q_U56](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u56)): not a construct; the
+decided ([Q_U56](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u56)): not a construct; the
 selection consumer refuses it, guided, so the grammar needs no `*->` form either.
 The fix shape below is unchanged.
 
@@ -6840,13 +6840,13 @@ in both. Only the closer seat is broken.
 **WHY FILED, NOT FIXED** (the rule: grammar at `X.close`, or a DEFERRED entry
 saying why not): CIU T6 still has 1b-v-C, 1b-vi, P4e-2, PF, P5, PX, P6 ahead,
 and **1b-vi changes this token AGAIN** — `*-` and `*-_`, plus the `*->` boundary
-question [Q_U52](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u52) raised, which is a
+question [Q_U52](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u52) raised, which is a
 grammar question as much as a reader one (`x{a*-> b}`). Doing it once at
 X.close, after the family is final, is the fix that survives.
 
 **FIX SHAPE when it lands**: `flatten_step: $ => token.immediate(/\*[-_]*/)` —
 a SUPERSET of the family, mirroring the battery's `p4e-star-token-lexeme?` and
-the matrix's `star-spellings`, per [Q_U53](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u53)'s
+the matrix's `star-spellings`, per [Q_U53](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u53)'s
 containment rule (an instrument or a grammar that is exactly the mint table
 re-blinds itself the moment the table grows) — plus a corpus test. ⚠ Read
 MISSING before ERROR when judging it (tree-sitter-grammar.md).
@@ -6859,7 +6859,7 @@ shows up in the corpus gate without anyone remembering it.
 glued star inside `<…>` per Q_U31, and a grammar that accepts more than the
 compiler is the harmless direction.)
 
-**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2), on main since the checkpoint `d2ad3dad`).
+**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](tracks/CIU/CIU_6/phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-close-2), on main since the checkpoint `d2ad3dad`).
 The fix shape above landed as `token.immediate(prec(1, /\*[-_]*/))`. The `prec` is load-bearing: `operator`
 contains the string `'*'`, a string wins a same-length tie against a regex, and without it corpus test 54
 (`record.orders:items*:sku`) broke. Three new corpus trees are red on the old grammar and green now (60 / 60).
@@ -6881,7 +6881,7 @@ carries its cont vocabulary as literal arms, and `pretty-print.rkt`'s
 SILENT `[else "^?"]` fallback (the star arm's miss now renders LOUDLY).
 
 **Why filed, not fixed at 1b-v-C**: the star fold was scoped to the star arm by
-[Q_U54](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u54); the caret family is
+[Q_U54](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u54); the caret family is
 stable (no growth queued), so the drift hazard is latent rather than live.
 **When**: with the cont-axis totality work at 1b-vi, or at PF — whichever first
 touches `cont->string`. Fix shape: a caret table of the same three-column shape
@@ -8420,7 +8420,7 @@ give the closer-band star followed by `>` Q_U56's message ("drop the `>`"), in t
 reader raise aborts the whole file). **When**: no gate; with the star-family grammar work (DEFERRED 144) at CIU 6 T6's
 close, or with the next Q_U56-family message work.
 
-**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2)). The mechanism is now measured: the
+**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](tracks/CIU/CIU_6/phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-close-2)). The mechanism is now measured: the
 fold fuses the closer star and leaves `>` as the next sibling, `(($select-path ($select env prod dev)
 $postfix-star-collapse) >)`, so `>` was an argument. Inside a keyword form it gave "map-get expects 2 arguments,
 got 3" instead. The consumer named in the fix shape cannot see a `>` outside the braces, so the arm sits in
@@ -8441,7 +8441,7 @@ equals the injected IR, 68 rows) both hold. This is instrument POWER: a regressi
 pass the arrival gate. **Fix shape**: require the minting token's LEXEME to equal the table lexeme under test (the gate
 already iterates the table). **When**: with DEFERRED 144, or the next edit of the arrival matrix.
 
-**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2)). The fix shape landed as
+**2026-11-02 — DISCHARGED** (CIU 6 1b-vi close, item 2; [D4 § close-2](tracks/CIU/CIU_6/phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-close-2)). The fix shape landed as
 written: `star-last-token-type` / `star-mints?` take an optional spelling, and with one the last star-family token
 must BE that lexeme, or the answer is `'split`. The arrival gate passes the lexeme under test. The battery's
 "is ONE token" pins compare `(lexeme . type)` with split controls. A mutation that ignores the spelling turns the
@@ -8597,7 +8597,7 @@ the library.
 
 ### 185. 🟡 PARTLY FIXED (CIU 6 1b-vi close, `a9788c0a`) — OPEN: the reader seats (→ P4e-2) · ON A PATH MADE ONLY OF ORDINALS, SELECTION REFUSALS GIVE KEY- AND POSTFIX-SHAPED ADVICE THAT CANNOT BE SPELLED — `vhm{0.{0}* 0.{0}}`'s L4 offers "keep a key before each star" and a `^` that does not parse; `vhm{0.{0*}}` says "`*` is postfix"
 
-**Found by** CIU 6: finding SB-3 when [Q_U62](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) was opened (2026-10-18;
+**Found by** CIU 6: finding SB-3 when [Q_U62](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u62) was opened (2026-10-18;
 probe `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/probe-1bvi-ae` line 66), and SB-4 at 1b-vi-F (2026-10-19;
 probe `…/probe-1bvi-ai` lines 19, 31, 32; branch `ciu6-path-selection` @ `3fcb720a`, on main since the
 checkpoint `d2ad3dad`). Subject: `vhm := @[@[{:x 1}] @[{:y 2}]]`.
@@ -8611,7 +8611,7 @@ checkpoint `d2ad3dad`). Subject: `vhm := @[@[{:x 1}] @[{:y 2}]]`.
   route ("Selecting the flatten in its own block") is also offered and stands. The arm is VF-3's
   (`typing-errors.rkt`, `star-l4-mixed`, the `'all-head` case). It is on main since `83fe4fb4`.
 - **SB-3, measured.** `vhm{0.{0*}}` reports "`*` — `*` is postfix; it attaches to the END of a segment" (ae line 66),
-  although the star does end segment `0`. [Q_U46](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u46)'s gap 1 made a star
+  although the star does end segment `0`. [Q_U46](tracks/CIU/CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u46)'s gap 1 made a star
   after an ordinal a guided error that names the reason (an ordinal makes no layer); this spelling misses that route.
   It predates 1b-vi.
 
@@ -9400,7 +9400,7 @@ no meaning a program could rely on; the singly-defined, unreferred case does hav
 
 ### 205. ⬜ THE TREE-SITTER GRAMMAR HAS NO ORDINAL-HEADED SELECT BRANCH — `{0.server^.ssl* name}` is an ERROR and `{0.{…}}` makes the parser INVENT an identifier; the corpus gate FAILED from `3fcb720a` (MISSING 75 > budget 71) until the owner raised the budget to 75 (`a7dcde7d`), and every rule tried so far makes `foray.prologos`'s invalid L957 swallow 251 lines
 
-**Found by** CIU 6's 1b-vi close, item 2 (2026-11-02; [D4 § close-2](tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2)). Measurements:
+**Found by** CIU 6's 1b-vi close, item 2 (2026-11-02; [D4 § close-2](tracks/CIU/CIU_6/phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-close-2)). Measurements:
 `docs/tracking/tracks/CIU/CIU_6/research/P4e-1b-vi/close/tsg-close2.txt` §3 and §5, plus `probe-957` (on main since
 the 1b-vi checkpoint `d2ad3dad`).
 

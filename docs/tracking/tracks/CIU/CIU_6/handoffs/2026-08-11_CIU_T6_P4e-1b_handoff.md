@@ -54,7 +54,7 @@ Per `HANDOFF_PROTOCOL.org`. **ON-DISK IS AUTHORITATIVE.**
 **P4e-1b — make `*` MEAN something.** P4e-1a delivered the *surface*: `xs:{a}*`
 and `c{a}*` now reach a guided **"(flatten) is not implemented yet"**; everything
 outside selection territory is refused, guided. 1b is the semantics behind that
-message — [Q_U23](../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u23): `*` deletes
+message — [Q_U23](../2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u23): `*` deletes
 the layer the preceding step created.
 
 ⚠ **TWO OBLIGATIONS COME DUE WITH IT, both recorded and neither optional:**
