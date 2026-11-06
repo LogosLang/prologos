@@ -4,7 +4,7 @@
 **Status**: Draft (D.4 — unified vision revision: all elaboration on the network)
 **Parent**: Propagator Migration Series ([Master Roadmap](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md))
 **Audit**: [Track 8 Infrastructure Audit](2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org)
-**Informed by**: [CIU Track 0 Trait Hierarchy Audit](2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md), [Allocation Audit](tracks/BSP-LE/BSP-LE_0/audits/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)
+**Informed by**: [CIU Track 0 Trait Hierarchy Audit](tracks/CIU/CIU_0/2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md), [Allocation Audit](tracks/BSP-LE/BSP-LE_0/audits/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)
 **Prior art**: Tracks 1–7 (complete), PUnify Parts 1–2 (cell-tree unification)
 **Supersedes**: Track 8 audit §5 (architectural vision) — this document makes it concrete
 
@@ -407,7 +407,7 @@ No circular dependency — `cell-ops.rkt` depends only on `propagator.rkt` and `
 
 **Goal**: `surf-get` generates `Indexed C` or `Keyed C K V` constraints instead of producing dict-free `expr-get`.
 
-**Design** (from [CIU Unification Design](2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md) §3):
+**Design** (from [CIU Unification Design](tracks/CIU/2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md) §3):
 
 ```
 surf-get coll key

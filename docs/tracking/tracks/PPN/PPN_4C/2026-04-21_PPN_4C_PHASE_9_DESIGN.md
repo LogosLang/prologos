@@ -2425,7 +2425,7 @@ Post-T-3 dialogue surfaced the T-2 scope. T-3 Commit B's set-union merge at the 
 
 **Two architectural decisions** (dialogue 2026-04-23):
 
-**D1 — Override CIU §8 D7**: `docs/tracking/2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md` §8 considered this exact question and recommended Option C (schema-first, keep narrow-union default). User override: CIU is a draft note, not a design commitment; the vision has always been Clojure-ergonomic Maps. Override taken with eyes open.
+**D1 — Override CIU §8 D7**: `docs/tracking/tracks/CIU/2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md` §8 considered this exact question and recommended Option C (schema-first, keep narrow-union default). User override: CIU is a draft note, not a design commitment; the vision has always been Clojure-ergonomic Maps. Override taken with eyes open.
 
 **D2 — α-semantic for Open** (not β "unknown"-style, not γ "freshen-per-access"):
 - `check ctx v (expr-Open) = #t` always (Open accepts any value)

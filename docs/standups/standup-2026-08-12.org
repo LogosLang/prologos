@@ -58,7 +58,7 @@ The hardest stretch of the interval, and the one still open.
 - The **star MINT was reverted** (~d0ac2a58~) — count-CHANGING at the reader,
   and the reader is not the selection surface. The owner then ruled that attempt
   3 must open from a **measured map**: the **star-surface census**
-  (~docs/research/2026-08-09_STAR_SURFACE_CENSUS.md~, ~1.39M tokens, 38
+  (~docs/tracking/tracks/CIU/CIU_6/research/2026-08-09_STAR_SURFACE_CENSUS.md~, ~1.39M tokens, 38
   constraints, 12 approaches). Its two biggest finds were **not star defects** —
   the abort seam (fixed, ~41458174~) and a bare ~*~ being a legal irrefutable
   PATTERN that silently deletes later ~match~ arms.

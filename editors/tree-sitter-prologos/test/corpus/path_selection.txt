@@ -1,4 +1,4 @@
-; Path selection — spec: docs/research/2026-07-28_path-selection-spec.md §2.
+; Path selection — spec: docs/tracking/tracks/CIU/CIU_6/2026-07-28_path-selection-spec.md §2.
 ;
 ; Every step opener is `token.immediate`, because §2.2 makes three characters
 ; juxtaposition-sensitive: `x:k` is a broadcast step but `x :k` is application

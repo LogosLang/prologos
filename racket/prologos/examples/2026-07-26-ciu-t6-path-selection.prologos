@@ -7,8 +7,8 @@
 ;;
 ;;  THE LAW:   dot DESCENDS · brace SELECTS · `:` BROADCASTS · `^` RE-KEYS
 ;;             · `*` FLATTENS · `<` DISCLOSES
-;;  Spec:   docs/research/2026-07-28_path-selection-spec.md   (the guide)
-;;  Design: docs/tracking/2026-07-28_CIU_T6_PATH_SELECTION_D4.md (the ladder)
+;;  Spec:   docs/tracking/tracks/CIU/CIU_6/2026-07-28_path-selection-spec.md   (the guide)
+;;  Design: docs/tracking/tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md (the ladder)
 ;;  [Superseded old-surface targets removed 2026-07-28 (D4 §5.P0); the
 ;;   2026-07-26 design doc remains the record of that surface.]
 ;;

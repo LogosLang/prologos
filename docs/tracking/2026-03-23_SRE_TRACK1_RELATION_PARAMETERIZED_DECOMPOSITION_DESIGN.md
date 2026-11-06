@@ -4,7 +4,7 @@
 **Date**: 2026-03-23
 **Series**: SRE (Structural Reasoning Engine)
 **Depends on**: [SRE Track 0](2026-03-22_SRE_TRACK0_FORM_REGISTRY_DESIGN.md) ✅
-**Enables**: SRE Track 2 (Elaborator-on-SRE), [CIU Series](2026-03-21_CIU_MASTER.md) Track 3
+**Enables**: SRE Track 2 (Elaborator-on-SRE), [CIU Series](tracks/CIU/2026-03-21_CIU_MASTER.md) Track 3
 **SRE Master**: [SRE Series Roadmap](2026-03-22_SRE_MASTER.md)
 **Master Roadmap**: [MASTER_ROADMAP](MASTER_ROADMAP.md)
 

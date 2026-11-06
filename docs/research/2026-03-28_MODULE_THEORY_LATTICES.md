@@ -10,7 +10,7 @@
 - PTF Master: `docs/tracking/2026-03-28_PTF_MASTER.md`
 - PAR Master: `docs/tracking/2026-03-27_PAR_MASTER.md`
 - BSP-LE Master: `docs/tracking/tracks/BSP-LE/2026-03-21_BSP_LE_MASTER.md`
-- CIU Master: `docs/tracking/2026-03-21_CIU_MASTER.md`
+- CIU Master: `docs/tracking/tracks/CIU/2026-03-21_CIU_MASTER.md`
 - PM Master: `docs/tracking/2026-03-13_PROPAGATOR_MIGRATION_MASTER.md`
 - NTT Syntax Design: `docs/research/2026-03-20_NTT_SYNTAX_DESIGN.md`
 - Hyperlattice Conjecture: confirmed findings in PRN Master

@@ -102,7 +102,7 @@ critique (~9aff6b82~) was adjudicated in full (~7a701587~).
 *** ⭐ THE REDESIGN (2026-07-28)
 
 At the P3 checkpoint a separate design conversation produced a refined **Path
-Selection spec** (~docs/research/2026-07-28_path-selection-spec.md~) — a theory
+Selection spec** (~docs/tracking/tracks/CIU/CIU_6/2026-07-28_path-selection-spec.md~) — a theory
 upgrade, not an amendment. The settled PS1–PS15 surface is **superseded**. The
 new law: **dot DESCENDS · brace SELECTS ~x{…}~ · ~:~ BROADCASTS · ~^~ RE-KEYS ·
 ~*~ FLATTENS · ~<~ DISCLOSES**, resting on the **key-sort thesis** (ordinal keys
@@ -111,7 +111,7 @@ contingent, nominal keys essential), **per-step result discipline**, and
 merge behind a strict-first waypoint, and the W1–W4 expressivity walls.
 
 The implementation design that adapts it is
-~docs/tracking/2026-07-28_CIU_T6_PATH_SELECTION_D4.md~ — born with per-phase
+~docs/tracking/tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md~ — born with per-phase
 sections. **D4 is settled end-to-end** after a 13-agent critique whose survivors
 were all main-session verified. Its headline finding became **§2.3, the carrier
 table**: the spec designs a type language, the compiler ships a different one.

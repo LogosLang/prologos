@@ -2,7 +2,7 @@ ns f1-records-acceptance :no-prelude
 
 ;; ============================================================================
 ;; CIU Track 6 F1 — Structural Record Typing: ACCEPTANCE FILE (Phase 0)
-;; Design: docs/tracking/2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md §4.7
+;; Design: docs/tracking/tracks/CIU/CIU_6/2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md §4.7
 ;;
 ;; Expectations use `;;N=>` (exact) / `;;N=>~` (contains) markers checked by
 ;;   racket tools/run-file.rkt --check examples/2026-07-06-ciu-t6-f1-records.prologos

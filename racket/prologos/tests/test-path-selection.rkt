@@ -6,7 +6,7 @@
 ;;; discipline guard, the ground-expr? twin fallbacks (the broadcast-get
 ;;; walker-safety arms retired WITH the node at D4.P1a).
 ;;; P2.b: the two-tier principle. D4.P1a: the retirement batch + marker seat.
-;;; Design: docs/tracking/2026-07-28_CIU_T6_PATH_SELECTION_D4.md §5 (P2 record
+;;; Design: docs/tracking/tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md §5 (P2 record
 ;;; in the 2026-07-26 predecessor §5.10).
 ;;;
 

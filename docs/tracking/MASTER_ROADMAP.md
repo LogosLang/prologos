@@ -135,10 +135,10 @@ Track 8 (complete) unblocked CIU Series Tracks 3–5 and BSP-LE. Track 9 enables
 
 |                    |                                                                                                                                                                                       |
 |------------------ |------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Master Roadmap** | [2026-03-21<sub>CIU</sub><sub>MASTER.md</sub>](2026-03-21_CIU_MASTER.md)                                                                                                              |
+| **Master Roadmap** | [2026-03-21<sub>CIU</sub><sub>MASTER.md</sub>](tracks/CIU/2026-03-21_CIU_MASTER.md)                                                                                                              |
 | **Thesis**         | Syntactic sugar generates trait constraints resolved on the propagator network — not constructor-specific dispatch. User-defined collections participate in all syntax automatically. |
 | **Status**         | Track 0 complete. Tracks 1–2 pre-Track 8; Tracks 3–5 post-Track 8.                                                                                                                    |
-| **Origin**         | [Collection Interface Audit](2026-03-20_COLLECTION_INTERFACE_AUDIT.md), [Unification Design](2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md)                                   |
+| **Origin**         | [Collection Interface Audit](tracks/CIU/2026-03-20_COLLECTION_INTERFACE_AUDIT.md), [Unification Design](tracks/CIU/2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md)                                   |
 
 
 <a id="org50addb0"></a>
@@ -147,7 +147,7 @@ Track 8 (complete) unblocked CIU Series Tracks 3–5 and BSP-LE. Track 9 enables
 
 | Track | Description                                                  | Status                                                    | Pre/Post Track 8 |
 |----- |------------------------------------------------------------ |--------------------------------------------------------- |---------------- |
-| 0     | Trait Hierarchy Design (deep Stage 2)                        | ✅ [Audit](2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md) | Pre              |
+| 0     | Trait Hierarchy Design (deep Stage 2)                        | ✅ [Audit](tracks/CIU/CIU_0/2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md) | Pre              |
 | 1     | Seq Protocol (Seq-as-trait, native instances, LSeq demotion) | ⬜                                                        | Pre              |
 | 2     | Syntactic Sugar Normalization (dot-brace, ground-expr? fix)  | ⬜                                                        | Pre              |
 | 3     | Trait-Dispatched Access (`surf-get` generates constraints)   | ⬜                                                        | Post Track 8     |
@@ -342,7 +342,7 @@ Design documents that exist but are not currently scoped into active work. They 
 | [Stratified Architecture Audit](2026-03-18_STRATIFIED_ARCHITECTURE_AUDIT.md)         | 2026-03-18 | ✅     | Track 7 S(−1) retraction design              |
 | [Track 8 Infrastructure Audit](2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.md) | 2026-03-18 | ✅     | Track 8 design direction                     |
 | [Cell/Propagator Allocation Audit](tracks/BSP-LE/BSP-LE_0/audits/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)   | 2026-03-20 | ✅     | BSP-LE Track 0 (Allocation Efficiency)       |
-| [Collection Interface Audit](2026-03-20_COLLECTION_INTERFACE_AUDIT.md)               | 2026-03-20 | ✅     | CIU Series                                   |
+| [Collection Interface Audit](tracks/CIU/2026-03-20_COLLECTION_INTERFACE_AUDIT.md)               | 2026-03-20 | ✅     | CIU Series                                   |
 | [CHAMP Performance Audit](tracks/BSP-LE/BSP-LE_0/audits/2026-03-21_CHAMP_PERFORMANCE_AUDIT.md)                     | 2026-03-21 | ✅     | CHAMP Performance Track                      |
 
 
