@@ -1,0 +1,45 @@
+power checks: 8 patterns passed every must-match / must-reject string
+populations: prod 139 files · tests 507 files · src 140 files · wip foray.prologos (main working copy)
+
+pattern                      prod  prod-nc  tests    src  wip-nc
+----------------------------------------------------------------
+glued-colon-star                0        0      0      1       0
+spaced-colon-star               3        0      4      3       0
+space-before-colon-star         3        0      0      0       0
+dot-star-bare                   7        0     36     16       0
+dot-star-star                   2        0     15     11       0
+colon-star-star                 1        0      0      0       0
+colon-dot-star                  0        0      1      0       0
+brace-colon-star                0        0      0      0       0
+
+== non-comment prod hits (file:line: text)
+
+== test files with hits (file: lines)
+[spaced-colon-star] racket/prologos/tests/test-path-selection.rkt: 1
+[spaced-colon-star] racket/prologos/tests/test-type-syntax-refactor.rkt: 3
+[dot-star-bare] racket/prologos/tests/test-arrow-acceptance.rkt: 1
+[dot-star-bare] racket/prologos/tests/test-dep-graph.rkt: 1
+[dot-star-bare] racket/prologos/tests/test-f1-records-acceptance.rkt: 1
+[dot-star-bare] racket/prologos/tests/test-f1b3-width-acceptance.rkt: 1
+[dot-star-bare] racket/prologos/tests/test-f1b4-seal-acceptance.rkt: 1
+[dot-star-bare] racket/prologos/tests/test-f1b5-validate-acceptance.rkt: 1
+[dot-star-bare] racket/prologos/tests/test-first-class-paths.rkt: 1
+[dot-star-bare] racket/prologos/tests/test-path-selection-acceptance.rkt: 1
+[dot-star-bare] racket/prologos/tests/test-path-selection.rkt: 16
+[dot-star-bare] racket/prologos/tests/test-pnet-header.rkt: 1
+[dot-star-bare] racket/prologos/tests/test-rel-t1-acceptance.rkt: 1
+[dot-star-bare] racket/prologos/tests/test-selection-compose.rkt: 2
+[dot-star-bare] racket/prologos/tests/test-selection-paths.rkt: 7
+[dot-star-bare] racket/prologos/tests/test-suite-plan.rkt: 1
+[dot-star-star] racket/prologos/tests/test-path-selection.rkt: 5
+[dot-star-star] racket/prologos/tests/test-selection-paths.rkt: 10
+[colon-dot-star] racket/prologos/tests/test-path-selection.rkt: 1
+
+== test-file hit lines, distinct: 54
+  comment                              8
+  path-literal (#p, PF's form)         6
+  racket-regex                         21
+  selection-declaration (JD-7)         18
+  test-name                            1
+
+== owner WIP foray.prologos (main's working copy, read-only), non-comment hits

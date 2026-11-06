@@ -6,7 +6,7 @@
 ;;; discipline guard, the ground-expr? twin fallbacks (the broadcast-get
 ;;; walker-safety arms retired WITH the node at D4.P1a).
 ;;; P2.b: the two-tier principle. D4.P1a: the retirement batch + marker seat.
-;;; Design: docs/tracking/2026-07-28_CIU_T6_PATH_SELECTION_D4.md §5 (P2 record
+;;; Design: docs/tracking/tracks/CIU/CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md §5 (P2 record
 ;;; in the 2026-07-26 predecessor §5.10).
 ;;;
 
@@ -10054,11 +10054,13 @@
 ;; `unbound` class would then accept — the false green noted at :117), or a
 ;; result count that does not match the command count (rows would misalign).
 (define 1bvi-cache (make-hash))
-(define (1bvi-batch level forms)
+;; ONE batch runner for every behaviour table here (1b-vi's, P4e-2's): FIXTURES is the
+;; `ns` line plus the defs, NFIX the number of results they print (`ns` prints none).
+(define (fixture-batch fixtures nfix cache level forms)
   (hash-ref!
-   1bvi-cache (cons level forms)
+   cache (cons level forms)
    (lambda ()
-     (define src (string-append 1bvi-fixtures (string-join forms "\n") "\n"))
+     (define src (string-append fixtures (string-join forms "\n") "\n"))
      (define rs
        (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
          (case level
@@ -10066,13 +10068,14 @@
            [(string) (process-string-ws src)])))
      (cond
        [(string? rs) (cons 'bad (format "the ~a batch RAISED — a whole-file abort: ~a" level rs))]
-       [(not (= (length rs) (+ 1bvi-fixture-count (length forms))))
+       [(not (= (length rs) (+ nfix (length forms))))
         (cons 'bad (format "the ~a batch returned ~a results for ~a fixtures + ~a forms"
-                           level (length rs) 1bvi-fixture-count (length forms)))]
-       [(ormap prologos-error? (take rs 1bvi-fixture-count))
+                           level (length rs) nfix (length forms)))]
+       [(ormap prologos-error? (take rs nfix))
         (cons 'bad (format "a ~a fixture failed to load: ~a" level
-                           (map 1bvi-line (filter prologos-error? (take rs 1bvi-fixture-count)))))]
-       [else (cons 'ok (map 1bvi-line (drop rs 1bvi-fixture-count)))]))))
+                           (map 1bvi-line (filter prologos-error? (take rs nfix)))))]
+       [else (cons 'ok (map 1bvi-line (drop rs nfix)))]))))
+(define (1bvi-batch level forms) (fixture-batch 1bvi-fixtures 1bvi-fixture-count 1bvi-cache level forms))
 
 (define (1bvi-spellings) (map 1bvi-row-spelling 1bvi-all-rows))
 (define (1bvi-hand-spellings) (map 1bvi-row-spelling 1bvi-rows))   ;; level 2 runs these only
@@ -10204,17 +10207,18 @@
   (if (surf-select? sf)
       (list 'select (1bvi-select-shape (surf-select-subject sf)) (surf-select-branches sf) (surf-select-sort sf))
       'subject))
-(define (1bvi-parse-forms forms)
+(define (fixture-parse-forms fixtures nfix cache forms)
   (hash-ref!
-   1bvi-cache (cons 'parse forms)
+   cache (cons 'parse forms)
    (lambda ()
-     (define src (string-append 1bvi-fixtures (string-join forms "\n") "\n"))
+     (define src (string-append fixtures (string-join forms "\n") "\n"))
      (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
        (parameterize ([current-prop-net-box (box (make-elaboration-network))]
                       [current-source-str src]
                       [current-raw-node #f])
          (reset-meta-store!)
-         (drop (ws-string->surfs src) 1bvi-fixture-count))))))
+         (drop (ws-string->surfs src) nfix))))))
+(define (1bvi-parse-forms forms) (fixture-parse-forms 1bvi-fixtures 1bvi-fixture-count 1bvi-cache forms))
 ;; the law's domain; raises (fail closed) when the spellings cannot be parsed as a batch
 (define (1bvi-parity-rows)
   (define rows (filter (lambda (r) (regexp-match? #rx"[*]-" (1bvi-row-spelling r))) 1bvi-all-rows))
@@ -10539,3 +10543,499 @@
   (define ok (select-reduce subj (list (select-branch-mark-total-collapse
                                         (list 'a 'b (make-select-star 'flatten-collapse)))) 'block #f))
   (check-false (expr-panic? ok) "marked, the total collapse joins"))
+
+;; ============================================================================
+;; ⭐⭐ D4.P4e-2 — RAVEL `x:*` ([Q_U63] = J): THE STAGE TABLE
+;; ============================================================================
+;; Design: D4 §5.P4e-2 (the design target and the plan A–F). Evidence: CIU 6
+;; `audits/2026-11-03_CIU_6_P4e-2_GROUNDING_AUDIT.md` (RA-1…13) and its probes in
+;; `research/P4e-2/`. J: ravel is `x:*`, the broadcast of the identity step ε then
+;; the existing join, so `x:*` ≡ `x{k₁ … kₙ}*` for every carrier whose keys or
+;; length are known, and every expected value below is today's spelling of it,
+;; measured by the run (`equiv`), never written down.
+;;
+;; ROWS: (ID SPELLING FLIPS-AT PRE TARGET [REMEDIES])
+;;   FLIPS-AT  the sub-slice whose code makes TARGET hold (B … E); #f = a control,
+;;             whose PRE holds at every stage and whose TARGET is #f.
+;;   PRE       what the spelling does at `d2ad3dad` (probe-p4e2-e and the grid
+;;             probe measured every one; the stage-A run re-measures them all).
+;;   REMEDIES  the spellings TARGET's message offers. Once the row is live, each must
+;;             appear in the message in backticks AND be accepted when run on the
+;;             row's own subject: a remedy is offered only once it runs.
+;; Refusal texts at C/D/E are the slice's to write; their regexes pin what JD-1…4
+;; decided they must SAY (the spelling that runs), and a label such as `:*_` is a
+;; PREDICTION of how the printer renders `(@bcast ε)` — tested at the flip.
+;;
+;; `p4e2-stage` is bumped as the FIRST edit of each sub-slice, so exactly that
+;; sub-slice's rows go red before its code exists. Every row ahead of the stage must
+;; still FAIL its target (non-vacuity, and the proof the machinery stays inert);
+;; every right-hand side is checked at every stage. The stage scaffolding retires at
+;; the P4e-2 close, as 1b-vi's did (D4 § close-3).
+;; ⚠ Subjects avoid the `s`+digit shape (DEFERRED 122).
+;; ============================================================================
+(define p4e2-stage 'A)   ;; P4e-2-A: the pins — no compiler change
+(define p4e2-stage-order '(A B C D E V F))
+(define (p4e2-reached? s)
+  (and s (<= (index-of p4e2-stage-order s) (index-of p4e2-stage-order p4e2-stage))))
+
+(define p4e2-fixtures
+  (string-append
+   "ns p4e2\n"
+   "def values := @[@[1 2 3] @[4 5 6] @[7 8 9]]\n"
+   "def t3 := @[@[@[1 2] @[3]] @[@[4] @[5 6]]]\n"
+   "def mh := {:a @[1 2] :b @[3]}\n"                     ;; a Map of vectors
+   "def mm := {:a {:x 1} :b {:y 2}}\n"                   ;; a Map of records
+   "def groups := @[@[{:name \"a\"}] @[{:name \"b\"} {:name \"c\"}]]\n"
+   "def pr := @[{:x 1} {:y 2}]\n"                        ;; a tuple (heterogeneous literal)
+   "def hv := @[{:x 1} {:x \"a\"}]\n"                    ;; a tuple whose join collides
+   "def recs := @[{:k @[1 2]} {:k @[3]}]\n"
+   "def rec := {:k @[@[1] @[2 3]]}\n"
+   "def y := {:a @[@[@[1] @[2]] @[@[3]]]}\n"             ;; rank 3 under a key, so `y.a.0:*` runs
+   "spec take1 [PVec Int] -> Nat\n"
+   "defn take1 [x] [pvec-length x]\n"
+   ;; RA-9's one silent position: the keyed twin `pk` is what J's `pj` must equal at C
+   "defr pk [?a ?b]\n  || \"x\" values:k\n     \"z\" \"w\"\n"
+   "defr pj [?a ?b]\n  || \"x\" values:*\n     \"z\" \"w\"\n"))
+(define p4e2-fixture-count 13)   ;; 10 defs + spec/defn (one result) + 2 defr
+
+(define p4e2-rows
+  '(;; ---- C — ravel spelled `x:*`: the shapes outside the generated grid
+    ;; the bind law, keys and positions: `x:k:*` ≡ `x:k*`
+    ("J-bind-k"   "recs:k:*"       C (line "ERROR: Unbound variable") (equiv "recs:k*"))
+    ("J-bind-0"   "t3:0:*"         C (line "ERROR: Unbound variable") (equiv "t3:0{0 1}*"))
+    ;; naturality of the join: a step after `:*` acts on the joined layer
+    ("J-nat-bc"   "groups:*:name"  C (line "ERROR: Unbound variable") (equiv "groups{0 1}*:name"))
+    ("J-nat-ord"  "values:*.0"     C (line "ERROR: Unbound variable") (equiv "values{0 1 2}*.0"))
+    ("J-nat-blk"  "values:*{0 1}"  C (line "ERROR: Unbound variable") (equiv "values{0 1 2}*{0 1}"))
+    ("J-nat-fld"  "mm:*.x"         C (line "ERROR: Unbound variable") (equiv "mm{a b}*.x"))
+    ;; full ravel is written per rank (JD-5)
+    ("J-full"     "t3:*:*"         C (line "ERROR: Unbound variable") (equiv "t3{0 1}*{0 1 2 3}*"))
+    ;; any subject: after an ordinal step (DEFERRED 185's remedy), after an application
+    ("J-ord"      "t3.0:*"         C (line "ERROR: Unbound variable") (equiv "t3.0{0 1}*"))
+    ("J-app"      "[id values]:*"  C (line "ERROR: Unbound variable") (equiv "values{0 1 2}*"))
+    ;; ---- C — RA-9: the mint turns three datum items into one, at every position
+    ("J-pos-arg"  "[take1 values:*]" C (line "ERROR: Too many arguments to 'p4e2::take1'")
+                                       (equiv "[take1 values{0 1 2}*]"))
+    ("J-pos-pvec" "@[values:* 1]"    C (line "ERROR: Unbound variable") (equiv "@[values{0 1 2}* 1]"))
+    ("J-pos-list" "'[values:*]"      C (line "ERROR: Unbound variable") (equiv "'[values{0 1 2}*]"))
+    ;; the ONE silent position (DEFERRED 192's class). Today `pj`'s row splays three datum
+    ;; items into fabricated rows; after the mint it holds one non-ground term, exactly the
+    ;; keyed twin `pk`. This pins parity with the twin, NOT correctness: 192's fix (refuse at
+    ;; registration) flips both rows.
+    ("J-pos-fact" "(pj ?a ?b)" C
+     (line "@[{:a \"x\", :b unknown} {:a unknown, :b unknown} {:a \"z\", :b \"w\"}] : [PVec {:a String :b String}]")
+     (equiv "(pk ?a ?b)"))
+    ;; ---- C — JD-3's waypoint lands WITH the mint, which changes how both block shapes
+    ;; read (RA-6). In a block the broadcast does not apply its step yet (DEFERRED 167).
+    ("JD3-blk"     "rec{k:*}"  C (line "ERROR: block keys are written bare — `x{}`, not `x{:}`")
+     (refused (#rx"`rec[.]k:[*]`" #rx"`[{]:k rec[.]k:[*][}]`" #rx"DEFERRED 167") ())
+     ("rec.k:*" "{:k rec.k:*}"))
+    ("JD3-blk-ord" "y{a.0:*}"  C (line "ERROR: block keys are written bare — `x{}`, not `x{:}`")
+     (refused (#rx"`y[.]a[.]0:[*]`" #rx"`[{]:a y[.]a[.]0:[*][}]`" #rx"DEFERRED 167") ())
+     ("y.a.0:*" "{:a y.a.0:*}"))
+    ;; ---- D — JD-1 / JD-4: each near-miss names the spelling that runs
+    ("JD1"      "values.*"      D (line "ERROR: Unbound variable") (refused (#rx"`values:[*]`") ()) ("values:*"))
+    ("JD4-sp"   "values: *"     D (line "ERROR: Unbound variable") (refused (#rx"`values:[*]`") ()) ("values:*"))
+    ("JD4-sp2"  "values :*"     D (line "ERROR: Unbound variable") (refused (#rx"`values:[*]`") ()) ("values:*"))
+    ;; `**` is not an operator; the rank decides how many joins (on `t3`, rank 3, both run)
+    ("JD4-ss"   "t3:**"         D (line "ERROR: Unbound variable")
+     (refused (#rx"`t3:[*]:[*]`" #rx"`t3:[*]`") ()) ("t3:*:*" "t3:*"))
+    ("JD4-ds"   "values:.*"     D (line "ERROR: Unbound variable") (refused (#rx"`values:[*]`") ()) ("values:*"))
+    ("JD4-bare" "values:"       D (line "ERROR: Unbound variable") (refused (#rx"`values:[*]`") ()) ("values:*"))
+    ;; RA-5: the `.*NAME` → `:NAME` template offered `xs:*` for `.**` by accident
+    ("JD4-dss"  "t3.**"         D (line "ERROR: broadcast `.**` was retired — its replacement is `:*` (e.g. `xs:*`)")
+     (refused (#rx"`t3:[*]`" #rx"`t3:[*]:[*]`") (#rx"`xs:")) ("t3:*" "t3:*:*"))
+    ("JD4-dsn"  "groups.*:name" D (line "ERROR: Unbound variable")
+     (refused (#rx"`groups:[*]:name`") ()) ("groups:*:name"))
+    ;; JD-4: "a hint, if it is cheap" — D measures the cost and re-targets this row if not
+    ("JD4-hint" "values*"       D (line "ERROR: Unbound variable") (refused (#rx"`values:[*]`") ()) ("values:*"))
+    ;; ---- D — the remedy texts J makes runnable: DEFERRED 185's block band, Q_U35 (RA-11)
+    ("RM-185"   "t3{0*}" D
+     (refused (#rx"an ORDINAL step produces no layer" #rx"select the element first and flatten separately") ())
+     (refused (#rx"an ORDINAL step produces no layer" #rx"`t3[.]0:[*]`") (#rx"flatten separately")) ("t3.0:*"))
+    ("RM-Q_U35" "[id values]*" D
+     (refused (#rx"applies to a SELECTION step" #rx"e[.]g[.] `xs:[{]a[}][*]`") ())
+     (refused (#rx"applies to a SELECTION step" #rx"`\\[id values\\]:[*]`") ()) ("[id values]:*"))
+    ;; ---- E — DEFERRED 185's reader seats (RA-7). A star after an ordinal STEP gets
+    ;; Q_U46's refusal, with the remedy J makes spellable…
+    ("E-ord"     "t3.0*"   E (line "ERROR: Unbound variable")
+     (refused (#rx"an ORDINAL step produces no layer" #rx"`t3[.]0:[*]`") ()) ("t3.0:*"))
+    ("E-ord-dp"  "y.a.0*"  E (line "ERROR: Unbound variable")
+     (refused (#rx"an ORDINAL step produces no layer" #rx"`y[.]a[.]0:[*]`") ()) ("y.a.0:*"))
+    ("E-ord-blk" "y{a.0*}" E (line "ERROR: stray `.` in a select block — write the path with no spaces (`server.host`)")
+     (refused (#rx"an ORDINAL step produces no layer" #rx"`y[.]a[.]0:[*]`") ()) ("y.a.0:*"))
+    ;; …and a star after a BROADCAST has the meaning (E(ii), owner 2026-11-03): the
+    ;; ordinal-sort sibling of `x:k*`, which the twins already compute (inject:4)
+    ("E-bc-ord"  "t3:0*"   E (line "ERROR: Unbound variable") (equiv "t3:0{0 1}*"))
+    ("E-bc-ord-" "t3:0*-"  E (line "ERROR: Unbound variable") (equiv "t3:0{0 1}*-"))
+    ;; ---- CONTROLS — never flip
+    ("K-map"    "{:* 1}"          #f (line "ERROR: Map literal requires an even number of elements (key-value pairs)") #f)
+    ("K-keyed"  "recs:k*"         #f (line "@[1 2 3] : [PVec Int]") #f)
+    ("K-block"  "values{0 1 2}*"  #f (line "@[1 2 3 4 5 6 7 8 9] : [PVec Int]") #f)
+    ("K-kwarg"  "values :k"       #f (line "ERROR: Could not infer type") #f)
+    ;; RA-9's loud positions stay loud: the message may change at C, the error may not vanish
+    ("K-binder" "defn f1 [x:*] : Int\n  x" #f (refused (#rx".") ()) #f)
+    ("K-def"    "def q1:* := 1"   #f (refused (#rx".") ()) #f)
+    ("K-bundle" "bundle Bn1 := (Eq:*)\nspec bz1 A A -> Bool where (Bn1 A)\ndefn bz1 [x y] where (Bn1 A)\n  [eq? x y]"
+     #f (refused (#rx".") ()) #f)))
+
+(define (p4e2-row-id r) (list-ref r 0))
+(define (p4e2-row-spelling r) (list-ref r 1))
+(define (p4e2-row-flips r) (list-ref r 2))
+(define (p4e2-row-pre r) (list-ref r 3))
+(define (p4e2-row-target r) (list-ref r 4))
+(define (p4e2-row-remedies r) (if (> (length r) 5) (list-ref r 5) '()))
+
+;; ---------------------------------------------------------------------------
+;; ⭐ THE RAVEL LAW, GENERATED. For every carrier S whose keys or length are known
+;; (a vector, a Map, a tuple) and every star family σ ∈ {`*`, `*-`, `*_`, `*-_`}:
+;;   S:σ ≡ S{K}σ  where the right-hand side is accepted (measured by the run);
+;;   otherwise S:σ is refused for the right-hand side's REASON, under J's label.
+;; The three reasons were measured on the block form (the grid probe, 28 spellings):
+;; contents at POSITIONS under a provenance star, a Map of VECTORS under one, and a
+;; keywise COLLISION. JD-2 is the `*-` / `*-_` half: no ancestor, so nothing collapses.
+;; ---------------------------------------------------------------------------
+(define p4e2-law-subjects
+  '((values "{0 1 2}") (t3 "{0 1}") (groups "{0 1}") (mh "{a b}") (mm "{a b}") (pr "{0 1}") (hv "{0 1}")))
+(define p4e2-law-suffixes '("*" "*-" "*_" "*-_"))
+(define p4e2-law-refusals
+  '((values "*_" positions) (values "*-_" positions) (t3 "*_" positions) (t3 "*-_" positions)
+    (groups "*_" positions) (groups "*-_" positions) (pr "*_" positions) (pr "*-_" positions)
+    (hv "*_" positions) (hv "*-_" positions) (mh "*_" no-fields) (mh "*-_" no-fields)
+    (hv "*" collision) (hv "*-" collision)))
+(define p4e2-reasons
+  (list (cons 'positions #rx"sit at POSITIONS, not keys")
+        (cons 'no-fields #rx"no fields to prefix")
+        (cons 'collision #rx"carry the same key")))
+(define (p4e2-law-reason subj sfx)
+  (for/first ([r (in-list p4e2-law-refusals)] #:when (and (eq? (car r) subj) (equal? (cadr r) sfx)))
+    (caddr r)))
+(define (p4e2-law-block subj sfx)
+  (format "~a~a~a" subj (cadr (assq subj p4e2-law-subjects)) sfx))
+(define (p4e2-law-rows)
+  (for*/list ([s (in-list p4e2-law-subjects)] [sfx (in-list p4e2-law-suffixes)])
+    (define subj (car s))
+    (define sp (format "~a:~a" subj sfx))
+    (define reason (p4e2-law-reason subj sfx))
+    (list (string-append "law " sp) sp 'C '(line "ERROR: Unbound variable")
+          (if reason
+              ;; the label is PREDICTED: the printer renders `(@bcast ε)` as `:`
+              (list 'refused (list (cdr (assq reason p4e2-reasons))
+                                   (regexp (string-append "`:" (regexp-quote sfx) "`")))
+                    '())
+              (list 'equiv (p4e2-law-block subj sfx))))))
+
+(define p4e2-all-rows (append p4e2-rows (p4e2-law-rows)))
+
+(define p4e2-cache (make-hash))
+(define (p4e2-batch level forms) (fixture-batch p4e2-fixtures p4e2-fixture-count p4e2-cache level forms))
+(define (p4e2-parse-forms forms) (fixture-parse-forms p4e2-fixtures p4e2-fixture-count p4e2-cache forms))
+(define (p4e2-expects r) (filter values (list (p4e2-row-pre r) (p4e2-row-target r))))
+(define (p4e2-equivs rows)
+  (remove-duplicates
+   (for*/list ([r (in-list rows)] [e (in-list (p4e2-expects r))] #:when (memq (car e) '(same equiv wrapped)))
+     (cadr e))))
+
+;; ---------------------------------------------------------------------------
+;; ⭐ B — ε, INERT, TESTED BY INJECTION. Each SPELLING parses today; TRANSFORM rewrites
+;; its select as the mint (C) will build it: `bcast-k` turns every `(@bcast k)` into
+;; `(@bcast (@id))` (ε inside the broadcast, the decided representation, RA-3);
+;; `step-k` turns a bare step `k` into `(@id)`, the illegal state B must refuse. Before
+;; B the closed union RAISES on `(@id)` (inject:7 in the audit), so PRE is the raise.
+;; (ID SPELLING TRANSFORM FLIPS-AT PRE TARGET). `raised` matches a caught raise.
+;; ---------------------------------------------------------------------------
+(define p4e2-inject-rows
+  '(;; the functor identity at both twins: `x:ε` ≡ `x`, over every carrier kind
+    ("B-id-vec" "values:k"       bcast-k B (raised #rx"unknown select step kind: [(]@id[)]") (equiv "values"))
+    ("B-id-map" "mh:k"           bcast-k B (raised #rx"unknown select step kind: [(]@id[)]") (equiv "mh"))
+    ("B-id-tup" "hv:k"           bcast-k B (raised #rx"unknown select step kind: [(]@id[)]") (equiv "hv"))
+    ;; ε then the existing join is the ravel, before any spelling reaches it
+    ("B-rv-vec" "values:k*"      bcast-k B (raised #rx"unknown select step kind: [(]@id[)]") (equiv "values{0 1 2}*"))
+    ("B-rv-map" "mm:k*_"         bcast-k B (raised #rx"unknown select step kind: [(]@id[)]") (equiv "mm{a b}*_"))
+    ("B-rv-nat" "groups:k*:name" bcast-k B (raised #rx"unknown select step kind: [(]@id[)]") (equiv "groups{0 1}*:name"))
+    ("B-rv-ord" "t3.0:k*"        bcast-k B (raised #rx"unknown select step kind: [(]@id[)]") (equiv "t3.0{0 1}*"))
+    ;; ε outside a broadcast is an illegal state: refused loudly, never a raise
+    ("B-bare"   "values.k"       step-k  B (raised #rx"unknown select step kind: [(]@id[)]") (refused (#rx"identity step") ()))))
+(define (p4e2-irow-id r) (list-ref r 0))
+(define (p4e2-irow-spelling r) (list-ref r 1))
+(define (p4e2-irow-transform r) (list-ref r 2))
+(define (p4e2-irow-flips r) (list-ref r 3))
+(define (p4e2-irow-pre r) (list-ref r 4))
+(define (p4e2-irow-target r) (list-ref r 5))
+
+(define p4e2-id-step (list '@id))
+(define (p4e2-transform-surf sf kind)
+  (define (step s)
+    (case kind
+      [(bcast-k) (if (and (select-bcast-step? s) (eq? (select-bcast-inner s) 'k)) (make-select-bcast p4e2-id-step) s)]
+      [(step-k) (if (eq? s 'k) p4e2-id-step s)]
+      [else s]))
+  (define (walk x)
+    (if (surf-select? x)
+        (surf-select (walk (surf-select-subject x))
+                     (for/list ([b (in-list (surf-select-branches x))]) (map step b))
+                     (surf-select-sort x) (surf-select-srcloc x))
+        x))
+  (if (surf-select? sf) (walk sf) sf))
+
+;; → (cons 'ok lines) or (cons 'bad reason). `process-string-ws`'s own scoping; each
+;; row's raise is CAUGHT and becomes its line ("RAISED: …"), so B's PRE is observable
+;; per row. IDENTITY? #t skips every transform: the harness check (it must then equal
+;; level 3 line for line — a mirror is only trusted once it reflects).
+(define (p4e2-inject-batch identity?)
+  (hash-ref!
+   p4e2-cache (list 'inject identity?)
+   (lambda ()
+     (define forms (map p4e2-irow-spelling p4e2-inject-rows))
+     (define src (string-append p4e2-fixtures (string-join forms "\n") "\n"))
+     (define rs
+       (with-handlers ([exn:fail? (lambda (e) (exn-message e))])
+         (parameterize ([current-prop-net-box (box (make-elaboration-network))]
+                        [current-source-str src]
+                        [current-raw-node #f])
+           (reset-meta-store!)
+           (let* ([surfs (ws-string->surfs src)]
+                  [nfix (- (length surfs) (length forms))])
+             (for/list ([sf (in-list surfs)] [i (in-naturals)])
+               (define row (and (>= i nfix) (list-ref p4e2-inject-rows (- i nfix))))
+               (cond
+                 [(prologos-error? sf) sf]
+                 [(and row (not identity?) (not (surf-select? sf)))
+                  (list 'raised "VACUOUS: the spelling did not parse to a select, so nothing was injected")]
+                 [else
+                  (with-handlers ([exn:prologos-solve?
+                                   (lambda (e) (prologos-error srcloc-unknown (exn-message e)))]
+                                  [exn:fail?   ;; TAGGED: a successful command's result is a string too
+                                   (lambda (e) (list 'raised (car (string-split (exn-message e) "\n"))))])
+                    (process-command (if (and row (not identity?))
+                                         (p4e2-transform-surf sf (p4e2-irow-transform row))
+                                         sf)))]))))))
+     (cond
+       [(string? rs) (cons 'bad (format "the injection batch RAISED outside a row: ~a" rs))]
+       [(not (= (length rs) (+ p4e2-fixture-count (length forms))))
+        (cons 'bad (format "the injection batch returned ~a results for ~a fixtures + ~a forms"
+                           (length rs) p4e2-fixture-count (length forms)))]
+       [(ormap (lambda (x) (or (prologos-error? x) (pair? x))) (take rs p4e2-fixture-count))
+        (cons 'bad (format "an injection fixture failed to load: ~s"
+                           (filter (lambda (x) (or (prologos-error? x) (pair? x))) (take rs p4e2-fixture-count))))]
+       [else (cons 'ok (for/list ([x (in-list (drop rs p4e2-fixture-count))])
+                         (if (pair? x) (string-append "RAISED: " (cadr x)) (1bvi-line x))))]))))
+
+;; P4e-2's matcher: 1b-vi's kinds, plus `raised` (a caught raise, the injection's PRE)
+(define (p4e2-holds? e line equiv-line)
+  (case (car e)
+    [(raised) (or (and (regexp-match? #rx"^RAISED: " line) (regexp-match? (cadr e) line))
+                  (format "expected a raise matching ~s" (cadr e)))]
+    [else (match-1bvi e line equiv-line)]))
+
+;; ---------------------------------------------------------------------------
+;; ⭐ C's PARITY LAW, pinned from A: the mint builds exactly the IR B tested.
+;; parse(S) ≡ ε-transform(parse(S′)), where S′ writes S's `:σ` as the keyed twin
+;; `:zzid σ` (a field no fixture has) and the transform turns `(@bcast zzid)` into
+;; `(@bcast (@id))`. The domain is every row whose spelling has a glued `:` + star
+;; and parses to a selection. Before C no J spelling parses as a selection, so the
+;; domain is EMPTY (the mint has not leaked); from C its size is pinned.
+;; ---------------------------------------------------------------------------
+;; The domain from C, NAMED: the 28 law rows + the 9 hand rows that are selections at top
+;; level. Excluded, each covered by its own row: the RA-9 positions (an application, a
+;; literal, a fact row, a binder), JD-3's block rows (a refusal), and `t3:**` (D's).
+(define p4e2-parity-hand-at-C
+  '("J-bind-k" "J-bind-0" "J-nat-bc" "J-nat-ord" "J-nat-blk" "J-nat-fld" "J-full" "J-ord" "J-app"))
+(define (p4e2-parity-domain-at-C)
+  (append p4e2-parity-hand-at-C (map p4e2-row-id (p4e2-law-rows))))
+(define (p4e2-keyed-twin sp) (regexp-replace* #rx"([]A-Za-z0-9_)}]):([*])" sp "\\1:zzid\\2"))
+(define (p4e2-zzid->id sf)
+  (define (step s)
+    (if (and (select-bcast-step? s) (eq? (select-bcast-inner s) 'zzid)) (make-select-bcast p4e2-id-step) s))
+  (let walk ([x sf])
+    (if (surf-select? x)
+        (surf-select (walk (surf-select-subject x))
+                     (for/list ([b (in-list (surf-select-branches x))]) (map step b))
+                     (surf-select-sort x) (surf-select-srcloc x))
+        x)))
+(define (p4e2-parity-problems)
+  ;; one-line spellings only: a declaration (the binder / bundle controls) is not a
+  ;; selection expression, and the bundle's three forms parse to a different COUNT
+  ;; once twinned (measured), which would misalign every row after it
+  (define cands (filter (lambda (r) (let ([sp (p4e2-row-spelling r)])
+                                      (and (regexp-match? #rx"[]A-Za-z0-9_)}]:[*]" sp)
+                                           (not (string-contains? sp "\n")))))
+                        p4e2-all-rows))
+  (define real (p4e2-parse-forms (map p4e2-row-spelling cands)))
+  (define twin (p4e2-parse-forms (map (lambda (r) (p4e2-keyed-twin (p4e2-row-spelling r))) cands)))
+  (cond
+    [(string? real) (list (format "parity: parsing the J spellings RAISED: ~a" real))]
+    [(string? twin) (list (format "parity: parsing the keyed twins RAISED: ~a" twin))]
+    [(not (= (length real) (length twin) (length cands)))
+     (list (format "parity: ~a candidate rows, ~a J surfs, ~a twin surfs" (length cands) (length real) (length twin)))]
+    [else
+     (define dom (for/list ([r cands] [a real] [b twin] #:when (surf-select? a)) (list r a b)))
+     (define got (map (lambda (d) (p4e2-row-id (car d))) dom))
+     (define want (if (p4e2-reached? 'C) (p4e2-parity-domain-at-C) '()))
+     (append
+      (if (equal? (sort got string<?) (sort want string<?))
+          '()
+          (list (format "parity at stage ~a~a: selections not pinned ~s; pinned but not selections ~s" p4e2-stage
+                        (if (p4e2-reached? 'C) "" " (the mint leaked before C)")
+                        (remove* want got) (remove* got want))))
+      (for*/list ([d (in-list dom)]
+                  [w (in-value (1bvi-select-shape (p4e2-zzid->id (caddr d))))]
+                  #:unless (equal? (1bvi-select-shape (cadr d)) w))
+        (format "[~a] PARITY ~a — the parser's surf ≠ ε-transform(keyed twin): ~s | ~s"
+                (p4e2-row-id (car d)) (p4e2-row-spelling (car d)) (1bvi-select-shape (cadr d)) w)))]))
+
+;; ⚠ ONE test-case, ONE check, for the whole table (1b-vi's reasons: the batch cache is
+;; per process, the runner shards test-cases, and one combined list names every
+;; failing row).
+(test-case "P4e-2: the stage table — batches usable, level 2 ≡ level 3, every row holds at its stage, every row ahead still FAILS its target, every right-hand side accepted, every live remedy runs, B's injection, C's parity"
+  (define forms (map p4e2-row-spelling p4e2-all-rows))
+  (define f (p4e2-batch 'file forms))
+  (define s (p4e2-batch 'string (map p4e2-row-spelling p4e2-rows)))
+  (define eqs (p4e2-equivs (append p4e2-all-rows
+                                   (for/list ([r p4e2-inject-rows]) (list 0 0 0 (p4e2-irow-pre r) (p4e2-irow-target r))))))
+  (define q (p4e2-batch 'file eqs))
+  (define ib (p4e2-inject-batch #f))
+  (define ii (p4e2-inject-batch #t))
+  (define il (p4e2-batch 'file (map p4e2-irow-spelling p4e2-inject-rows)))
+  (define batch-problems
+    (append
+     (if (memq p4e2-stage p4e2-stage-order) '() (list (format "unknown stage ~s" p4e2-stage)))
+     (for/list ([b (in-list (list f s q ib ii il))]
+                [what (in-list '("spellings, level 3" "spellings, level 2" "equivalents, level 3"
+                                 "injection" "injection, identity" "injection spellings, level 3"))]
+                #:unless (eq? (car b) 'ok))
+       (format "~a: ~a" what (cdr b)))))
+  (define level-problems
+    (if (and (eq? (car f) 'ok) (eq? (car s) 'ok))
+        (for/list ([r (in-list p4e2-rows)] [a (in-list (cdr f))] [b (in-list (cdr s))] #:unless (equal? a b))
+          (format "[~a] ~a reads differently at level 2 and level 3: ~a | ~a" (p4e2-row-id r) (p4e2-row-spelling r) b a))
+        '()))
+  (define eqv (if (eq? (car q) 'ok) (for/hash ([e eqs] [l (cdr q)]) (values e l)) (hash)))
+  (define (equiv-of e) (and e (memq (car e) '(same equiv wrapped)) (hash-ref eqv (cadr e) #f)))
+  ;; a row at its stage holds PRE or TARGET; a row not yet live must FAIL its target
+  (define (stage-check id sp flips pre target line)
+    (let* ([live? (p4e2-reached? flips)]
+           [now (if live? target pre)]
+           [held (p4e2-holds? now line (equiv-of now))])
+      (cond
+        [(not (eq? held #t))
+         (format "[~a] ~a — ~a (~a); observed: ~a" id sp (if live? "TARGET" "PRE") held line)]
+        [(and (not live?) target (eq? #t (p4e2-holds? target line (equiv-of target))))
+         (format "[~a] ~a — its TARGET already holds before stage ~a: the row is vacuous, or ~a's code leaked early; observed: ~a"
+                 id sp flips flips line)]
+        [else #f])))
+  (define row-problems
+    (if (and (eq? (car f) 'ok) (eq? (car q) 'ok))
+        (filter values
+                (for/list ([r (in-list p4e2-all-rows)] [line (in-list (cdr f))])
+                  (stage-check (p4e2-row-id r) (p4e2-row-spelling r) (p4e2-row-flips r)
+                               (p4e2-row-pre r) (p4e2-row-target r) line)))
+        '()))
+  (define inject-problems
+    (if (and (eq? (car ib) 'ok) (eq? (car q) 'ok))
+        (filter values
+                (for/list ([r (in-list p4e2-inject-rows)] [line (in-list (cdr ib))])
+                  (stage-check (p4e2-irow-id r) (p4e2-irow-spelling r) (p4e2-irow-flips r)
+                               (p4e2-irow-pre r) (p4e2-irow-target r) line)))
+        '()))
+  ;; the harness reflects: with no transform it reads every spelling as level 3 does
+  (define harness-problems
+    (if (and (eq? (car ii) 'ok) (eq? (car il) 'ok))
+        (for/list ([r (in-list p4e2-inject-rows)] [a (in-list (cdr ii))] [b (in-list (cdr il))] #:unless (equal? a b))
+          (format "[~a] the injection harness with NO transform reads ~a as ~a; level 3 reads ~a"
+                  (p4e2-irow-id r) (p4e2-irow-spelling r) a b))
+        '()))
+  ;; every right-hand side at every stage: accepted, and a refused law's block form is
+  ;; refused for the law's stated reason (so a drift in the measurement is loud)
+  (define rhs-problems
+    (if (eq? (car q) 'ok)
+        (filter values
+                (for/list ([e (in-list eqs)])
+                  (let ([l (hash-ref eqv e #f)])
+                    (and (or (not l) (regexp-match? #rx"^ERROR: " l))
+                         (format "the right-hand side ~s is REFUSED today: ~a" e l)))))
+        '()))
+  (define reason-blocks
+    (for*/list ([s (in-list p4e2-law-subjects)] [sfx (in-list p4e2-law-suffixes)]
+                [why (in-value (p4e2-law-reason (car s) sfx))] #:when why)
+      (list (p4e2-law-block (car s) sfx) why)))
+  (define rb (p4e2-batch 'file (map car reason-blocks)))
+  (define reason-problems
+    (if (eq? (car rb) 'ok)
+        (for/list ([x (in-list reason-blocks)] [l (in-list (cdr rb))]
+                   #:unless (regexp-match? (cdr (assq (cadr x) p4e2-reasons)) l))
+          (format "the law's block form ~s is no longer refused for ~a: ~a" (car x) (cadr x) l))
+        (list (format "reason batch: ~a" (cdr rb)))))
+  ;; a live row's remedies: each named in its message, each accepted on its own
+  (define live-remedies
+    (if (eq? (car f) 'ok)
+        (for*/list ([(r line) (in-parallel (in-list p4e2-all-rows) (in-list (cdr f)))]
+                    #:when (and (p4e2-reached? (p4e2-row-flips r)) (pair? (p4e2-row-remedies r))))
+          (cons r line))
+        '()))
+  (define rem-srcs (remove-duplicates (append-map (lambda (x) (p4e2-row-remedies (car x))) live-remedies)))
+  (define remb (if (null? rem-srcs) (cons 'ok '()) (p4e2-batch 'file rem-srcs)))
+  (define rem (if (eq? (car remb) 'ok) (for/hash ([x rem-srcs] [l (cdr remb)]) (values x l)) (hash)))
+  (define remedy-problems
+    (append
+     (if (eq? (car remb) 'ok) '() (list (format "remedies batch: ~a" (cdr remb))))
+     ;; from D every stage has offered remedies live; an empty population there has no power
+     (if (and (p4e2-reached? 'D) (null? live-remedies)) (list "remedies: no live row offers a remedy") '())
+     (for*/list ([x (in-list live-remedies)] [src (in-list (p4e2-row-remedies (car x)))]
+                 [p (in-value
+                     (let ([l (hash-ref rem src #f)])
+                       (cond
+                         [(not (string-contains? (cdr x) (string-append "`" src "`")))
+                          (format "[~a] the message does not name its remedy `~a`: ~a" (p4e2-row-id (car x)) src (cdr x))]
+                         [(or (not l) (regexp-match? #rx"^ERROR: " l))
+                          (format "[~a] the remedy `~a` the message offers is itself REFUSED: ~a" (p4e2-row-id (car x)) src l)]
+                         [else #f])))]
+                 #:when p)
+       p)))
+  (define parity-problems (p4e2-parity-problems))
+  (define problems (append batch-problems level-problems row-problems inject-problems harness-problems
+                           rhs-problems reason-problems remedy-problems parity-problems))
+  (check-equal? problems '()
+                (format "stage ~a: ~a problem(s) over ~a rows (~a hand, ~a law) + ~a injection rows:\n~a"
+                        p4e2-stage (length problems) (length p4e2-all-rows) (length p4e2-rows)
+                        (- (length p4e2-all-rows) (length p4e2-rows)) (length p4e2-inject-rows)
+                        (string-join problems "\n"))))
+
+(test-case "P4e-2: the table's SIZE is pinned — a generator or filter regression that drops rows fails here"
+  ;; counted from the table, by id, before the first run: 38 hand rows (C: 9 J shapes + 4
+  ;; positions + 2 JD-3; D: 9 JD-1/4 + 2 remedy texts; E: 3 ordinal-step refusals + 2
+  ;; meanings; 7 controls), 7 × 4 = 28 laws (14 equiv, 14 refused), 8 injection rows
+  (define (by-flip rows) (sort (hash->list (for/fold ([h (hash)]) ([r rows]) (hash-update h (format "~a" (p4e2-row-flips r)) add1 0)))
+                               string<? #:key car))
+  (define laws (p4e2-law-rows))
+  (check-equal? (list (length p4e2-rows) (by-flip p4e2-rows) (length laws)
+                      (length (filter (lambda (r) (eq? (car (p4e2-row-target r)) 'equiv)) laws))
+                      (length p4e2-inject-rows))
+                '(38 (("#f" . 7) ("C" . 15) ("D" . 11) ("E" . 5)) 28 14 8)
+                "hand rows, hand rows per sub-slice, law rows, equiv laws, injection rows"))
+
+(test-case "P4e-2: the table is well-formed — ids unique, flips known, every flipping row's PRE differs from its TARGET, a control carries no TARGET"
+  (define ids (append (map p4e2-row-id p4e2-all-rows) (map p4e2-irow-id p4e2-inject-rows)))
+  (check-equal? (length ids) (length (remove-duplicates ids)) "duplicate row id")
+  (define (known-kind? e)
+    (and (pair? e)
+         (case (car e)
+           [(same) (and (= (length e) 3) (string? (cadr e)) (string? (caddr e)))]
+           [(equiv wrapped line) (and (= (length e) 2) (string? (cadr e)))]
+           [(raised) (and (= (length e) 2) (regexp? (cadr e)))]
+           [(refused) (and (= (length e) 3) (pair? (cadr e)) (andmap regexp? (cadr e)) (andmap regexp? (caddr e)))]
+           [else #f])))
+  (for ([r (in-list (append p4e2-all-rows
+                            (for/list ([i p4e2-inject-rows])
+                              (list (p4e2-irow-id i) (p4e2-irow-spelling i) (p4e2-irow-flips i)
+                                    (p4e2-irow-pre i) (p4e2-irow-target i)))))])
+    (define fl (p4e2-row-flips r))
+    (check-true (and (<= 5 (length r) 6) (known-kind? (p4e2-row-pre r))
+                     (or (not fl) (and (memq fl p4e2-stage-order) #t)))
+                (format "[~a] malformed row: ~s" (p4e2-row-id r) r))
+    (if fl
+        (begin
+          (check-true (known-kind? (p4e2-row-target r)) (format "[~a] malformed TARGET" (p4e2-row-id r)))
+          (check-not-equal? (p4e2-row-pre r) (p4e2-row-target r) (format "[~a] PRE = TARGET: the flip is vacuous" (p4e2-row-id r))))
+        (check-false (p4e2-row-target r) (format "[~a] a control carries no TARGET" (p4e2-row-id r))))
+    (check-true (andmap string? (p4e2-row-remedies r)) (format "[~a] remedies are spellings" (p4e2-row-id r)))))

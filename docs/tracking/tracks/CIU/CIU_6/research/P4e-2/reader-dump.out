@@ -1,0 +1,204 @@
+values:*
+  PRE  ((values : *))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 7 1))) #(struct:srcloc "<p>" 1 0 8)))
+values:*_
+  PRE  ((values : *_))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var *_ #(struct:srcloc "<p>" 1 7 2))) #(struct:srcloc "<p>" 1 0 9)))
+values:*-
+  PRE  ((values : *-))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var *- #(struct:srcloc "<p>" 1 7 2))) #(struct:srcloc "<p>" 1 0 9)))
+values:*-_
+  PRE  ((values : *-_))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var *-_ #(struct:srcloc "<p>" 1 7 3))) #(struct:srcloc "<p>" 1 0 10)))
+values:*:*
+  PRE  ((values : * : *))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 7 1)) #(struct:surf-var : #(struct:srcloc "<p>" 1 8 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 9 1))) #(struct:srcloc "<p>" 1 0 10)))
+values:*:name
+  PRE  ((values : ($select-path * ($bcast-step :name))))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-select #(struct:surf-var * #(struct:srcloc "<p>" 1 7 1)) (((@bcast name))) path #(struct:srcloc "<p>" 1 7 1))) #(struct:srcloc "<p>" 1 0 13)))
+values.0:*
+  PRE  (((get values 0) : *))
+  PAR  (#(struct:surf-app #(struct:surf-get #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) #(struct:surf-int-lit 0 #(struct:srcloc "<p>" 1 0 6)) #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 8 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 9 1))) #(struct:srcloc "<p>" 1 0 10)))
+values:k*
+  PRE  (($select-path values ($bcast-step :k*)))
+  PAR  (#(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (((@bcast k) (@star flatten))) path #(struct:srcloc "<p>" 1 0 9)))
+values:k*_
+  PRE  (($select-path values ($bcast-step :k*_)))
+  PAR  (#(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (((@bcast k) (@star flatten-synth))) path #(struct:srcloc "<p>" 1 0 10)))
+values:k*-
+  PRE  (($select-path values ($bcast-step :k*-)))
+  PAR  (#(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (((@bcast k) (@star flatten-collapse))) path #(struct:srcloc "<p>" 1 0 10)))
+values:k*-_
+  PRE  (($select-path values ($bcast-step :k*-_)))
+  PAR  (#(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (((@bcast k) (@star flatten-collapse-synth))) path #(struct:srcloc "<p>" 1 0 11)))
+values:k:*
+  PRE  ((($select-path values ($bcast-step :k)) : *))
+  PAR  (#(struct:surf-app #(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (((@bcast k))) path #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 8 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 9 1))) #(struct:srcloc "<p>" 1 0 10)))
+values:k*:name
+  PRE  (($select-path ($select-path values ($bcast-step :k*)) ($bcast-step :name)))
+  PAR  (#(struct:surf-select #(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 6 0)) (((@bcast k) (@star flatten))) path #(struct:srcloc "<p>" 1 6 3)) (((@bcast name))) path #(struct:srcloc "<p>" 1 0 14)))
+values:k*.0
+  PRE  ((get ($select-path values ($bcast-step :k*)) 0))
+  PAR  (#(struct:surf-get #(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 6 0)) (((@bcast k) (@star flatten))) path #(struct:srcloc "<p>" 1 6 3)) #(struct:surf-int-lit 0 #(struct:srcloc "<p>" 1 9 2)) #(struct:srcloc "<p>" 1 0 11)))
+values:k*{a b}
+  PRE  (($select ($select-path values ($bcast-step :k*)) a b))
+  PAR  (#(struct:surf-select #(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (((@bcast k) (@star flatten))) path #(struct:srcloc "<p>" 1 0 6)) ((a) (b)) block #(struct:srcloc "<p>" 1 0 10)))
+values:k**
+  PRE  (($select-path values ($bcast-step :k**)))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 0 10) "`k**` — `*` is the layer-delete operator and attaches at the END of a segment, so `k**` is neither a field nor an operator. A field literally named `k**` is reached with `[map-get x :k**]`" #f))
+values:k*^
+  PRE  (($select-path values ($bcast-step :k*^)))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 0 10) "`k*^` — `*` is the layer-delete operator and attaches at the END of a segment, so `k*^` is neither a field nor an operator. A field literally named `k*^` is reached with `[map-get x :k*^]`" #f))
+values:k*x
+  PRE  (($select-path values ($bcast-step :k*x)))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 0 10) "`k*x` — `*` is the layer-delete operator and attaches at the END of a segment, so `k*x` is neither a field nor an operator. A field literally named `k*x` is reached with `[map-get x :k*x]`" #f))
+values:*.0
+  PRE  ((values : (get * 0)))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-get #(struct:surf-var * #(struct:srcloc "<p>" 1 7 1)) #(struct:surf-int-lit 0 #(struct:srcloc "<p>" 1 7 1)) #(struct:srcloc "<p>" 1 7 1))) #(struct:srcloc "<p>" 1 0 10)))
+values:*{a b}
+  PRE  ((values : ($select * a b)))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-select #(struct:surf-var * #(struct:srcloc "<p>" 1 7 1)) ((a) (b)) block #(struct:srcloc "<p>" 1 7 1))) #(struct:srcloc "<p>" 1 0 9)))
+values:**:name
+  PRE  ((values : ($select-path ** ($bcast-step :name))))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-select #(struct:surf-var ** #(struct:srcloc "<p>" 1 7 2)) (((@bcast name))) path #(struct:srcloc "<p>" 1 7 2))) #(struct:srcloc "<p>" 1 0 14)))
+values:*-_:k
+  PRE  ((values : ($select-path *-_ ($bcast-step :k))))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-select #(struct:surf-var *-_ #(struct:srcloc "<p>" 1 7 3)) (((@bcast k))) path #(struct:srcloc "<p>" 1 7 3))) #(struct:srcloc "<p>" 1 0 12)))
+values{a:*}
+  PRE  (($select values a : *))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 0 7) "block keys are written bare — `x{}`, not `x{:}`" #f))
+values{a:k*}
+  PRE  (($select values a ($bcast-step :k*)))
+  PAR  (#(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) ((a (@bcast k) (@star flatten))) block #(struct:srcloc "<p>" 1 0 7)))
+y{a.0:*}
+  PRE  (($select y a ($postfix-index 0) : *))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 0 2) "block keys are written bare — `x{}`, not `x{:}`" #f))
+values.a:*
+  PRE  ((($select-path values a) : *))
+  PAR  (#(struct:surf-app #(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) ((a)) path #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 8 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 9 1))) #(struct:srcloc "<p>" 1 0 10)))
+values{a}:*
+  PRE  ((($select values a) : *))
+  PAR  (#(struct:surf-app #(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) ((a)) block #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 9 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 10 1))) #(struct:srcloc "<p>" 1 0 11)))
+values{a}:k*
+  PRE  (($select-path ($select values a) ($bcast-step :k*)))
+  PAR  (#(struct:surf-select #(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 6 1)) ((a)) block #(struct:srcloc "<p>" 1 6 1)) (((@bcast k) (@star flatten))) path #(struct:srcloc "<p>" 1 0 12)))
+x.y:*
+  PRE  ((($select-path x y) : *))
+  PAR  (#(struct:surf-app #(struct:surf-select #(struct:surf-var x #(struct:srcloc "<p>" 1 0 1)) ((y)) path #(struct:srcloc "<p>" 1 0 1)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 3 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 4 1))) #(struct:srcloc "<p>" 1 0 5)))
+(values):*
+  PRE  (((values) : *))
+  PAR  (#(struct:surf-app #(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 1 6)) () #(struct:srcloc "<p>" 1 1 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 8 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 9 1))) #(struct:srcloc "<p>" 1 1 9)))
+[f x]:*
+  PRE  (((f x) : *))
+  PAR  (#(struct:surf-app #(struct:surf-app #(struct:surf-var f #(struct:srcloc "<p>" 1 1 1)) (#(struct:surf-var x #(struct:srcloc "<p>" 1 3 1))) #(struct:srcloc "<p>" 1 1 3)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 5 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 6 1))) #(struct:srcloc "<p>" 1 1 6)))
+[f values:*]
+  PRE  ((f values : *))
+  PAR  (#(struct:surf-app #(struct:surf-var f #(struct:srcloc "<p>" 1 1 1)) (#(struct:surf-var values #(struct:srcloc "<p>" 1 3 6)) #(struct:surf-var : #(struct:srcloc "<p>" 1 9 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 10 1))) #(struct:srcloc "<p>" 1 1 10)))
+values:* x
+  PRE  ((values : * x))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 7 1)) #(struct:surf-var x #(struct:srcloc "<p>" 1 9 1))) #(struct:srcloc "<p>" 1 0 10)))
+values.*
+  PRE  ((values |.| *))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var |.| #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 7 1))) #(struct:srcloc "<p>" 1 0 8)))
+values.*name
+  PRE  (($retired-selection broadcast name))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 0 12) "broadcast `.*name` was retired — its replacement is `:name` (e.g. `xs:name`)" #f))
+values.*:name
+  PRE  ((values |.| ($select-path * ($bcast-step :name))))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var |.| #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-select #(struct:surf-var * #(struct:srcloc "<p>" 1 7 1)) (((@bcast name))) path #(struct:srcloc "<p>" 1 7 1))) #(struct:srcloc "<p>" 1 0 13)))
+x.*{a}
+  PRE  ((x |.| ($select * a)))
+  PAR  (#(struct:surf-app #(struct:surf-var x #(struct:srcloc "<p>" 1 0 1)) (#(struct:surf-var |.| #(struct:srcloc "<p>" 1 1 1)) #(struct:surf-select #(struct:surf-var * #(struct:srcloc "<p>" 1 2 1)) ((a)) block #(struct:srcloc "<p>" 1 2 1))) #(struct:srcloc "<p>" 1 0 4)))
+values.**
+  PRE  (($retired-selection broadcast *))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 0 9) "broadcast `.**` was retired — its replacement is `:*` (e.g. `xs:*`)" #f))
+values.**:name
+  PRE  (($select-path ($retired-selection broadcast *) ($bcast-step :name)))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 6 3) "broadcast `.**` was retired — its replacement is `:*` (e.g. `xs:*`)" #f))
+values: *
+  PRE  ((values : *))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 8 1))) #(struct:srcloc "<p>" 1 0 9)))
+values :*
+  PRE  ((values : *))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 7 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 8 1))) #(struct:srcloc "<p>" 1 0 9)))
+values :k
+  PRE  ((values :k))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-keyword k #(struct:srcloc "<p>" 1 7 2))) #(struct:srcloc "<p>" 1 0 9)))
+values:**
+  PRE  ((values : **))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var ** #(struct:srcloc "<p>" 1 7 2))) #(struct:srcloc "<p>" 1 0 9)))
+values:.*
+  PRE  ((values : |.| *))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var |.| #(struct:srcloc "<p>" 1 7 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 8 1))) #(struct:srcloc "<p>" 1 0 9)))
+values:
+  PRE  ((values :))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1))) #(struct:srcloc "<p>" 1 0 7)))
+values*
+  PRE  ((values*))
+  PAR  (#(struct:surf-app #(struct:surf-var values* #(struct:srcloc "<p>" 1 0 7)) () #(struct:srcloc "<p>" 1 0 7)))
+values:*->
+  PRE  ((values : *- >))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var *- #(struct:srcloc "<p>" 1 7 2)) #(struct:surf-var > #(struct:srcloc "<p>" 1 9 1))) #(struct:srcloc "<p>" 1 0 10)))
+values:*.*
+  PRE  ((values : * |.| *))
+  PAR  (#(struct:surf-app #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 6 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 7 1)) #(struct:surf-var |.| #(struct:srcloc "<p>" 1 8 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 9 1))) #(struct:srcloc "<p>" 1 0 10)))
+vhm.0*
+  PRE  ((vhm |.| 0 *))
+  PAR  (#(struct:surf-app #(struct:surf-var vhm #(struct:srcloc "<p>" 1 0 3)) (#(struct:surf-var |.| #(struct:srcloc "<p>" 1 3 1)) #(struct:surf-int-lit 0 #(struct:srcloc "<p>" 1 4 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 5 1))) #(struct:srcloc "<p>" 1 0 6)))
+vhm.0*_
+  PRE  ((vhm |.| 0 *_))
+  PAR  (#(struct:surf-app #(struct:surf-var vhm #(struct:srcloc "<p>" 1 0 3)) (#(struct:surf-var |.| #(struct:srcloc "<p>" 1 3 1)) #(struct:surf-int-lit 0 #(struct:srcloc "<p>" 1 4 1)) #(struct:surf-var *_ #(struct:srcloc "<p>" 1 5 2))) #(struct:srcloc "<p>" 1 0 7)))
+y.a.0*
+  PRE  ((($select-path y a) |.| 0 *))
+  PAR  (#(struct:surf-app #(struct:surf-select #(struct:surf-var y #(struct:srcloc "<p>" 1 0 1)) ((a)) path #(struct:srcloc "<p>" 1 0 1)) (#(struct:surf-var |.| #(struct:srcloc "<p>" 1 3 1)) #(struct:surf-int-lit 0 #(struct:srcloc "<p>" 1 4 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 5 1))) #(struct:srcloc "<p>" 1 0 6)))
+y.a.0*-
+  PRE  ((($select-path y a) |.| 0 *-))
+  PAR  (#(struct:surf-app #(struct:surf-select #(struct:surf-var y #(struct:srcloc "<p>" 1 0 1)) ((a)) path #(struct:srcloc "<p>" 1 0 1)) (#(struct:surf-var |.| #(struct:srcloc "<p>" 1 3 1)) #(struct:surf-int-lit 0 #(struct:srcloc "<p>" 1 4 1)) #(struct:surf-var *- #(struct:srcloc "<p>" 1 5 2))) #(struct:srcloc "<p>" 1 0 7)))
+y{a.0*}
+  PRE  (($select y a |.| 0 *))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 0 2) "stray `.` in a select block — write the path with no spaces (`server.host`)" #f))
+vhm{0*}
+  PRE  (($select vhm 0 *))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 0 4) "select: `0*` — `*` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b*}`), or select the element first and flatten separately" #f))
+vv:0*
+  PRE  ((vv : 0 *))
+  PAR  (#(struct:surf-app #(struct:surf-var vv #(struct:srcloc "<p>" 1 0 2)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 2 1)) #(struct:surf-int-lit 0 #(struct:srcloc "<p>" 1 3 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 4 1))) #(struct:srcloc "<p>" 1 0 5)))
+vhm.0:*
+  PRE  (((get vhm 0) : *))
+  PAR  (#(struct:surf-app #(struct:surf-get #(struct:surf-var vhm #(struct:srcloc "<p>" 1 0 3)) #(struct:surf-int-lit 0 #(struct:srcloc "<p>" 1 0 3)) #(struct:srcloc "<p>" 1 0 3)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 5 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 6 1))) #(struct:srcloc "<p>" 1 0 7)))
+vv:0:*
+  PRE  ((($select-path vv ($bcast-step :0)) : *))
+  PAR  (#(struct:surf-app #(struct:surf-select #(struct:surf-var vv #(struct:srcloc "<p>" 1 0 2)) (((@bcast 0))) path #(struct:srcloc "<p>" 1 0 2)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 4 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 5 1))) #(struct:srcloc "<p>" 1 0 6)))
+y.a.0:*
+  PRE  (((get ($select-path y a) 0) : *))
+  PAR  (#(struct:surf-app #(struct:surf-get #(struct:surf-select #(struct:surf-var y #(struct:srcloc "<p>" 1 0 1)) ((a)) path #(struct:srcloc "<p>" 1 0 1)) #(struct:surf-int-lit 0 #(struct:srcloc "<p>" 1 0 1)) #(struct:srcloc "<p>" 1 0 1)) (#(struct:surf-var : #(struct:srcloc "<p>" 1 5 1)) #(struct:surf-var * #(struct:srcloc "<p>" 1 6 1))) #(struct:srcloc "<p>" 1 0 7)))
+#p(a.*)
+  PRE  ((path :a.*))
+  PAR  (#(struct:surf-path ((#:a *)) #(struct:srcloc "<p>" 1 0 7)))
+#p(a.**)
+  PRE  ((path :a.**))
+  PAR  (#(struct:surf-path ((#:a **)) #(struct:srcloc "<p>" 1 0 8)))
+#p(a:*)
+  PRE  ((path :a:*))
+  PAR  (#(struct:surf-path ((#:a:*)) #(struct:srcloc "<p>" 1 0 7)))
+{:* 1}
+  PRE  (($brace-params : * 1))
+  PAR  (#(struct:parse-error #(struct:srcloc "<p>" 1 0 1) "Map literal requires an even number of elements (key-value pairs)" #f))
+:*
+  PRE  ((: *))
+  PAR  (#(struct:surf-app #(struct:surf-var : #(struct:srcloc "<p>" 1 0 1)) (#(struct:surf-var * #(struct:srcloc "<p>" 1 1 1))) #(struct:srcloc "<p>" 1 0 2)))
+values:name
+  PRE  (($select-path values ($bcast-step :name)))
+  PAR  (#(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (((@bcast name))) path #(struct:srcloc "<p>" 1 0 11)))
+values:{a b}
+  PRE  (($select-path values ($bcast-step ($select-brace a b))))
+  PAR  (#(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (((@bcast (@sub (a) (b))))) path #(struct:srcloc "<p>" 1 0 7)))
+values:0
+  PRE  (($select-path values ($bcast-step :0)))
+  PAR  (#(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 0 6)) (((@bcast 0))) path #(struct:srcloc "<p>" 1 0 8)))
+values{a b}*
+  PRE  (($select-path ($select values a b) $postfix-star))
+  PAR  (#(struct:surf-select #(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 6 1)) ((a) (b)) block #(struct:srcloc "<p>" 1 6 1)) (((@star flatten))) path #(struct:srcloc "<p>" 1 0 12)))
+values{0 1}*
+  PRE  (($select-path ($select values 0 1) $postfix-star))
+  PAR  (#(struct:surf-select #(struct:surf-select #(struct:surf-var values #(struct:srcloc "<p>" 1 6 1)) (((@ord 0)) ((@ord 1))) block #(struct:srcloc "<p>" 1 6 1)) (((@star flatten))) path #(struct:srcloc "<p>" 1 0 12)))

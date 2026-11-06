@@ -1079,7 +1079,7 @@ module.exports = grammar({
 
     // Application by juxtaposition
     // ============================================================
-    // Path selection  (spec: docs/research/2026-07-28_path-selection-spec.md §2)
+    // Path selection  (spec: docs/tracking/tracks/CIU/CIU_6/2026-07-28_path-selection-spec.md §2)
     // ============================================================
     //
     // A postfix chain of steps on a focus: `record.orders:items*:sku`,

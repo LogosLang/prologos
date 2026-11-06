@@ -1,0 +1,95 @@
+ns p4e2
+def values := @[@[1 2 3] @[4 5 6] @[7 8 9]]
+def t3 := @[@[@[1 2] @[3]] @[@[4] @[5 6]]]
+def mh := {:a @[1 2] :b @[3]}
+def mm := {:a {:x 1} :b {:y 2}}
+def groups := @[@[{:name "a"}] @[{:name "b"} {:name "c"}]]
+def pr := @[{:x 1} {:y 2}]
+def hv := @[{:x 1} {:x "a"}]
+def recs := @[{:k @[1 2]} {:k @[3]}]
+def rec := {:k @[@[1] @[2 3]]}
+def y := {:a @[@[@[1] @[2]] @[@[3]]]}
+spec take1 [PVec Int] -> Nat
+defn take1 [x] [pvec-length x]
+defr pk [?a ?b]
+  || "x" values:k
+     "z" "w"
+defr pj [?a ?b]
+  || "x" values:*
+     "z" "w"
+values{0 1 2}*
+values{0 1 2}*-
+values{0 1 2}*_
+values{0 1 2}*-_
+t3{0 1}*
+t3{0 1}*-
+t3{0 1}*_
+t3{0 1}*-_
+groups{0 1}*
+groups{0 1}*-
+groups{0 1}*_
+groups{0 1}*-_
+mh{a b}*
+mh{a b}*-
+mh{a b}*_
+mh{a b}*-_
+mm{a b}*
+mm{a b}*-
+mm{a b}*_
+mm{a b}*-_
+pr{0 1}*
+pr{0 1}*-
+pr{0 1}*_
+pr{0 1}*-_
+hv{0 1}*
+hv{0 1}*-
+hv{0 1}*_
+hv{0 1}*-_
+t3{0*}
+[id values]*
+values :k
+(values)
+y.a.0
+y.a.0{0 1}*
+rec.k{0 1}*
+{:k rec.k{0 1}*}
+{:a y.a.0{0 1}*}
+(pj ?a ?b)
+(pk ?a ?b)
+t3:0{0 1}*
+t3.0{0 1}*
+recs:k*
+values:*
+t3:**
+t3.**
+groups.*:name
+values*
+values.*
+values: *
+values :*
+values:.*
+values:
+rec{k:*}
+y{a.0:*}
+t3.0*
+y.a.0*
+y{a.0*}
+t3:0*
+t3:0*-
+[take1 values:*]
+@[values:* 1]
+'[values:*]
+defn f1 [x:*] : Int
+  x
+def q1:* := 1
+bundle Bn1 := (Eq:*)
+spec bz1 A A -> Bool where (Bn1 A)
+defn bz1 [x y] where (Bn1 A)
+  [eq? x y]
+{:* 1}
+t3{0 1}*{0 1 2 3}*
+values{0 1 2}*.0
+values{0 1 2}*{0 1}
+mm{a b}*.x
+groups{0 1}*:name
+t3:0{0 1}*-

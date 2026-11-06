@@ -64,9 +64,9 @@ stratification.md, testing.md, workflow.md).
    (typed solution rows)** carries the load-bearing **entry gates (a)-(e)** and the
    "why hard" (labels not statically derivable). READ FIRST for Aspect B.
 4. **CIU T6 F1/F1b** — typed rows reuse the F1 row carrier: design doc
-   `docs/tracking/2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md` (records /
-   `Map`↔schema / validate) + PIR `docs/tracking/2026-07-19_CIU_T6_F1B_PIR.md` +
-   the downstream `docs/tracking/2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md` (the `^`
+   `docs/tracking/tracks/CIU/CIU_6/2026-07-06_CIU_T6_F1_STRUCTURAL_RECORDS_DESIGN.md` (records /
+   `Map`↔schema / validate) + PIR `docs/tracking/tracks/CIU/CIU_6/2026-07-19_CIU_T6_F1B_PIR.md` +
+   the downstream `docs/tracking/tracks/CIU/CIU_6/2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md` (the `^`
    dynamic key-rename that B.2's schema-projection ties to). Aspect B is "the F1
    `{:a 1}.a : Int` machinery, one layer up." Grounding for gate (d)/(e) (the two
    unbound reps + the **F1b.6 escape-boundary tightening** / D23 display posture).

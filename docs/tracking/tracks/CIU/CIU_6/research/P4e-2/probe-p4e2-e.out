@@ -1,0 +1,66 @@
+PERF-COUNTERS:{"cell_allocs":2337,"constraint_count":0,"constraint_retries":0,"elaborate_steps":271,"inert_dependent_skips":0,"infer_steps":293,"meta_created":22,"meta_solved":3,"prop_allocs":0,"prop_firings":0,"reduce_steps":582,"resolution_cycles":0,"solver_backtracks":0,"solver_col_compares":21,"solver_row_scans":19,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":83,"zonk_steps":311}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":1,"qtt_ms":0,"reduce_ms":1,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":49,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":43,"speculation_pruned_count":0}
+CELL-METRICS:{"cells":39,"propagators":0}
+0: values : [PVec [PVec Int]] defined.
+1: t3 : [PVec [PVec [PVec Int]]] defined.
+2: mh : {:a [PVec Int] :b [PVec Int]} defined.
+3: groups : [PVec [PVec {:name String}]] defined.
+4: rec : {:k [PVec [PVec Int]]} defined.
+5: y : {:a [PVec [PVec Int]]} defined.
+6: take1 : [PVec Int] -> Nat defined.
+7: ERROR: Unbound variable
+8: ERROR: Unbound variable
+9: ERROR: Unbound variable
+10: ERROR: Unbound variable
+11: ERROR: Unbound variable
+12: ERROR: Unbound variable
+13: ERROR: Unbound variable
+14: ERROR: Unbound variable
+15: ERROR: Unbound variable
+16: ERROR: Unbound variable
+17: ERROR: Unbound variable
+18: ERROR: Unbound variable
+19: ERROR: Unbound variable
+20: ERROR: Unbound variable
+21: ERROR: Unbound variable
+22: ERROR: Unbound variable
+23: ERROR: broadcast `.**` was retired — its replacement is `:*` (e.g. `xs:*`)
+24: ERROR: Unbound variable
+25: ERROR: block keys are written bare — `x{}`, not `x{:}`
+26: ERROR: block keys are written bare — `x{}`, not `x{:}`
+27: ERROR: Unbound variable
+28: ERROR: Unbound variable
+29: ERROR: stray `.` in a select block — write the path with no spaces (`server.host`)
+30: ERROR: Unbound variable
+31: @[1 2 3 4 5 6 7 8 9] : [PVec Int]
+32: @[1 2 3] : [PVec Int]
+33: ERROR: select: `*_` — `*_` prefixes the FIELDS of each content, and this layer's contents are vectors (layer `{:a [PVec Int] :b [PVec Int]}`), which concatenate into one keyless component: there are no fields to prefix. Use bare `*`
+34: @["a" "b" "c"] : [PVec String]
+35: @[1 2 3] : [PVec Int]
+36: @[1 2 4] : [PVec Int]
+37: ERROR: Too many arguments to 'probe-p4e2-e::take1'
+38: ERROR: Unbound variable
+39: ERROR: Unbound variable
+40: ERROR: broadcast `:k` fails on every element — Could not infer type — select: `k` is not a field of a vector element position — the element is itself a vector, which has positions and no field names. Use an ordinal step (`xs:0`), or descend a further level first
+41: f0 : Int -> Int defined.
+42: ERROR: Empty type segment in arrow type
+43: q0 : Int defined.
+44: ERROR: Type mismatch
+45: pr0 : _ defined.
+46: @[{:b "w"}] : [PVec {:b String}]
+47: @[{:a "x", :b "y"} {:a "z", :b "w"}] : [PVec {:a String :b String}]
+48: pr1 : _ defined.
+49: @[{:b "w"}] : [PVec {:b String}]
+50: @[{:a "x", :b unknown} {:a unknown, :b unknown} {:a "z", :b "w"}] : [PVec {:a String :b String}]
+51: pr2 : _ defined.
+52: @[{:a "x", :b unknown} {:a "z", :b "w"}] : [PVec {:a String :b String}]
+53: bz0 : [Pi [x :0 <[Type 0]>] [x x -> Bool] x x -> Bool] defined.
+54: true : Bool
+55: ERROR: Unbound variable
+56: ERROR: Unbound variable
+57: ERROR: `*` (flatten) applies to a SELECTION step — there is no selection to its left here. Write it after a path or block access, e.g. `xs:{a}*` or `cfg{a}*`; a bare `*` between values is multiplication, and a spaced `*` after a value is the operator
+58: ERROR: select: `0*` — `*` deletes the layer the step before it produced, and an ORDINAL step produces no layer (it selects a position, it does not add a level). Star a named step instead (`x{a.b*}`), or select the element first and flatten separately
+59: @[@[1 2 3] @[4 5 6] @[7 8 9]] : [PVec [PVec Int]]
+
+--- 35 errors ---

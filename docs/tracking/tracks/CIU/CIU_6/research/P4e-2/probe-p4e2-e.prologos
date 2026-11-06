@@ -1,0 +1,91 @@
+ns probe-p4e2-e
+;; P4e-2 grounding audit: what each spelling the slice changes does TODAY (at d2ad3dad). Output line N = the
+;; Nth command after the ns; `e:N` in the audit cites it. Families: (1) J's spellings · (2) the near-misses
+;; JD-4 names · (3) block position (JD-3) · (4) DEFERRED 185's reader seats · (5) today's spellable
+;; equivalents of what J and `vv:0*` should mean · (6) the positions where J's mint changes the datum's item
+;; count (3 -> 1), which DEFERRED 105 says must be read as meaning claims · (7) the refusals whose remedy text
+;; J can change.
+def values := @[@[1 2 3] @[4 5 6] @[7 8 9]]
+def t3 := @[@[@[1 2] @[3]] @[@[4] @[5 6]]]
+def mh := {:a @[1 2] :b @[3]}
+def groups := @[@[{:name "a"}] @[{:name "b"} {:name "c"}]]
+def rec := {:k @[@[1] @[2 3]]}
+def y := {:a @[@[1 2] @[3]]}
+spec take1 [PVec Int] -> Nat
+defn take1 [x] [pvec-length x]
+;; (1) J's spellings
+values:*
+values:*_
+values:*-
+values:*-_
+t3:*:*
+t3.0:*
+mh:*
+groups:*:name
+[id values]:*
+;; (2) the near-misses
+values.*
+values: *
+values :*
+values:**
+values:.*
+values:
+values*
+values.**
+values.*:name
+;; (3) block position
+rec{k:*}
+y{a.0:*}
+;; (4) DEFERRED 185's reader seats
+t3.0*
+y.a.0*
+y{a.0*}
+t3:0*
+;; (5) today's equivalents of the intended meanings
+values{0 1 2}*
+mh{a b}*
+mh{a b}*_
+groups{0 1}*:name
+t3.0{0 1}*
+t3:0{0 1}*
+;; (6) item-count positions: application argument, collection literal, quoted datum, binder, def annotation
+[take1 values:*]
+@[values:* 1]
+'[values:*]
+'[values:k]
+defn f0 [x:Int] : Int
+  x
+defn f1 [x:*] : Int
+  x
+def q0:Int := 1
+def q1:* := 1
+;; (6b) the arity-chunked positions DEFERRED 105 regressed in: a defr fact block (rows re-chunk by arity) and a bundle
+defr pr0 [?a ?b]
+  || "x" "y"
+     "z" "w"
+(pr0 "z" ?b)
+(pr0 ?a ?b)
+defr pr1 [?a ?b]
+  || "x" values:*
+     "z" "w"
+(pr1 "z" ?b)
+(pr1 ?a ?b)
+defr pr2 [?a ?b]
+  || "x" values:k
+     "z" "w"
+(pr2 ?a ?b)
+bundle Bn0 := (Eq)
+spec bz0 A A -> Bool where (Bn0 A)
+defn bz0 [x y] where (Bn0 A)
+  [eq? x y]
+[bz0 1 1]
+bundle Bn1 := (Eq:*)
+spec bz1 A A -> Bool where (Bn1 A)
+defn bz1 [x y] where (Bn1 A)
+  [eq? x y]
+[bz1 1 1]
+;; (7) remedy texts J can change
+[id values]*
+values{0*}
+;; (8) controls appended after the first read (indices above unchanged): the subject of e:15 / e:57 alone
+[id values]

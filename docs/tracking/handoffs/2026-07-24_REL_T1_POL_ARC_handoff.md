@@ -92,7 +92,7 @@ the full suite to diagnose**), `pipeline.md`, `prologos-syntax.md`.
 7. `docs/tracking/2026-07-21_UCS_TYPES_AS_PREDICATES_NOTE.md` (185 L) — where C.d
    went; POL.6 must not collide with it (POL.6 is the **static functional-binder**
    path, NOT the runtime types-as-predicates reading).
-8. `docs/tracking/2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md` (214 L) — CIU T6
+8. `docs/tracking/tracks/CIU/CIU_6/2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md` (214 L) — CIU T6
    Path Selection, the owner's next track after Rel T1; **it owns the
    `[head rows].field` polymorphic-inference gap** that B3.1 surfaced (see §5).
 9. `docs/tracking/2026-06-28_DEPENDENCY_RESOLVER_DEMO_DESIGN.md` (257 L) — the DEMO

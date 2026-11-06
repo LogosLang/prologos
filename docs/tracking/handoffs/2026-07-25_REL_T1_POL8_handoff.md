@@ -109,7 +109,7 @@ the `[]`/`()` delimiter conventions ARE the POL.9 design**).
 8. `docs/research/2026-07-23_FACT_REPRESENTATION_QUERY_OPTIMIZATION.md` — §11
    (the **Rel T2 "Fact Store" charter seed**), §12 (Q_A–Q_D parked), §14 (D.2
    addendum). Read at least those three when X.close's DEFERRED triage runs.
-9. `docs/tracking/2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md` — CIU T6 Path
+9. `docs/tracking/tracks/CIU/CIU_6/2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md` — CIU T6 Path
    Selection, the owner's likely next track; it **owns** the `[head rows].field`
    gap (line ~124).
 
