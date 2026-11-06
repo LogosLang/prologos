@@ -834,3 +834,28 @@ are in [`../README.md`](../README.md).
   LOG entry: `tracks/REL/REL_2/2026-11-06_REL_2_NOTE_FROM_CIU_6.md` in its worktree. The other seven live branches add
   no CIU citation.
 - **Next**: unchanged. The owner's review of P4e-2-B, then the D4 decomposition decision.
+
+### D4 split into a spine and its parts — `a6337b1a` (2026-11-06)
+- **Owner** (2026-11-06): "Fine with the D4 split. Then, let's proceed with P4e-2-B therewith, per our stage 4 design
+  methodology (implementation protocol)."
+- **What**: [D4](2026-07-28_CIU_T6_PATH_SELECTION_D4.md) is now a 414-line spine: the tracker, §1–§2, §4, a §5 index
+  carrying a stub for every moved anchor, §6–§10, and §11, which maps every pre-split D4 line to its new home. Its parts
+  are:
+  - [the decision ledger](2026-07-28_CIU_6_D4_DECISION_LEDGER.md) (§3);
+  - [the lexical grammar](2026-07-28_CIU_6_D4_LEXICAL_GRAMMAR.md) (§Q8, normative);
+  - 20 phase records in [`phases/`](phases/), one per phase. P4 is split by sub-slice (P4, P4a, P4b, P4c). P4e-1 is
+    split into four contiguous blocks (1a + 1b, 1b-iii-iv, 1b-v, 1b-vi); 1b-iii and 1b-iv interleave, so they share one.
+  - P4e-2's record, where B is recorded, is [`phases/CIU_6_P4e-2.md`](phases/CIU_6_P4e-2.md).
+- **Verification** (details in the `a6337b1a` message):
+  - 13 081 lines placed once each, verbatim except link targets.
+  - 8 881 links, fragments included, equal before and after through the map (0 missing, 0 new).
+  - The two anchored links that did not resolve before still don't, unchanged.
+  - Power: a planted word change and a planted link change were both reported.
+- **Surprise / correction**:
+  - D4 stacked newer sub-slice records ABOVE older ones (1b-vi before 1b-v before 1b-iv/iii), and the split keeps that
+    order inside each part.
+  - The `p4e-1b-v-shipped` anchor sits inside the 1b-vi block, at its old D4 position, so it lands in 1b-vi's record.
+    That is where it already landed, so it was left alone.
+  - My first line-citation census returned 0, because `\b` matches nothing under this machine's `git grep -E`. The
+    known `D4:12059` citation was the power row that exposed it; the Python re-count found 4.
+- **Next**: P4e-2-B.
