@@ -819,3 +819,18 @@ are in [`../README.md`](../README.md).
     session (its branch added 13 lines citing CIU documents);
   - then the owner's review of P4e-2-B (asked 2026-11-06: what B introduces and what surface syntax results), and the
     D4 split decision.
+
+### The move landed: checkpoint `781ca616` on main; one dead citation repaired; a note for REL 2 — `0dd7a92c` (2026-11-06)
+- **Landed**: the checkpoint `781ca616` (parents main `0fdbe824`, this branch `ad6cf8bc`, with a tree equal to the gated
+  tip). Gate: full suite 10 434 / 502, all pass, as predicted before the run (`d2ad3dad`'s 10 431 + P4e-2-A's 3). Editor:
+  `install.sh` exit 0, `check-corpus.sh` PASS (budget 75), `tree-sitter test` 60 / 60. Main's WIP is unchanged (16
+  entries), and main's battery is 705 / 705. Main's dailies `475e977f` open `2026-11-06_dailies.md`.
+- **Repair**: `handoffs/2026-07-25_CIU_T6_PATH_SELECTION_handoff.md:40` cited `docs/tracking/2026-03-28_CIU_MASTER.md`,
+  a name that never existed (`git log --all`). The series has one master, so the citation now names it. The exact
+  old-path grep could not see this, because it is not an old path; the pattern grep written for the REL 2 note found it
+  on a simulated merge.
+- **REL 2**: the branch `rel2-fact-store` added 13 lines in 9 files citing old paths (12 in prose, 1 link), and none of
+  its files overlap the move. An untracked note lists each line with its rewrite, the power-checked grep and a proposed
+  LOG entry: `tracks/REL/REL_2/2026-11-06_REL_2_NOTE_FROM_CIU_6.md` in its worktree. The other seven live branches add
+  no CIU citation.
+- **Next**: unchanged. The owner's review of P4e-2-B, then the D4 decomposition decision.
