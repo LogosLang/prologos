@@ -754,3 +754,68 @@ are in [`../README.md`](../README.md).
 - **Battery**: 585 + 118 + 2 = 705, all pass.
 - **Next**: P4e-2-B, ε inert — `(@id)` in the closed union, its arms at every consumer, one constructor, and a bare
   `(@id)` refused.
+
+### The CIU series moves into `tracks/CIU/` — `df724466` (2026-11-06)
+- **Owner** (2026-11-06 06:47): "I would like for us to take the time to re-organize this track in the updated
+  Series/Track file hierarchy organization so we can start having better structure and visibility over various parts
+  of this project. I want us to be careful to preserve all the documents, and make sure that the links are updated to
+  point to the new file. I would like us to take the time and bring all of the CIU tracks into their respective folder
+  directories, not just for CIU 6." On process: "I'm hoping that each track having it's own directory, will allow us
+  to keep the design document itself more tight and allow other supplementary documents to co-habitate in the
+  directory and simply be linked in rather than create so much noise." The process direction is recorded in
+  `../../README.md` and `../README.md`.
+- **Decisions** (one form, each the recommended option):
+  - Q1: the spec goes to this track's root; the star census and the row-coalgebra note go to `research/`; symlinks
+    stay at the old `docs/research/` paths.
+  - Q2: the master and both origin documents go to `tracks/CIU/`; Track 0's audit to `CIU_0/`; the seed note to
+    `CIU_4/`.
+  - Q3: moved on this branch and landed at once as a checkpoint.
+  - By precedent (PPN, BSP-LE): basenames kept, and every link rewritten from anywhere.
+- **What moved**: 35 documents. The master and the two origin documents go to `tracks/CIU/`. CIU 6's whole flat record
+  comes here, with `critiques/`, `audits/` (including the 1b-vi audit, which had sat at this root) and `handoffs/`
+  (15). This log is renamed `CIU_6_LOG.md`. The full layout is in the `df724466` message; the index is
+  [`../README.md`](../README.md). Symlinks: `2df6df67`.
+- **Rewrites**: 391 citations in 65 files.
+  - 246 link targets, 103 repo paths and 42 relative paths.
+  - All in-line: 347 insertions, 347 deletions.
+- **Verification**:
+  - Link set before = after = 4 044, with 0 missing, 0 new and 0 newly broken (121 broken before and after).
+  - Old-path `git grep`: 1 hit, the dead absolute path at `docs/standups/standup-2026-03-21.org:104`, which is kept as
+    printed and is also the grep's power row.
+  - The `.rkt` header edit is comment-only: its datums are `equal?`, and a one-token mutant reads DIFFER.
+- **Surprise / correction**:
+  1. This log was a bare `LOG.md` from 2026-10-13, against the 2026-10-15 convention (`<SERIES>_<N>_LOG.md`) that the
+     other tracks follow. It is renamed now; earlier entries keep their wording.
+  2. Three instrument errors, each caught by a control before any number was published:
+     - `git grep` with misordered arguments died, and the script read the empty output as "0 old paths". The power
+       row caught it.
+     - `~` in the path-token class missed org-verbatim mentions (3 lines). Reading the list of untouched files caught
+       it.
+     - A `#lang` read names the module after the file, so `before.rkt` ≠ `after.rkt`. The self-comparison control
+       caught it.
+  3. **Dates.** I dated the move's first two commits 2026-11-03, the previous entry's date, without running `date`.
+     They were uncited, so I rebuilt them with the same trees as `df724466` / `2df6df67`; the old `66f133e3` /
+     `00293751` are unreferenced.
+- **D4 is the remaining problem, measured (decomposition PROPOSED, unapplied)**:
+  - [D4](2026-07-28_CIU_T6_PATH_SELECTION_D4.md) is 13 082 lines. Its §3 decision ledger is 4 035 lines; the §5
+    per-phase records are 8 436 (counted from the headings).
+  - A heading-level defect hides most of §5. `## §Q8 — THE LEXICAL GRAMMAR` (`:4701`) is an h2 placed inside §5, so §5's
+    later records nest under the grammar heading in every outline: §5.P1b-ii (`:4978`) through §5.X, 7 853 lines. This is
+    why §5.P4e-2 could not be found.
+  - §5.P4d-s7 sits after §10 References.
+  - The spine (tracker, §1, §2, §4, §6, §8, §9, §10) is about 315 lines.
+  - 101 links from 16 other files carry a D4 anchor: 74 into §3, the rest into phase records.
+  - **Proposed split**:
+    - D4 stays at its path as the spine.
+    - §3 becomes its own decision-ledger document.
+    - §Q8 becomes the lexical-grammar document (normative).
+    - §5 becomes one record per phase under `phases/`.
+    - The spine keeps an anchor table, so every old `D4.md#x` still lands, and the 101 anchored links are re-pointed
+      with the same before/after instrument as this move.
+  - Open for the owner: granularity (per phase or per sub-slice), and whether the ledger is one document or one per
+    decision series.
+- **Next**:
+  - the full-suite gate, the checkpoint, main's records (a dailies "corpus layout" bullet), and a note for the REL 2
+    session (its branch added 13 lines citing CIU documents);
+  - then the owner's review of P4e-2-B (asked 2026-11-06: what B introduces and what surface syntax results), and the
+    D4 split decision.

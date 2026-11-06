@@ -21,6 +21,19 @@ the track log `LOG_BSP-LE_<N>.md` (BSP-LE only), new files `YYYY-MM-DD_BSP-LE_<N
 [`BSP-LE/README.md`](BSP-LE/README.md) and [`BSP-LE/BSP-LE_3/LOG_BSP-LE_3.md`](BSP-LE/BSP-LE_3/LOG_BSP-LE_3.md) §
 *The BSP-LE series moves into `tracks/BSP-LE/`*.
 
+**CIU** (2026-11-06, `df724466`; research symlinks `2df6df67`) — 35 documents into [`CIU/`](CIU/): the master and the
+two origin documents at the series root, `CIU_0/`, `CIU_4/`, and CIU 6's whole record in `CIU_6/` (with `audits/`,
+`critiques/`, `handoffs/`, `research/`); 391 citations rewritten in 65 files; links before = after = 4 044, broken 121
+before and after, 0 new. Basenames were kept; the track log was renamed `CIU_6/CIU_6_LOG.md` (the 2026-10-15
+convention). Details: [`CIU/README.md`](CIU/README.md) and [`CIU/CIU_6/CIU_6_LOG.md`](CIU/CIU_6/CIU_6_LOG.md) § *The CIU
+series moves into `tracks/CIU/`*.
+
+**What a track directory is for** (owner, 2026-11-06, at the CIU move): "I'm hoping that each track having it's own
+directory, will allow us to keep the design document itself more tight and allow other supplementary documents to
+co-habitate in the directory and simply be linked in rather than create so much noise." The design document keeps the
+design (target, decisions, plan, tracker); audits, per-slice records, probes and deliberations are their own documents
+in the track directory, linked from it.
+
 **Moving the next series** — what the PPN move measured:
 - Census before moving: every md/org link whose target resolves to a moved file, every
   relative link INSIDE a moved file (it must keep the absolute location it resolved to, even a
@@ -70,10 +83,9 @@ lhc, 2026-08-17): `2026-10-12_PAR_4_STAGE2_GAP_ANALYSIS.md`, matching the direct
 Current: `tracks/PAR/PAR_4/` — PAR Track 4, Arena Executors (D.2 and its D.3 critique written; D.3 next).
 `tracks/PAR/PAR_4B/` — PAR Track 4B, the parallel and distributed architecture portfolio (opened 2026-10-18 on branch
 `par4b-parallelism-portfolio`; Stage 1 next). Stage-1 research artifacts live in the track's `research/` subdirectory, named `…_STAGE1_<TOPIC>.md`.
-`tracks/CIU/CIU_6/` — CIU Track 6, Anonymous Records, Collections & Path Selection: a track
-already deep in implementation when the layout arrived (2026-10-13). Its flat documents of
-record stay where they are and are indexed in `tracks/CIU/README.md`; the directory holds the
-LOG from 2026-10-13 on and any new artifacts.
+`tracks/CIU/CIU_6/` — CIU Track 6, Anonymous Records, Collections & Path Selection (phase P4e on branch
+`ciu6-path-selection`). Its whole record moved here with the series on 2026-11-06; the master is
+`tracks/CIU/2026-03-21_CIU_MASTER.md`, indexed in `tracks/CIU/README.md`, and the log is `CIU_6/CIU_6_LOG.md`.
 `tracks/PPN/PPN_4C/` — PPN Track 4C, Elaboration completely on-network: resumed 2026-10-13 on
 branch `ppn4c-elaboration-on-network` after four months parked (addendum Phase 4B.5.b next). Its
 whole record moved here with the series; the LOG starts with where the earlier history lives.
