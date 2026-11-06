@@ -63,12 +63,12 @@ are in [`../README.md`](../README.md).
   entries, the dailies) go to main either way. Analysis in this session's reply; record the
   answer here.
 - **Next**: **1b-vi, the star-collapse slice** (D4 `#p4e-1b-sequencing`, row 1b-vi):
-  `*-` ([Q_U48](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u48), total collapse —
+  `*-` ([Q_U48](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u48), total collapse —
   ruled), the `*-_` decision (open), the cont-axis **totality dispatcher** (the six
   `select-star-cont` readers are binary tests on `'flatten-synth`; an unknown cont reads as
   bare `*`), and `typing-errors.rkt`'s prose column (15 formatters spelling `*`/`*_` per kind —
   the printer defect's twin, `#p4e-1b-v-c`). Two owner decisions come first
-  ([Q_U52](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u52) §1–2): what total collapse
+  ([Q_U52](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u52) §1–2): what total collapse
   does to a **renamed** ancestor (`t4{a^p.b.c*-}`), and the **`*->` token boundary**. Opens
   with the grounding mini-audit, re-deriving those counts at this HEAD.
 
@@ -93,7 +93,7 @@ are in [`../README.md`](../README.md).
   test-cases, 663/663 with the acceptance test file, acceptance markers 88/88. Findings: (1) `^-` silently
   drops a re-keyed ancestor (`e3{a^p.b.c^-}` → `{:c …}`) while `^-_` honors it (`{:p-b-c …}`), unpinned and
   unused. `*-` is `^-` ∘ `*` (one operator suffix per segment), so the decision is one rule for both
-  families. Posed as **[Q_U55](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u55)** (pending), options
+  families. Posed as **[Q_U55](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u55)** (pending), options
   A refuse / B total wins / C explicit wins, with the tradeoff analysis in the ledger. (2) In type territory
   `Nat *-> Nat` is already not an arrow ("has no arrow"); 0 glued `*->` anywhere. (3) An in-block fused ω chain
   errors (`w4{a:b:c}`) where the path form works, with zero pins: filed **DEFERRED 167** on main. It also
@@ -116,7 +116,7 @@ are in [`../README.md`](../README.md).
 ### Q_U55 decided: A — a rename on an ancestor of a total collapse is refused, in BOTH collapse families; dissolve stays legal; provenance forms keep the rename — this commit (2026-10-13)
 - **Why / decision**: owner — *"I'm good with Option A (refuse) on Q_55. And that we fix `^-` to be in
   line with the behavior as well, for consistency."* Recorded in D4's ledger
-  ([Q_U55](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u55)) with the reason (monotone waypoint;
+  ([Q_U55](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u55)) with the reason (monotone waypoint;
   the silent drop becomes a guided error; `^-` costs nothing to align — 0 uses, 0 pins) and the
   implementation shape (a syntactic check in the shared branch walk, not typing; failing-first pins in
   both families; the `^-` half lands in 1b-vi with the `*-` mint).
@@ -136,10 +136,10 @@ are in [`../README.md`](../README.md).
 
 ### Q_U56 decided (`*->` is a guided diagnostic in selection territory; type territory filed as DEFERRED 168); Q_U57 posed — `*-_`'s prefix, L vs P, measured through today's equivalents — this commit (2026-10-13)
 - **Why / decision**: owner — *"Yes, that looks like a guided diagnostic as per (a)."* Ledgered as
-  [Q_U56](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u56); the pre-existing type-territory
+  [Q_U56](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u56); the pre-existing type-territory
   messages ("has no arrow", a bare "Type mismatch") filed on main as **DEFERRED 168** (`b309f98e`).
   Then the owner asked for the `*-_` rule "worked out in examples and tradeoffs … with more examples":
-  [Q_U57](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u57), ten cases (E1–E10) on five fixtures.
+  [Q_U57](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u57), ten cases (E1–E10) on five fixtures.
   Both candidate prefixes are measurable today through equivalent spellings: L ≡ `^` on every ancestor
   + `*_`, and P ≡ every lifted field written with `^-_` (probe `probe-1bvi-h`). So the table is
   measured, not predicted.
@@ -153,7 +153,7 @@ are in [`../README.md`](../README.md).
 
 ### Q_U57 decided: P — `*-_` names the whole collapsed path; every decision 1b-vi owed is made; two implementation facts measured for the plan — this commit (2026-10-13)
 - **Why / decision**: owner — *"`P`'s table and rationale stand as reasoned, let's go with that."* Ledgered at
-  [Q_U57](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u57). The 1b-vi row in D4's sequencing table now
+  [Q_U57](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u57). The 1b-vi row in D4's sequencing table now
   shows all three decisions (Q_U55 A, Q_U56 (a), Q_U57 P).
 - **Measured for the implementation plan**:
   - `probe-1bvi-k`: provenance names only what the BRANCH collapses. `e3{a.{b.c^-_}}` → `{:a {:b-c …}}`, so an
@@ -172,8 +172,8 @@ are in [`../README.md`](../README.md).
 ### Q_U58 decided (M + slicing A→B→C→D); Stage 4 opened on 1b-vi — design target recorded; one published claim corrected — this commit (2026-10-13)
 - **Why / decision**: owner — *"Ok with lean on M. Proposed sequencing looks good to me. Let's record it,
   then proceed to implementation per our Stage 4 Design Methodology (Implementation Protocol)."* Ledgered
-  at [Q_U58](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u58). The Per-Phase Protocol's mini-design and
-  mini-audit are written into D4 as [§5.P4e-1b-vi](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi):
+  at [Q_U58](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u58). The Per-Phase Protocol's mini-design and
+  mini-audit are written into D4 as [§5.P4e-1b-vi](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi):
   the semantics stated once, principles in play, a two-column mantra check, drift risks DR-1–DR-6, the A
   audit, and the sub-slice tracker.
 - **Phase design target (1b-vi-A)**: read §5.P4e-1b-vi; principles Correctness Through Types (correct by
@@ -196,11 +196,11 @@ are in [`../README.md`](../README.md).
 - **Next**: 1b-vi-A, the stage table (`tests/test-path-selection.rkt`).
 
 ### 1b-vi-A shipped: the star-collapse stage table — 40 rows, targets measured, red step shown at stages B and D — `0b6a645f` (2026-10-13)
-- **Why / decision**: the first sub-slice of [Q_U58](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u58)'s
+- **Why / decision**: the first sub-slice of [Q_U58](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u58)'s
   slicing: pins first. One row per behaviour, `(id spelling flips-at pre target)`, with every target
   measured from today's equivalent spelling (`research/P4e-1b-vi/probe-1bvi-p`). `1bvi-stage` is bumped as
   the first edit of each later sub-slice, so its rows go red before its code exists. Design and VAG:
-  [§5.P4e-1b-vi](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi).
+  [§5.P4e-1b-vi](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi).
 - **Evidence**: stage B → exactly C1–C4 red (the silent drop); stage D → 37 / 40 red, each for its pre-mint
   reason; mutation M1 (an already-true target) caught twice, M2 (a broken fixture) caught before the
   `unbound` class could accept it. Battery 573 → 575 test-cases, all pass; the table costs 5.28 s per run
@@ -226,10 +226,10 @@ are in [`../README.md`](../README.md).
 
 ### Q_U59 settled, Q_U60 decided; 1b-vi-B shipped: `^-` / `^-k'` refuse a renamed ancestor with two runnable remedies, and the equivalences are generated laws — `332e16a2` (2026-10-14)
 - **Why / decision**: owner at the A checkpoint — *"1: Ok as settled, with medium confidence · 2: fold it in ·
-  3: ok"*. Ledgered: [Q_U59](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u59) (where nothing can collapse,
+  3: ok"*. Ledgered: [Q_U59](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u59) (where nothing can collapse,
   `*-` ≡ `*` and `*-_` ≡ `*_`; the medium confidence is given an object: the monotone cost and a revisit
-  trigger), [Q_U60](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u60) (the laws, placed as B's first step —
-  my call, recorded as such). B's design target, mini-audit and VAG: [§5.P4e-1b-vi](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi).
+  trigger), [Q_U60](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u60) (the laws, placed as B's first step —
+  my call, recorded as such). B's design target, mini-audit and VAG: [§5.P4e-1b-vi](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi).
 - **What shipped**: the check sits in `branch-problem` (`parser.rkt`, block-close validation), after the
   positional check; TOTAL means `'collapse` / `(collapse-rename . k')`; the two remedies are step lists
   rendered by `pp-select-branch` (new edge parser → pretty-print, acyclic, +6 modules). 61 generated law rows
@@ -255,7 +255,7 @@ are in [`../README.md`](../README.md).
 ### 1b-vi-C shipped: the total-collapse machinery, inert, proven by injection — `6142d318` (design) + `3cbb1025` (code) (2026-10-14)
 - **Why / decision**: owner — *"Let's proceed with Slice C per our Stage 4 Design Methodology
   (Implementation Protocol)"*. Design target and mini-audit committed before any code
-  ([§5.P4e-1b-vi, 1b-vi-C](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-c)). Two
+  ([§5.P4e-1b-vi, 1b-vi-C](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-c)). Two
   representation choices made inside Q_U58's M and recorded, not posed: the mark is a wrapper
   `(collapsed . c₀)` around the WRITTEN cont (so printing and naming read the step as written),
   and the two new spellings live in a printer-only pending table rather than a MINTED column.
@@ -289,7 +289,7 @@ are in [`../README.md`](../README.md).
   to me — do you have a challenge to that perspective?)"*. The challenge: a LEVEL has no single
   star (`env{prod^.db* dev.db*-}`), so passing one would be wrong in a mixed block. The decision
   that survived: pass the operators PRESENT (a list), and scope each claim to the family it was
-  measured on ([D4 §5.P4e-1b-vi, 1b-vi-D](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-d)).
+  measured on ([D4 §5.P4e-1b-vi, 1b-vi-D](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-d)).
 - **What shipped**: `select-fail`'s field is a list; `star-dup-key` carries every star at the
   level, `star-l4-mixed` its branch's; both arms speak per family. M-one (pass one star) red on
   exactly the mixed row; M-none red on three. 670 / 670.
@@ -310,7 +310,7 @@ are in [`../README.md`](../README.md).
 ### 1b-vi-D-2a shipped: an ordinal head is transparent under a collapse — `035aea42` (design) + `84beb15a` (2026-10-14)
 - **Why / decision**: owner — *"Excellent, let's proceed to D-2 per our stage 4 design methodology"*.
   D-2 split into D-2a (the ordinal-head fix, still inert) and D-2b (the mint); design first
-  ([D4 §5.P4e-1b-vi, D-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-d2)).
+  ([D4 §5.P4e-1b-vi, D-2](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-d2)).
 - **What shipped**: one `select-branch-total-collapse?` predicate; both twins' ord-head arms
   descend transparently under a total collapse; the law generator borrows the base subject's
   equivalents (`ot{0.X}` ≡ `t5{X}`, four families; `ov3`), 168 rows. 670 / 670.
@@ -345,7 +345,7 @@ are in [`../README.md`](../README.md).
   against spec §3.3, Q_U47 and Q_U49. Today splices at depth 1 (Q_U49's decided seat B, 9 pins) and
   wraps at depth ≥ 2 (no decision, 0 pins — a seat-B predicate that only sees sₙ★ right after the
   ordinal). Options S (splice through; what Q_U47/Q_U49 say) and W (always wrap; honest nesting);
-  recommendation S. [D4 Q_U61](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u61).
+  recommendation S. [D4 Q_U61](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u61).
 - **Acceptance §M**: 20 live forms, 3 commented refusals with measured messages; 108 / 108.
 - **Surprise / correction**: the corpus check passes a FILE argument as zero files — re-run on
   directories (+6 ERROR nodes, inside the ratchet). `server.ssl*->port` splits at `>` while
@@ -354,8 +354,8 @@ are in [`../README.md`](../README.md).
 
 ### 1b-vi-E shipped: Q_U61 = S — `67979e59` (decision + design) + `a41f8362` (2026-10-14)
 - **Why / decision**: owner — *"Reading S looks good to me."* An ordinal head passes a keyless star
-  landing through at every depth ([D4 Q_U61](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u61),
-  [1b-vi-E](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-e)).
+  landing through at every depth ([D4 Q_U61](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u61),
+  [1b-vi-E](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-e)).
 - **What shipped**: `select-step-names-no-key?` inside `select-steps-yield-bare-join?`; one
   transparent arm per twin (D-2a's arm and seat B's splice deleted); the dup refusal names S's cost
   and the `^` tuple spelling via a `select-fail` field `ordinal`. Stage E; 187 rows; 694 / 694;
@@ -371,7 +371,7 @@ are in [`../README.md`](../README.md).
 - **Why / decision**: the owner — *"Let's proceed."* — to the verify, the suite gate and the checkpoint merge.
   Four read-only lenses at `64368197` (VT twins, VS silent answers, VM message truth, VI instruments), adjudicated
   on the main thread: 36 raw → 34 survive, 2 killed
-  ([D4 §5.P4e-1b-vi verify](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-verify)). The standing
+  ([D4 §5.P4e-1b-vi verify](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-verify)). The standing
   question ("one seat, not its sibling") answered YES five times.
 - **What shipped**: VF-1 a parser refusal of a total collapse under an ω ancestor (was a whole-file abort;
   DEFERRED 167's waypoint, both collapse families); VF-2 `asort` threaded through five reduction helpers
@@ -420,7 +420,7 @@ are in [`../README.md`](../README.md).
   the five DEFERRED passages saying "until the next checkpoint merge" (167 ×2, 168, 179, 180) and two probe locations
   now cite `83fe4fb4`; the dailies carry the STATE line and a pointer.
 - **Surprise / correction**: none beyond the gate entry's.
-- **Next**: [Q_U62](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) (an ordinal head then a sub-block; lean
+- **Next**: [Q_U62](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u62) (an ordinal head then a sub-block; lean
   S+, medium) — pending, owner. Then the 1b-vi close: the stage table's `pre` column and `1bvi-stage` retire. Then
   P4e-2.
 
@@ -430,7 +430,7 @@ are in [`../README.md`](../README.md).
 - **What shipped**: probe-1bvi-ae (74 lines, nine families: the VS-3 shapes, key-head transparency, star-free ordinal
   sub-blocks, factored vs unfactored, a realistic `fleet` subject, the bare-number control, every star family, the star
   outside the braces, heterogeneous per-element records) and the
-  [Q_U62 ledger entry](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) rewritten around it: five options (B, S+,
+  [Q_U62 ledger entry](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u62) rewritten around it: five options (B, S+,
   S1, F, R), F refuted by measurement (factoring across an ordinal prefix is not a law), S1 and R rejected with reasons.
   Every quoted value checked mechanically against its probe line (39 values, 0 mismatches; three seeded errors caught).
 - **Surprise / correction**: my posing lean (S+, medium; also in the checkpoint entry above) read Q_U47's remainder
@@ -446,7 +446,7 @@ are in [`../README.md`](../README.md).
 ### Q_U62: owner lean B (slight); the joint lean critiqued — B's law measured unconditional, 98/98; decision next — `990fafb7` (2026-10-19)
 - **Why / decision**: the owner (2026-10-19 00:22) — *"I do think B has a slight lean than the S+ reading."* A lean, so
   ledgered OWNER LEAN under critique; it agrees with mine, so the stance is joint and was critiqued as such
-  ([D4 Q_U62 critique](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62-critique), UC-1…9).
+  ([D4 Q_U62 critique](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u62-critique), UC-1…9).
 - **What shipped**: probe-1bvi-af (generated, 102 pairs): `x{0.P.{X}}` ≡ `y{P.{X}}` WRAPPED holds on 98/98 comparable
   pairs — six star families × 15 positions/assignments plus vector contents; 4 pairs refused identically on both sides.
   The step-chain control fails the wrap where S passes, so the comparison discriminates. Under S+ (derived) the same
@@ -461,7 +461,7 @@ are in [`../README.md`](../README.md).
 - **Why / decision**: the owner (2026-10-19 01:11) — *"I'd have to see R worked out alongside B in multiple, clear,
   worked examples to make a weigh-in on either. I don't have an intuition for what R is, otherwise."*
 - **What shipped**: probe-1bvi-ag (80 lines) and the ledger section
-  [R worked out beside B](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62-r): R defined as refusing exactly
+  [R worked out beside B](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u62-r): R defined as refusing exactly
   where B and S+ disagree; eleven refused programs side by side (B's value; R's refusal; B's meaning and S+'s meaning,
   each spelled under R and measured); over R's whole refused population in af's grid the one-component recipe
   `x{N}:{P.{X}}` reproduces B 26/26 and the unfactored chains reproduce S+'s reading 26/26. R's message drafted
@@ -475,8 +475,8 @@ are in [`../README.md`](../README.md).
 - **Why / decision**: the owner (2026-10-19 01:33) — *"On the language design front, I want to balance ergonomics,
   expressivity, composition, and correctness. I think I'm landing B still as well. Happy for a critique or pushback on
   these dimensions and choices, but if B is clear on this, then let's go with that for now."*
-- **What shipped**: [the decision](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62) and its critique
-  ([DC-1…7](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u62-dc)), measured by probe-1bvi-ah: under B the
+- **What shipped**: [the decision](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u62) and its critique
+  ([DC-1…7](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u62-dc)), measured by probe-1bvi-ah: under B the
   SPLICED reading is also factored, `fleet{0.{meta^.id net^.tls}*}` → `{:n 1, :port 443}` ≡ the unfactored chains
   (DC-1: B's rule is one sentence — a star inside the braces lands in the element, a star after them escapes); L★
   (`x{p* q*} ≡ x{p q}*`) holds at key heads and with a kept key but fails across an ordinal head's braces exactly where
@@ -493,7 +493,7 @@ are in [`../README.md`](../README.md).
 ### P4e-1b-vi-F — Q_U62 = B pinned; SB-1 / SB-2's remedies under B — `3fcb720a` (2026-10-19)
 - **Why**: the owner decided B "for now". B was already the code's behaviour, so F makes it a
   contract and corrects the two refusals whose remedies were false or missing under B (UC-7, UC-8, UC-9).
-- **What shipped**: [§1b-vi-F](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-f):
+- **What shipped**: [§1b-vi-F](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-f):
   - 50 `sub-block` laws + 23 hand rows (stage F; size pin 129 / 194, predicted).
   - The dup refusal no longer offers `^` where an element heads several branches. It kept the BRANCHES
     apart: `fleet{0.meta^.id 0.net^.tls 1.meta^.id 1.net^.tls}` → a 4-tuple. It now offers grouping
@@ -516,7 +516,7 @@ are in [`../README.md`](../README.md).
 ### 1b-vi close, item 1: DEFERRED 185 (Q_U46's ordinal-star gap, one text; remedies the branch can spell) + a buried panic — `a9788c0a` · `55b7df16` (2026-10-19)
 - **Why**: the owner approved the close ("Ok to proceed on 1"), in four items: 185; the star family in the grammar
   (144 / 179 / 180); retiring the stage scaffolding; the close note, suite and checkpoint.
-- **What shipped**: [§1b-vi CLOSE](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close):
+- **What shipped**: [§1b-vi CLOSE](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-close):
   - A star right after an ordinal head (`vhm{0*}`, `vhm{0.{0*}}`) now gets Q_U46's refusal from one
     definition shared with typing.
   - The all-ordinal L4 offers each remedy only where every passing head can spell it; otherwise
@@ -536,7 +536,7 @@ are in [`../README.md`](../README.md).
 ### Q_U63 opened: does ravel `.*` add expressivity, or only notation? (PENDING) — docs commit on the branch (2026-10-19)
 - **Why**: the owner — *"On 2. I want to open up whether this syntax/spelling offers any true increase in
   expressivity?"* (2026-10-19). Item 3 (the rest of P4e) is to be walked through together, later.
-- **What**: [Q_U63](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63), probes `research/P4e-2/probe-p4e2-a`
+- **What**: [Q_U63](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u63), probes `research/P4e-2/probe-p4e2-a`
   / `-b`.
   - In the whole language ravel is notation (Felleisen: a fixed context, `concat`).
   - In the selector language it is a real increase, by exactly one primitive: join at the focus = bind with
@@ -556,7 +556,7 @@ are in [`../README.md`](../README.md).
 - **Why**: the owner — *"I think it would do us well to work out these options in worked examples, and consider their
   design tradeoffs against our design principles and expressivity. I'm still not seeing a clear choice among what has
   been considered."*
-- **What**: [Q_U63, worked out](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63-worked) with probe
+- **What**: [Q_U63, worked out](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u63-worked) with probe
   `research/P4e-2/probe-p4e2-c` (29 lines):
   - each intent's value measured through today's nearest spelling;
   - each option's spelling for it;
@@ -574,7 +574,7 @@ are in [`../README.md`](../README.md).
 
 ### Q_U63: OWNER LEAN J ("I'm liking J. It reads well to me."); the joint lean critiqued (JC-1…8), seven sub-decisions surfaced (JD-1…7) — docs commit on the branch (2026-10-19)
 - **Why**: the owner's answer is a lean ("liking"), so it is ledgered as a lean under critique, joint with mine.
-- **What**: [Q_U63 critique](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63-jc), probe
+- **What**: [Q_U63 critique](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u63-jc), probe
   `research/P4e-2/probe-p4e2-d` (16 lines).
   - J's substrate is measured:
     - a broadcast over a Map comes back KEYED (`mh:x` → `{:a 1, :b 2}`), so `m:*` joins exactly as
@@ -595,9 +595,9 @@ are in [`../README.md`](../README.md).
 ### Q_U63 DECIDED J (ravel is `x:*`) and JD-1…7 decided at their leans, as a batch — docs commit on the branch (2026-11-02)
 - **Why / decision**: the owner (2026-11-02 12:06) — *"OK to take the leans in a batch. Let's proceed accordingly."* —
   after the 2026-10-19 lean ("I'm liking J. It reads well to me.").
-- **What**: [Q_U63](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63) is marked DECIDED with the decision stated;
+- **What**: [Q_U63](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u63) is marked DECIDED with the decision stated;
   the JD header is DECIDED.
-  - [Q_U26](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u26) gets a "spelling superseded" callout; its
+  - [Q_U26](2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u26) gets a "spelling superseded" callout; its
     meaning stands.
   - Q_U40's unmeasured `vv:{0 1}*` → `⟨1 2 3 4⟩` line is struck with a correction callout (RV-1).
   - The P4e tracker row and §5.P4e's ravel bullet name `x:*`.
@@ -611,7 +611,7 @@ are in [`../README.md`](../README.md).
 - **Next**: 1b-vi close item 2, the star family in the tree-sitter grammar (DEFERRED 144, with 179 and 180).
 
 ### 1b-vi close item 2 — the star family in the editor grammar (DEFERRED 144), with 179 and 180 — `04e3c5c5` (2026-11-02)
-- **What**: [§ close-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-2).
+- **What**: [§ close-2](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-close-2).
   - **144**: `flatten_step` reads `*`, `*_`, `*-` and `*-_` as one token, `token.immediate(prec(1, /\*[-_]*/))`.
     Before, the closer seat parsed `cfg{db}*_` as an application to `_`, an error-free wrong tree. The
     `prec` is load-bearing: corpus test 54 broke without it.
@@ -640,13 +640,13 @@ are in [`../README.md`](../README.md).
   the corpus budget is raised 71 → 75, naming DEFERRED 205 (`a7dcde7d`; the gate PASSes), and item 3 proceeds.
   Item 3 was approved with the close ("Ok to proceed on 1"; the "walk through together" was about the later P4e
   items, re-read from the 10-19 exchange).
-- **What**: [§ close-3](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-close-3).
+- **What**: [§ close-3](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-close-3).
   - Retired: the stage constant, FLIPS-AT and PRE (rows are `(ID SPELLING EXPECT)`), the pre-mint classes, and C's
     injection batch.
   - The parity pin is now the law `parse(*-) ≡ totalize(parse(*))` over every total-star row the parser reads as
     a selection: 81 → 113 rows, size-pinned. It held on all 32 new rows at once.
   - The remedy check covers every refused row that offers remedies.
-  - Plus [§ what 1b-vi shipped](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-vi-shipped), the close note (item 4's first part).
+  - Plus [§ what 1b-vi shipped](phases/CIU_6_P4e-1b-vi.md#p4e-1b-vi-shipped), the close note (item 4's first part).
 - **Evidence**:
   - Equivalence by mechanical dump: 346 / 346 rows identical, and the old domain ⊆ the new one
     (`research/P4e-1b-vi/close/retire-*`).
@@ -696,7 +696,7 @@ are in [`../README.md`](../README.md).
 
 ### P4e-2 OPENED — ravel `x:*` (Q_U63 = J): design target, mini-audit RA-1…13, the sub-slice plan; one scope question to the owner — `5876569b` (2026-11-03)
 - **What**: per the Implementation Protocol's per-phase steps 1–2, the mini-design and the mini-audit are written into D4
-  [§5.P4e-2](2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-2), not into a separate audit file (the protocol: "Not in
+  [§5.P4e-2](phases/CIU_6_P4e-2.md#p4e-2), not into a separate audit file (the protocol: "Not in
   dailies, not in separate per-phase audit files"; the 1b-vi audit file predates my reading of that line). Probes at
   `5876569b`: `probe-p4e2-e` (60 results), `reader-dump` (68 spellings), `inject` (IR injection), `census-p4e2` (power-checked).
 - **Why it is small**: J needs no new rule. The keyed twin `values:k*` already carries every continuation J needs (RA-2). The

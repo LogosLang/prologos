@@ -1,9 +1,9 @@
 # CIU 6 — P4e-1b-vi grounding audit (the star-collapse slice)
 
-**Serves**: D4 [§5.P4e-1b-sequencing](../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b-sequencing),
+**Serves**: D4 [§5.P4e-1b-sequencing](../phases/CIU_6_P4e-1b-iii-iv.md#p4e-1b-sequencing),
 row *1b-vi — the star-COLLAPSE slice*; opens the decisions
-[Q_U52](../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u52) §1–2 named, now ledgered as
-[Q_U55](../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u55) (pending) and two to follow.
+[Q_U52](../2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u52) §1–2 named, now ledgered as
+[Q_U55](../2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u55) (pending) and two to follow.
 **Written at** `01ef2542` (branch `ciu6-path-selection` = `main`; no CIU code changes since `a492bbb7`).
 Racket 9.3, built with `PLT_CS_COMPILE_LIMIT=1000000`. Probes: [`research/P4e-1b-vi/`](../research/P4e-1b-vi/)
 (`probe-1bvi-{a…f}.prologos`, each with its `.out`), run one file per process with

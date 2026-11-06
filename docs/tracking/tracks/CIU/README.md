@@ -13,7 +13,9 @@ second master; its status column copies the master's tracker and defers to it an
 **Naming**:
 - directories are `CIU_<N>/`;
 - the track log is `CIU_<N>_LOG.md` (the 2026-10-15 convention: never a bare `LOG.md`);
-- new files are `YYYY-MM-DD_CIU_<N>_<KIND>.md`;
+- new files are `YYYY-MM-DD_CIU_<N>_<KIND>.md`; a design's per-phase records are `phases/CIU_<N>_<PHASE>.md`, with no
+  date, so they list in phase order (each carries its dates inside); D4's ledger and grammar keep D4's date, so the
+  parts list beside it;
 - moved files keep their basenames, so a basename cited in a commit message, a code comment or an old dailies still
   finds the file. Three spellings of the track therefore occur in these directories (`CIU_6`, `CIU_T6`,
   `CIU_TRACK6`); search with `CIU_(T|TRACK)?6`.
@@ -25,8 +27,8 @@ second master; its status column copies the master's tracker and defers to it an
 to keep the design document itself more tight and allow other supplementary documents to co-habitate in the directory
 and simply be linked in rather than create so much noise." A design document keeps the design: the target, the
 decisions, the plan and the tracker. Audits, per-slice records, probes and deliberations are their own documents
-here, linked from it. CIU 6's D4 predates this and is 13 082 lines; its decomposition is proposed in
-[`CIU_6/CIU_6_LOG.md`](CIU_6/CIU_6_LOG.md) § *The CIU series moves into `tracks/CIU/`* and is not yet applied.
+here, linked from it. CIU 6's D4 predated this at 13 082 lines; it was split on 2026-11-06 into a spine of about 400 lines plus its
+parts (the ledger, the grammar, one record per phase), as the first application.
 
 ## Series-level documents
 
@@ -53,7 +55,8 @@ here, linked from it. CIU 6's D4 predates this and is 13 082 lines; its decompos
 
 | Document | Role |
 |---|---|
-| [`CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md`](CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md) | **D4, the live implementation design**: the Progress Tracker, §3 decision ledger (Q_L…Q_U63), §5 per-phase records. Link by anchor (`#q-u63`, `#p4e-2`), never by line |
+| [`CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md`](CIU_6/2026-07-28_CIU_T6_PATH_SELECTION_D4.md) | **D4, the live implementation design**: since the 2026-11-06 split, the spine (Progress Tracker, §1–§2, §4, §6–§10, an index of its parts, and §11, the map from every pre-split D4 line to its new home) |
+| [`CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md`](CIU_6/2026-07-28_CIU_6_D4_DECISION_LEDGER.md) · [`CIU_6/2026-07-28_CIU_6_D4_LEXICAL_GRAMMAR.md`](CIU_6/2026-07-28_CIU_6_D4_LEXICAL_GRAMMAR.md) · [`CIU_6/phases/`](CIU_6/phases/) | D4's parts: §3 the decision ledger (Q_L…Q_U63); §Q8 the lexical grammar (normative); §5 one record per phase. Link by anchor (`#q-u63`, `#p4e-2`): every anchor kept its id, and the spine keeps a stub for each |
 | [`CIU_6/2026-07-28_path-selection-spec.md`](CIU_6/2026-07-28_path-selection-spec.md) | The normative surface: a guide, not a prescription |
 | [`CIU_6/CIU_6_LOG.md`](CIU_6/CIU_6_LOG.md) | The track journal from 2026-10-13 on; before that, the dailies `../../standups/2026-07-05 … 2026-09-08_dailies.md` (STATE of record at resume: `2026-09-08_dailies.md`) |
 | [`CIU_6/2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md`](CIU_6/2026-07-05_PATH_SELECTION_RECORDS_DESIGN.md) | The track doc: decisions D1–D29 (§2a rounds 1–7) |

@@ -1,7 +1,7 @@
 # CIU 6 — P4e-2 grounding audit (ravel `x:*`, Q_U63 = J)
 
-**Serves**: D4 [§5.P4e-2](../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-2), the design target and plan of the slice that builds ravel as `x:*`
-([Q_U63](../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u63) = J). The decisions these findings led to are recorded there, each citing its RA-n; this
+**Serves**: D4 [§5.P4e-2](../phases/CIU_6_P4e-2.md#p4e-2), the design target and plan of the slice that builds ravel as `x:*`
+([Q_U63](../2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u63) = J). The decisions these findings led to are recorded there, each citing its RA-n; this
 document holds the evidence (owner, 2026-11-03: "Audit findings can be their own thing and not cloud-up the design doc
 (but cross-reference)"; `principles/DESIGN_METHODOLOGY.org` Per-Phase Protocol step 2 as revised that day).
 **Written at** `bd2e48ff` (branch `ciu6-path-selection`, = the 1b-vi checkpoint `d2ad3dad` on main + docs). Racket
@@ -71,7 +71,7 @@ J needs no new rule, and the slice is smaller than the record implied:
   for every spelling P4e-2 touches. The 54 distinct test lines any pattern hits are classified mechanically: Racket regexes
   (`#rx".*"`, 21), comments (8) and a test name (1) are look-alikes; 6 are the `#p(a.*)` / `#p(a.**)` path-literal pins
   (PF's form) and 18 are `selection` declarations (JD-7, untouched). **The expression-position class is 0: no pin flips.** So the "17 lines … the bulk of what a retirement must move" of
-  [§5.P4e-1b](../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-1b) (the `test-selection-paths.rkt` count) is, under JD-7, nothing to move. foray's `.*` "splat" is one
+  [§5.P4e-1b](../phases/CIU_6_P4e-1.md#p4e-1b) (the `test-selection-paths.rkt` count) is, under JD-7, nothing to move. foray's `.*` "splat" is one
   comment (line 687 of the WIP copy): no collision.
 - **RA-5 — the `.**` message offers `xs:*` already, by accident.** `values.**` → "broadcast `.**` was retired — its
   replacement is `:*` (e.g. `xs:*`)" (e:23). It is the `.*NAME` → `:NAME` template (`parser.rkt:979`, since `25f3f22d`,
@@ -80,19 +80,19 @@ J needs no new rule, and the slice is smaller than the record implied:
 - **RA-6 — block position has two shapes.** `rec{k:*}` and `y{a.0:*}` both read `($select … : *)` and both get "block keys
   are written bare — `x{}`, not `x{:}`" (e:25, e:26; `parser.rkt:2062`). JD-3's waypoint covers both, naming `rec.k:*` and
   `y.a.0:*`.
-- **RA-7 — DEFERRED 185's reader seats split in two, and one of them is a CORRECTION.** By [Q_U46](../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u46)'s rule ("the star
+- **RA-7 — DEFERRED 185's reader seats split in two, and one of them is a CORRECTION.** By [Q_U46](../2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u46)'s rule ("the star
   deletes the layer **sₙ** contributed"):
   - `t3.0*`, `y.a.0*`, `y{a.0*}` star an ordinal **step**, which contributes no layer → Q_U46's ordinal-star refusal, the
     text the block band already gives (`values{0*}`, e:58), with the remedy `x.N:*` once J runs. Today: Unbound variable
     (e:27, e:28), "stray `.`" (e:29).
-  - `t3:0*` stars a **broadcast**, which does contribute a layer → by Q_U46 + [Q_U27](../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#q-u27) it has a meaning: the join of
+  - `t3:0*` stars a **broadcast**, which does contribute a layer → by Q_U46 + [Q_U27](../2026-07-28_CIU_6_D4_DECISION_LEDGER.md#q-u27) it has a meaning: the join of
     each element's element 0, the ordinal-sort sibling of `values:k*`. Measured: the twins already compute it —
     `(@bcast 0) (@star flatten)` injected → `@[1 2 4] : [PVec Int]` (inject:4) = `t3:0{0 1}*` (e:36). Only the reader
     cannot spell it (e:30, Unbound variable).
   - ⚠ **Correction:** DEFERRED 185's 1b-vi-close addendum listed `vv:0*` among the spellings that "missed" Q_U46's
     refusal. That classification was wrong; `vv:0*` is a missing spelling of a meaning already built. (Addendum on main.)
 - **RA-8 — DEFERRED 105's verdict, re-derived at HEAD.** 105 (⛔, 2026-08-10) blocked `x.0*` / `xs:0*` on the star's datum
-  representation: "the star has nowhere to live in an ordinal payload" ([§5.P4e-0](../2026-07-28_CIU_T6_PATH_SELECTION_D4.md#p4e-0) attempt 3). Two later facts move it:
+  representation: "the star has nowhere to live in an ordinal payload" ([§5.P4e-0](../phases/CIU_6_P4e-0.md#p4e-0) attempt 3). Two later facts move it:
   `x.0*` now wants a REFUSAL (Q_U46, 2026-08-12), so a reader marker that collapses to one loud item suffices and no star
   representation is needed; `xs:0*`'s star would ride the broadcast's KEYWORD payload, as `:k*`'s does (`:k*` fuses into one
   symbol — the count-preserving shape), not `$postfix-index`'s numeric one. **Conjecture until built:** both seats are
