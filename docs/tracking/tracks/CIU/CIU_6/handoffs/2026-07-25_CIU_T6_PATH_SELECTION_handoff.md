@@ -37,7 +37,7 @@ design conversation**. Per `HANDOFF_PROTOCOL.org`. **ON-DISK IS AUTHORITATIVE.**
   (214 lines) — **§2 owner vision V1–V5 · §2a locked decisions D1–D29 across 7
   rounds · §2a "OPEN — Path Selection unified surface" ← THE SUBJECT ·
   §5 open questions 3/4/5/6/8 · §6 proposed approach**.
-- **Series master**: `docs/tracking/2026-03-28_CIU_MASTER.md` (see
+- **Series master**: `docs/tracking/tracks/CIU/2026-03-21_CIU_MASTER.md` (see
   `MASTER_ROADMAP.org` line ~146 for the Track 6 status paragraph).
 
 ### NEXT IMMEDIATE TASK
