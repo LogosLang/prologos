@@ -9446,7 +9446,8 @@ refusal there. When the contents are vectors, the join is a concatenation, which
 computes it in canonical key order (Q_U44). So for that population the refusal is conservative and its stated reason is
 false.
 
-**Decided (owner, 2026-11-06): A** — "I'm good with your leans above." A genuine-`Map` layer whose value type is
+**Decided (owner, 2026-11-10): A** — "I'm good with your leans above." (First written as 2026-11-06, the day the
+question was posed; the answer is dated 2026-11-10 22:32. Corrected 2026-11-10.) A genuine-`Map` layer whose value type is
 `[PVec T]` joins, to `[PVec T]`, in canonical key order, for `*` and `*-`. Record values keep `star-map-opaque`, and `*_`
 keeps today's refusal (vector contents have no fields to prefix, as over a closed row of vectors). The other options
 weighed: B, keep refusing with a true reason; C, defer with today's message.
