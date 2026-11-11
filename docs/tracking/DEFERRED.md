@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 206**
+> ### **NEXT FREE: 207**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -9430,5 +9430,27 @@ the recipe for a contested shape), or land the rule together with a `foray.prolo
 owner's call, since the file is his work in progress on main. Then lower `max_missing` again.
 
 **When**: CIU 6 X.close at the latest. That is the closing-phase grammar obligation for P3c's syntax.
+
+**Owner**: CIU 6.
+
+### 206. ⬜ A GENUINE-`Map` LAYER OF VECTORS REFUSES TO JOIN, FOR A REASON THAT HOLDS ONLY FOR KEYWISE JOINS — `wg{g*}` over `{:g [Map Keyword [PVec Int]]}` says "a key collision there can be neither proven nor ruled out", and from P4e-2-C `gmv:*` says the same
+
+**Found by** CIU 6 P4e-2-B, finding EB-10 ([the B audit](tracks/CIU/CIU_6/audits/2026-11-06_CIU_6_P4e-2-B_GROUNDING_AUDIT.md),
+2026-11-06). Measured: `docs/tracking/tracks/CIU/CIU_6/research/P4e-2/probe-p4e2-eps.out`, result 23, at `537e4605`.
+The ravel spelling through ε is pinned as the stage-table row `B-rv-gmap`.
+
+**The gap.** The Map-layer arm of `star-join-type` (`typing-core.rkt`, kind `star-map-opaque`, 1b-iv-B2) refuses every
+genuine-`Map` layer. Its reason is that a `[Map K V]` has no static key set, so a keywise join's collisions can be
+neither proven nor ruled out. That is right when the contents are records (a keywise join), and it stays a permanent
+refusal there. When the contents are vectors, the join is a concatenation, which cannot collide, and reduction already
+computes it in canonical key order (Q_U44). So for that population the refusal is conservative and its stated reason is
+false.
+
+**Decided (owner, 2026-11-06): A** — "I'm good with your leans above." A genuine-`Map` layer whose value type is
+`[PVec T]` joins, to `[PVec T]`, in canonical key order, for `*` and `*-`. Record values keep `star-map-opaque`, and `*_`
+keeps today's refusal (vector contents have no fields to prefix, as over a closed row of vectors). The other options
+weighed: B, keep refusing with a true reason; C, defer with today's message.
+
+**When**: CIU 6 P4e-2, after C (its own commit). `B-rv-gmap` flips there.
 
 **Owner**: CIU 6.
