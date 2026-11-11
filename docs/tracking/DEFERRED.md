@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 207**
+> ### **NEXT FREE: 209**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -9454,3 +9454,61 @@ weighed: B, keep refusing with a true reason; C, defer with today's message.
 **When**: CIU 6 P4e-2, after C (its own commit). `B-rv-gmap` flips there.
 
 **Owner**: CIU 6.
+
+### 207. ⬜ A BUNDLE BODY READS A BROADCAST STEP AS A TYPE PARAMETER — `bundle B := (Eq:k)` (and, since CIU 6 P4e-2-C, `(Eq:*)`) defines a bundle with an invented parameter `(A :k)`, and every use is refused with "expects 2 type params"
+
+**Found by** CIU 6 P4e-2-C, finding EC-8 (`tracks/CIU/CIU_6/audits/2026-11-10_CIU_6_P4e-2-C_GROUNDING_AUDIT.md`,
+2026-11-10), probing every position where the `:*` mint changes a datum's item count (RA-9).
+
+**Measured** (`tracks/CIU/CIU_6/research/P4e-2/C/probe-c-bundle.prologos`, at branch `4cbc4971`): result 0, the use of
+`bundle Bk := (Eq:k)`, is "bundle Bk expects 2 type params ((A :k)), got 1 ((A))"; result 3, the use of
+`bundle Bj := (Eq:*)`, is the same with `(A :*)`. A well-formed `bundle Bok := (Eq)` works (result 5). Before C,
+`(Eq:k)` behaved the same, and `(Eq:*)` failed at its use with "defn requires …" (`probe-c-bundle.base.out`:3).
+
+**The gap.** In a bundle body the reader's broadcast datum `(Eq ($bcast-step :k))` reaches the bundle expander
+(`expand-one-constraint`, `macros.rkt:8726`; the error at `:8742`, both on main), which reads the step as a second
+parameter. Nothing wrong runs, since every use is refused, but the message blames the USE and names a parameter
+`(A :k)` the user never wrote, while the defect is in the BODY.
+
+**Fix shape (not decided).** Refuse a select step in a bundle constraint at the bundle definition, with a message that
+names the body: a constraint is a trait applied to type arguments, and a path step has no meaning there.
+
+**When**: whichever track owns the bundle surface (the owner's call). Not CIU 6: P4e-2-C only adds `:*` to a family
+`:k` already had.
+
+**Owner**: unassigned.
+
+### 208. ⬜ A LAYOUT LIST SILENTLY DROPS ITEMS — a multi-line `@[…]` inside a non-last `- ` item drops every later item, and as an item's first key it collapses the list into one record; the program typechecks over the truncated data
+
+**Found by** CIU 6 P4e-2-C, finding EC-14 (`tracks/CIU/CIU_6/audits/2026-11-10_CIU_6_P4e-2-C_GROUNDING_AUDIT.md`,
+2026-11-10), writing the acceptance file's bind-law example on that file's own `build` fixture. `build.modules` holds
+one module where the source declares two (`tracks/CIU/CIU_6/research/P4e-2/C/probe-c-build.out`:1), so
+`build.modules:diags*:msg` gives 2 messages where the file's spec-corpus comment
+(`racket/prologos/examples/2026-07-26-ciu-t6-path-selection.prologos:354`) expects 3. The same before C
+(`probe-c-build.base.out`:1, at `1aa2cf50`).
+
+**Minimal repro** (`tracks/CIU/CIU_6/research/P4e-2/C/probe-c-layout.prologos`, `.out`, at `4cbc4971`):
+```
+def lb
+  :mods
+    - :name "core"
+      :ds @[1
+            2]
+    - :name "cli"
+      :ds @[3]
+lb.mods    ;; @[{:name "core", :ds @[1 2]}] : [PVec {:ds [PVec Int] :name String}]  — "cli" is gone
+```
+- `la`, the same with every `@[…]` on one line: both items (result 1).
+- `lc`, the multi-line `@[…]` in the LAST item: both items (result 5).
+- `ld`, the multi-line `@[…]` as an item's FIRST key: `ld : {:mods {:name String}}` (result 6). The list and `:ds`
+  are both gone, and the type changes with them.
+
+**Related**: the issue #80 section of this file ("🐛 DEFECT — `def X :=` + multi-key layout body fails"), whose
+trigger is "≥2 dash items with a multi-line `@[…]`". It is the same trigger family; there it fails loudly with `:=`,
+and here, without `:=`, it is silent.
+
+**Severity**: silent wrong data. The program typechecks and computes over the truncated list.
+
+**When**: whichever track owns the WS layout reader (the owner's call). Not CIU 6.
+
+**Owner**: unassigned.
