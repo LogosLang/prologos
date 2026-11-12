@@ -7105,6 +7105,15 @@ So no route answers TC over a chain of 100 or more edges. Part (a) of this entry
 error) would at least keep the rest of the file. The semi-naive route REL 2's Stage-1 survey proposes (synthesis SV-2)
 was measured on the propagator network in `docs/tracking/tracks/REL/REL_2/research/counters/tc-delta-carrier.out` (L up to 1000, correct closure).
 
+**Addendum 2026-11-12 (BSP-LE 3 checkpoint 2, owner decision BL-3; on branch `bsple3-tabling`, `7c4ad9d9`; not yet on
+main).** One more shape reaches this abort under the default: a recursive relation with a `not` and NO body-local
+variable. Check 3 does not catch it, Check 1 used to send it to ATMS, and Check 1 is now suspended.
+`docs/tracking/tracks/BSP-LE/BSP-LE_3/research/decisions/bl3/bl3-leftrec.prologos`: the default answered
+`@[{:x 1} {:x 1}]` (through ATMS; the doubled row is DEFERRED 177's) and now aborts with `solve: Depth limit
+exceeded (100)`, as the DFS leg always did. The decision accepted this until BSP-LE 3 Stage B's tabling. No in-repo
+program has the shape: over 44 files, 19 queries moved off the network and none aborted
+(`docs/tracking/tracks/BSP-LE/BSP-LE_3/research/checkpoint2/inrepo-effect.out`). `parity-adversarial` aborts at the same command as before.
+
 ### 154. ⬜ THE DETERMINISTIC COUNTERS ARE BLIND TO PROPAGATOR WORK UNDER THE PRODUCTION SCHEDULER — `prop_firings` counts only the sequential drain (`propagator.rkt:2758`), and `perf-inc-prop-alloc!` is NEVER CALLED (`prop_allocs` ≡ 0)
 
 `solve-adversarial` under BSP: `cell_allocs` 4 079, `prop_firings` 0, `prop_allocs` 0. The
@@ -8355,6 +8364,22 @@ By reading: `naf-per-binding-mask` declines when the generator count is not 1 (`
 the fallback is wrong. `:auto` takes ATMS because the relation's clause carries a `not`. One corpus rule has this shape,
 `racket/prologos/examples/2026-03-18-track7-acceptance.prologos:536`, and its query is commented out (`:540`).
 
+**Addendum 2026-11-12 (BSP-LE 3 checkpoint 2; on branch `bsple3-tabling`, `160114c9`; not yet on main).** Where this
+defect shows has changed in two ways.
+- **Under the default, less.** `:auto`'s Check 1 is suspended (owner decision BL-3), so a `not` no longer sends a plain
+  `solve` to ATMS. Over every in-repo program with a query form (44 files), the default leg differs from the DFS leg
+  on 1 result line, where it differed on 6. The one left is `reach-bigc256`, which Check 2 routes
+  (`docs/tracking/tracks/BSP-LE/BSP-LE_3/research/checkpoint2/inrepo-effect.out`). The generated workloads were not re-run; in Stage 1, all 337 of their wrong `:auto`
+  answers were on Check-1 routes.
+- **On the forced leg, more.** A repeated variable over a facts-only relation used to take the fast path on every
+  leg, which hid it from the DFS-against-ATMS differential. The fast path now declines it (DEFERRED 187), and forced
+  ATMS answers wrongly: `@[{:a 2}]` for `(e2 ?a ?a)` over the single fact `(2, 3)`, and doubled rows for
+  `(e2d ?a ?a)` (`docs/tracking/tracks/BSP-LE/BSP-LE_3/research/checkpoint2/after/bl2-fixtures.atms.out`, result lines 9–12). These rows join Stage A's gate.
+- **Still wrong under the default**: whatever Check 2 routes. A repeated variable over 260 facts returns all 260 rows
+  (ledger BL-9, pending).
+
+Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-11-12_BSP-LE_3_CHECKPOINT_2.md` §4 (on branch `bsple3-tabling`, `0572601e`).
+
 ### 178. ⬜ BSP'S TIER-1 FLUSH RETURNS A NETWORK THAT IS NOT A FIXPOINT — it fires the fire-once, empty-input propagators, then clears the whole worklist, discarding the dependents its own writes enqueued (`propagator.rkt:3431-3445`)
 
 **Found by** PAR 4's D.3 round: critics C2 (reality check) and C5 (theory), independently. Reproduced by hand on
@@ -8764,7 +8789,7 @@ So the hazard is not specific to that fixture: any second `process-file` in a pr
 are re-bound per run. "Resolve no trait instance" above is the safe reading, not a measured boundary.
 
 
-### 187. ⬜ THE DIRECT-FACT FAST PATH IGNORES A REPEATED QUERY VARIABLE, UNDER EVERY STRATEGY — `solve (e2 ?a ?a)` over the single fact `(2, 3)` answers `@[{:a 3, :a 3}]` instead of `@[]`; `(e3 ?a ?b ?a)` returns both `(1 2 1)` and `(1 2 3)`
+### 187. 🟡 **MITIGATED `7c4ad9d9`** (branch `bsple3-tabling`; not yet on main) — OPEN: at 256 or more facts a declined goal reaches ATMS through Check 2 (BL-9) — THE DIRECT-FACT FAST PATH IGNORES A REPEATED QUERY VARIABLE, UNDER EVERY STRATEGY — `solve (e2 ?a ?a)` over the single fact `(2, 3)` answers `@[{:a 3, :a 3}]` instead of `@[]`; `(e3 ?a ?b ?a)` returns both `(1 2 1)` and `(1 2 3)`
 
 **Found by** BSP-LE 3's Stage-1 differential: the generated workload, program census-f2 `p27`, in all four of its
 metamorphic variants. Reproduced by hand at `2d04ae79` with `tier1-repeat.prologos`, in `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage1/` `w2-known/` (on branch
@@ -8817,7 +8842,25 @@ the owner places it there. The differential then gains a fast-path leg against t
   ledger BL-2 §8). The fix lands at BSP-LE 3 checkpoint 2, behind a named read-surface seam that owner guidance G-5
   (one lookup mechanism for facts, tables and schema'd records; Rel Track 2's seed) later replaces.
 
-### 188. ⬜ A REPEATED QUERY VARIABLE PRINTS TWICE IN EVERY ANSWER — `solve-with dfs-s (q ?a ?a)` prints `@[{:a 2, :a 2}]`, on the direct-fact fast path, DFS and ATMS alike
+**Addendum 2026-11-12 (BSP-LE 3 checkpoint 2; the fix is on branch `bsple3-tabling`, `7c4ad9d9`; not yet on main).**
+The fast path now declines a goal that repeats a query variable, and the dispatch answers it. Measured after
+(`docs/tracking/tracks/BSP-LE/BSP-LE_3/research/checkpoint2/after/bl2-fixtures.dfs.out`, result lines 9–12 and 19): `@[]`, `@[{:a 2}]`, `@[{:a 1, :b 2}]`, `@[]`, and
+`solve-one` gives `{:a 2}`. The default leg agrees. Pins: `racket/prologos/tests/test-solver-boundary.rkt` R1–R4, E3
+and U2, with R9 and R10 for anonymous variables (two `_` in one goal are not a repeat, and stay on the fast path).
+
+**Open**, which is why this is MITIGATED and not discharged:
+1. **At 256 or more facts a declined goal is still answered wrongly.** There the dispatch is Check 2, which routes to
+   ATMS, and ATMS is wrong on a repeat (DEFERRED 177). `solve (big ?a ?a)` returns all 260 rows of a 260-row table and
+   all 2 000 of a 2 000-row one; the reference returns 2 (`docs/tracking/tracks/BSP-LE/BSP-LE_3/research/checkpoint2/after/cp2-bigrepeat.auto.out` and
+   `cp2-bigrepeat-2000.auto.out`, result line 6). It was wrong before the fix as well, through the fast path. Owner
+   decision BL-9, pending: leave it until Stage A, or send a declined goal to DFS. **When**: BL-9's answer.
+2. Forced `:strategy atms` is wrong on every repeat, and now visibly (the atms leg, result lines 9–12): DEFERRED 177,
+   Stage A.
+3. The fast path is still a private stand-in for owner guidance G-5's lookup layer (REL 2).
+
+Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-11-12_BSP-LE_3_CHECKPOINT_2.md` §4.1 (on branch `bsple3-tabling`, `0572601e`).
+
+### 188. ✅ **DISCHARGED `7c4ad9d9`** (branch `bsple3-tabling`; not yet on main) — A REPEATED QUERY VARIABLE PRINTS TWICE IN EVERY ANSWER — `solve-with dfs-s (q ?a ?a)` prints `@[{:a 2, :a 2}]`, on the direct-fact fast path, DFS and ATMS alike
 
 **Found by** the controls for 187 (`dupkey-control.prologos`, `w2/dupkey-control.auto.out` in `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage1/`, `0b303034`, on
 branch `bsple3-tabling`). A clause relation `q` over the facts `(2, 3)` and `(2, 2)` prints:
@@ -8856,6 +8899,13 @@ that, measure `champ-insert` on two equal fresh keys.
 - **Decision BL-2 (owner, 2026-10-19): narrow, now; retirement is a design item after Stage A** (`7e3163ee`,
   ledger BL-2 §8). The fix lands at BSP-LE 3 checkpoint 2, behind a named read-surface seam that owner guidance G-5
   (one lookup mechanism for facts, tables and schema'd records; Rel Track 2's seed) later replaces.
+
+**Addendum 2026-11-12 (BSP-LE 3 checkpoint 2; fixed on branch `bsple3-tabling`, `7c4ad9d9`; not yet on main).**
+`row-query-vars` drops repeats and keeps the first occurrence (`racket/prologos/reduction.rkt:282-286` on the branch).
+The doubled key is gone on the dfs, atms and default legs: 7 result lines on each before, 0 after
+(`docs/tracking/tracks/BSP-LE/BSP-LE_3/research/checkpoint2/after/bl2-fixtures.{dfs,atms,auto}.out`). Pin: E1, where the echo prints the key once and agrees with the
+static row type. `driver.rkt` is untouched. All eight consumers of the list iterate it to build keys; none zips it
+against a positional list. Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-11-12_BSP-LE_3_CHECKPOINT_2.md` §3.2 (on branch `bsple3-tabling`, `0572601e`).
 
 ### 189. ⬜ A PRELUDE MODULE THAT FAILS TO LOAD IS DROPPED IN SILENCE — a user file then elaborates without it, and the only symptom is a later `Unbound variable` or `No instance`
 
@@ -8936,7 +8986,14 @@ part of owner decision BL-4.
 
 **Owner**: PAR 4 (`propagator.rkt`), with BSP-LE 3 (the solver's refusal waypoint).
 
-### 191. ⬜ A BOOLEAN `false` ANSWER PRINTS AS `none`, UNDER EVERY STRATEGY — `defr flag [?b] || true false` then `solve (flag ?b)` prints `@[{:b true} {:b none}] : [PVec {:b Bool}]`
+**Addendum 2026-11-12 (BSP-LE 3 checkpoint 2, owner decision BL-3; on branch `bsple3-tabling`, `7c4ad9d9`; not yet on
+main).** This defect's `:auto` exposure is closed on the branch. `:auto`'s Check 1 is suspended, so a query whose only
+reason for ATMS was a `not` runs on DFS, under `:execution :sequential` as well. Pins S1 and S2
+(`racket/prologos/tests/test-solver-boundary.rkt`) give the reference rows, `@[]` and `{:x 2} {:x 3}`. **The defect
+itself is unchanged**: forced `:strategy atms` with `:execution :sequential` still ignores `not`. By reading, a
+relation of 256 or more alternatives still reaches it under `:auto`, through Check 2.
+
+### 191. ✅ **DISCHARGED `7c4ad9d9`** (branch `bsple3-tabling`; not yet on main) — A BOOLEAN `false` ANSWER PRINTS AS `none`, UNDER EVERY STRATEGY — `defr flag [?b] || true false` then `solve (flag ?b)` prints `@[{:b true} {:b none}] : [PVec {:b Bool}]`
 
 **Found by** BSP-LE 3's Stage-2 census (ANSWERS_CORPUS, probe 4 row f0). Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/audits/2026-10-19_BSP-LE_3_STAGE2_AUDIT.md` SG-8. Output:
 `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/stage2/answers/p4-variants.{dfs,atms,auto}.out`, line 8, identical on
@@ -8979,6 +9036,15 @@ fast-path `solve` result kept with `def`, then filtered on its Bool column, prin
 0 errors, on 4 of 10 queries: every query that tests the flag, `true` included (`docs/tracking/tracks/REL/REL_2/research/iso/iso.out` lines 259–268, class
 `STUCK`; (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)). **Control**: the same table kept from a `solve` through the strategy dispatch (form `pvd`) agrees with
 the oracle on all 10 (lines 269–278).
+
+**Addendum 2026-11-12 (BSP-LE 3 checkpoint 2; fixed on branch `bsple3-tabling`, `7c4ad9d9`; not yet on main).** Two
+changes, one at each end. The fast path binds the fact's own term and normalizes only to compare
+(`racket/prologos/relations.rkt:3061` on the branch). The reader of answer values marks "no binding" with a value no
+answer can hold, never `#f` (`racket/prologos/reduction.rkt:288-295`). `false` prints `false` on the dfs, atms and
+default legs: the four `none` lines (result lines 23, 26, 27, 31 of `docs/tracking/tracks/BSP-LE/BSP-LE_3/research/checkpoint2/after/bl2-fixtures.*.out`) are gone. Pins:
+F1, F4, F5, F8 (the VALUE, not only its echo), F9 and U3. **Not re-run**: REL 2's iso family from the addendum above.
+Its `STUCK` class should clear, since the kept value is now `false`; that is a prediction. Record: `docs/tracking/tracks/BSP-LE/BSP-LE_3/2026-11-12_BSP-LE_3_CHECKPOINT_2.md` §3.2 (on
+branch `bsple3-tabling`, `0572601e`).
 
 ### 192. ⬜ A NON-GROUND TERM IN A `||` FACT ROW IS ACCEPTED SILENTLY, AND ITS COLUMN PRINTS `unknown` — `defr n2 [?x ?y] || 1 ?y` then `solve (n2 ?a ?b)` prints `@[{:a 1, :b unknown} {:a 2, :b 3}] : [PVec {:a Int :b Int}]`, and `solve (n2 1 5)` prints `@[]`
 
@@ -9036,6 +9102,16 @@ into one. A `||` row is the one position where that change is silent:
 
 This entry's fix (refuse a non-ground term at registration) covers J's term and the keyed twin's alike. CIU 6 adds no
 hazard class here and needs nothing new from this entry.
+
+**Addendum 2026-11-12 (BSP-LE 3 checkpoint 2; observed, not investigated).** Two compound values in `||` rows behave
+like this entry's non-ground term, on the fast path and through the dispatch alike, before and after the checkpoint
+(`docs/tracking/tracks/BSP-LE/BSP-LE_3/research/checkpoint2/after/cp2-kinds.auto.out`, result lines 42–43 and 50–51):
+- a row `[some 1] 1` prints its column as `[?some 1]`, and selecting on it, `(k-opt [some 2] ?n)`, answers `@[]`;
+- a row holding a quoted list, `'[1 2] 1`, prints its column as `unknown`.
+
+The `?` suggests `some` is read as a variable, which would make the row non-ground. If so, this entry's fix (refuse a
+non-ground term at registration) would refuse a row the user meant as a constructor application. The cause was not
+traced.
 
 ### 193. ⬜ THE WS READER IS STILL QUADRATIC IN FILE LENGTH — `pos->line-col` (`parse-reader.rkt:2500-2506`) rescans the source from position 0 for every token: a 10 000-row fact block spends 85 % of its load there, and a 100 000-row block takes 468 s to load while its `defr` command takes 0.9 s
 
