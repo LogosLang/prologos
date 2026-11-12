@@ -8745,6 +8745,13 @@ programs that resolve no trait instance. A test that runs several files in one p
 fixture (`tests/test-def-seam.rkt`), as `tests/test-form-isolation-01.rkt` does. Record: the audit's §5,
 `docs/tracking/tracks/PPN/PPN_4C/audits/2026-11-12_PPN_4C_4D_GROUNDING_AUDIT.md` (on the branch).
 
+**Measured further the same day** (`docs/tracking/tracks/PPN/PPN_4C/research/4D/fixture-trigger.out`, on the branch at
+`c87e9ac6`; 8 legs, one process each): the loss does not depend on what the caller binds around `process-file`
+(nothing, a fresh module network, `current-ns-context` `#f`, or both), nor on the two files sharing a namespace name.
+It is partial: in every leg the second run loses `Eq Nat` and `Eq Int`, while `[add 1N 2N]` still gives `3N : Nat`.
+So the hazard is not specific to that fixture: any second `process-file` in a process has it unless the registries
+are re-bound per run. "Resolve no trait instance" above is the safe reading, not a measured boundary.
+
 
 ### 187. ⬜ THE DIRECT-FACT FAST PATH IGNORES A REPEATED QUERY VARIABLE, UNDER EVERY STRATEGY — `solve (e2 ?a ?a)` over the single fact `(2, 3)` answers `@[{:a 3, :a 3}]` instead of `@[]`; `(e3 ?a ?b ?a)` returns both `(1 2 1)` and `(1 2 3)`
 
