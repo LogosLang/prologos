@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 211**
+> ### **NEXT FREE: 212**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -9571,3 +9571,43 @@ diagnose a bare `.` in key position in general ("a path was split into separate 
 **When**: the owner's call. A candidate for CIU 6 P4e-2-F's verify round.
 
 **Owner**: CIU 6.
+
+### 211. ⬜ THE PROPAGATOR PERF COUNTERS UNDERCOUNT — `prop_allocs` is never incremented and `prop_firings` counts one of six fire paths, so PERF-COUNTERS reads 0 where hundreds of propagators fire
+
+**Found by**: PPN 4C spike C (2026-11-12), while measuring whether propagators of an earlier command fire in a later
+one. PERF-COUNTERS printed `"prop_firings":0` and `"prop_allocs":0` for every one of 60 files, while an instrument
+placed in `fire-propagator` counted 1 078 fires over the same 60 runs: 580 on
+`racket/prologos/examples/2026-04-17-ppn-track4c.prologos`, and at least one in 31 of the 60 files. Evidence:
+`docs/tracking/tracks/PPN/PPN_4C/research/4B5b/spike-elabnet-lifetime/fires-per-file.out` (on the measurement branch
+`ppn4c-spike-elabnet-lifetime` @ `bbbcf31a`, not for merge). That branch does not touch the counters' code, and the
+runs compared are its baseline variant.
+
+**Mechanism** (read on main `e63657b2`; not instrumented there):
+- `perf-inc-prop-firing!` (`performance-counters.rkt:234`) has ONE call site, `propagator.rkt:2776`, inside
+  `run-to-quiescence-drain` (`:2731`). `fire-propagator` (`:377`) is called from six sites (`:2775`, `:2816`, `:2886`,
+  `:3441`, `:4162`, `:4227`), and only the first is followed by the increment.
+- `perf-inc-prop-alloc!` (`performance-counters.rkt:247`) has NO call site in `racket/` or `tools/`. The two places
+  that construct a propagator (`propagator.rkt:2301`, `:2484`) do not call it.
+- Both values are reported as if live: the PERF-COUNTERS hash (`performance-counters.rkt:310`, `:312`) and the
+  per-phase delta (`:730`, `:733`).
+
+**Control** (the recorded outputs on main under `racket/prologos/benchmarks/` and `racket/prologos/data/`):
+`prop_firings` is non-zero in 2 files and zero in 648; `prop_allocs` is non-zero in 0 files and zero in 649. So
+`prop_firings` is not dead. It counts on the one path, which most recorded workloads do not take. Which workloads
+reach that path was not traced.
+
+**Why filed**: a 0 from these counters is a fail-open reading. `docs/tracking/2026-06-06_PM_TRACK12B_FREE_ORDERING_ON_NETWORK.md:72`
+already reasons from them ("`prop_allocs`/`prop_firings` are **NET-2** counters"), and PPN 4C's next phase (addendum
+Phase 4D) measures propagator activity across commands.
+
+**Fix shape**: increment in `fire-propagator` itself, which every fire path goes through, and drop the drain-only
+call. Call `perf-inc-prop-alloc!` at the two construction sites. Pin both with a file known to fire propagators (the
+acceptance file above must report non-zero). The counters are plain struct mutations; whether they must be exact
+under threaded executors is a decision.
+
+**Severity**: instrumentation only. No program result changes.
+
+**When**: before PPN 4C addendum Phase 4D's Pre-0 measurements read these counters, and before any A/B comparison
+that reports `prop_firings`.
+
+**Owner**: unassigned (found by PPN 4C).
