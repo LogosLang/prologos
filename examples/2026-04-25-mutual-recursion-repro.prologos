@@ -1,0 +1,13 @@
+ns mutrec-repro
+
+spec even? Nat -> Bool
+defn even?
+  | zero  -> true
+  | suc n -> [odd? n]
+
+spec odd? Nat -> Bool
+defn odd?
+  | zero  -> false
+  | suc n -> [even? n]
+
+[even? 4N]
