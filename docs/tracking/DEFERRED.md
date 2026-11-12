@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 213**
+> ### **NEXT FREE: 214**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -9668,3 +9668,27 @@ controls.
 
 **Owner**: Rel Track 2 (the store's value domain). The elaboration half, if the fix is to solve the meta there, is
 PPN 4C's: by note.
+
+### 213. ⬜ A BARE `:` INSIDE A SELECT BLOCK IS REPORTED AS A KEYWORD KEY WITH NO NAME — `y{a : b}` says "block keys are written bare — `x{}`, not `x{:}`"
+
+**Found by** CIU 6 P4e-2-E's mini-audit, finding EO-10 (2026-11-12; the audit is on branch `ciu6-path-selection`,
+`tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-E_GROUNDING_AUDIT.md`), while measuring what `y{a:0*}` reads as.
+
+**Measured** on main (`eac30978`), and identical on the branch (`084d11f9`), with `y := {:a … :b 1}`:
+- `y{a : b}`, `y{: a}`, `y{a:}` → "block keys are written bare — `x{}`, not `x{:}`";
+- control, a real keyword key: `y{:a}` → "block keys are written bare — `x{a}`, not `x{:a}`" (correct).
+
+**The gap.** The block segmenter's keyword-key arm (`kw-sym?`, `parser.rkt`) also matches the bare colon symbol, and
+prints the key name it strips, which is empty. The user wrote no keyword key: they wrote a `:` with a space beside it,
+or with nothing after it. `y{a:0*}` reaches the same arm today, because the reader leaves a glued `:0*` as three items
+(`:` `0` `*`); CIU 6 P4e-2-E's mint takes that one spelling away from it, and the spaced ones stay.
+
+**Fix shape (not decided).** An arm for the bare `:` ahead of the keyword-key arm, saying what a `:` in a block needs
+(a step glued after it, as the path band's text does since P4e-2-D: "a `:` needs a step glued after it").
+
+**Severity**: a misleading message; every refusal is correct.
+
+**When**: the owner's call. A candidate for CIU 6 P4e-2-F's verify round, with DEFERRED 209 and 210 (the same family:
+block and literal positions the ravel's near-miss scan does not reach).
+
+**Owner**: CIU 6.
