@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 224**
+> ### **NEXT FREE: 226**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -10094,6 +10094,22 @@ Phase 4D).
 **Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-11-12_PPN_4C_4D_GROUNDING_AUDIT.md` §10 (on branch
 `ppn4c-elaboration-on-network`).
 
+**Addendum 2026-11-12 (later the same day) — item 1 of "also read, not run" has now been run.** Probes on branch
+`ppn4c-elaboration-on-network` @ `d943376f` (`…/research/4D/visibility-laws.rkt`, `mint-under-hypothesis.rkt`) and on the
+measurement branch @ `dd401e79` (`…/q18/q18.out`).
+- As a law (an entry visible under a worldview stays visible under every larger one): the subset rule holds on all
+  189 triples of three bits; the equality rule fails on 12.
+- Through the production readers: an unknown minted with no assumption and solved under bitmask 2 reads as solved
+  under 2; under 6 (the same command's next speculation) `meta-solved?` is `#t` and `meta-lookup` returns `#f`.
+- After a command whose union speculation committed (`(def v <(Option Nat) | Bool> none)`), `meta-lookup` returns `#f`
+  for the solved unknown and `meta-info-solved?` is `#f`; control with no speculation: the record, `#t`.
+- No user-visible effect of this alone was found. `meta-lookup`'s callers use it for source locations and
+  provenance (`driver.rkt:245`, `trait-resolution.rkt:357`, `:449`, `unify.rkt:953`). DEFERRED 224 is a different
+  defect of the same substrate.
+- With the elaboration network kept across commands (three spike configurations), a later command's failed
+  speculation clears the cache bits an earlier command committed (6 → 0), and that command's solved unknown reads as
+  unsolved. Nothing reads it today.
+
 ### 216. ⬜ A `:method` REQUIREMENT FOR A METHOD THE TRAIT DOES NOT HAVE IS ACCEPTED — the call prints `[?meta 1N] : Bool`, 0 errors
 
 **Found by** the PPN 4C Phase 4D controls, 2026-11-12. Probe
@@ -10233,6 +10249,11 @@ definite clash returns ⊤, and it replaces the fallback's stuck case with a car
 `6:` and `7:` then print `Could not infer type`. Open until P1a lands. Layer 2 is unchanged: unassigned, and proposed
 to PPN 4C in PAR 4's note of the same day (`docs/tracking/tracks/PAR/PAR_4/handoffs/2026-11-12_PAR_4_NOTE_TO_PPN_4C.md`,
 on the branch).
+
+**Addendum 2026-11-12 — layer 2 is PPN 4C's (owner).** The owner, answering PAR 4's note at 04:53: *"Yes to take on the
+note from PAR 4"*. Read as: PPN 4C owns layer 2 (the missing instantiation in argument position) and has received
+PC-1…PC-6. It has no row in PPN 4C's tracker yet, and it does not gate addendum Phase 4D. Recorded in
+`docs/tracking/tracks/PPN/PPN_4C/PPN4C_LOG.md` (on branch `ppn4c-elaboration-on-network`).
 
 ### 219. ⬜ `defn` AND `spec` TAKE ANY EXPRESSION AS A PARAMETER TYPE — `defn a2 [x : 5] : Int` prints `a2 : 5 -> Int defined.`, where `def b1 : 5 := 1` says "Expression is not a valid type"
 
@@ -10450,3 +10471,107 @@ outputs. Until then, a replay compares `solve` results as sets.
 BSP-LE 3 Stage A) and DEFERRED 190 (the sequential drain has no stratum layer).
 
 **Owner**: unassigned. The solver files are BSP-LE 3's (PAR 4 owner decision O-17 (a)).
+
+### 224. ⬜ AN UNKNOWN MINTED INSIDE A SPECULATION IS NEVER SEEN AS SOLVED — `def i : <Nat | Bool> := [if true 1N 2N]` aborts the whole file with the internal error `solve-meta-core-pure: metavariable … already solved`
+
+**Found by** PPN 4C Phase 4D's probes for Q-4B5.18 (what kind of object a scope is), 2026-11-12. Compiler code = main
+`7c1d126f`.
+
+**Measured.** Probes with their outputs on branch `ppn4c-elaboration-on-network` @ `d943376f`,
+`docs/tracking/tracks/PPN/PPN_4C/research/4D/`:
+
+| file (`branch-defects/`, one process each, `tools/scratch-run.sh`) | result |
+|---|---|
+| `mint-if-union.prologos`: `def i : <Nat | Bool> := [if true 1N 2N]`, then a valid `def` | exit 1, no result line for either form; stderr `solve-meta-core-pure: metavariable metaN already solved` |
+| `mint-if-union-swapped.prologos`: the union written `<Bool | Nat>` | the same |
+| `mint-control-no-union.prologos`: `def i : Nat := [if true 1N 2N]` | `i : Nat defined.`, 0 errors |
+| `mint-control-no-if.prologos`: `def i : <Nat | Bool> := 1N` | `i : Nat | Bool defined.`, 0 errors |
+
+`mint-under-hypothesis.rkt` calls the production API on a fresh meta environment, with `current-worldview-bitmask`
+bound to 2 (what a command's first speculation binds) or 0:
+
+| minted under | solved under | `solve-meta!` | `meta-solved?` afterwards | `meta-solution` | a second `solve-meta!` |
+|---|---|---|---|---|---|
+| 0 | 0 | ok | `#t` | `Nat` | raises "already solved" (as it should) |
+| 0 | 2 | ok | `#t` | `Nat` | raises |
+| 2 | 0 | ok | `#f` | `#f` | ok |
+| 2 | 2 | ok | `#f` | `#f` | raises "already solved" |
+
+So the solver's own reader never sees the solution of an unknown that was minted under a hypothesis, and the next
+attempt to solve it raises.
+
+**How the program reaches it.** Measured with an event log on the measurement branch
+(`ppn4c-spike-elabnet-lifetime` @ `dd401e79`, `…/spike-elabnet-lifetime/q18/q18.out`): the command's events are
+`CTX def-type-annotation n=0; MINT type aid=2 if-motive`, then the raise. The unknown is the `if` motive, minted in
+`infer` (`typing-core.rkt:3086`) while a union branch is being checked under `with-speculative-rollback`
+(`typing-core.rkt:5516`). The raise is at `metavar-store.rkt:2132`, reached from `unify` → `solve-flex-rigid`
+(`unify.rkt:452`) → `solve-meta!` (`metavar-store.rkt:1996`).
+
+**Read, not run.** Under a hypothesis the component is created as a tagged entry holding the placeholder
+(`meta-universe.rkt:312-319`), so after the solve two entries sit under one bitmask. CONJECTURE: the read returns the
+placeholder (`decision-cell.rkt:452-477`; with no domain merge it takes the first match). Not verified.
+
+**Who else is exposed.** `typing-core.rkt` mints unknowns at 10 sites (`:598`, `:910`, `:917`, `:2458`, `:2465`,
+`:2530`, `:3086`, `:3685`, `:3709`, `:3951`) and `qtt.rkt` at one (`:1415`). Only the `if` motive was run.
+`with-speculative-rollback` has 11 call sites in three files.
+
+**The suite has no test of it.** With the event log on, the full suite (10 437 tests, 503 files, all pass) records
+5 190 speculations and **0** unknowns minted under a hypothesis (`…/q18/scope-log-census.out`, measurement branch).
+
+**Why filed.** A small well-typed program aborts the whole file with an internal error. And PPN 4C addendum Phase 4D's
+locked pattern (an assumption per form) would make "minted under an assumption" true of every unknown of every form.
+
+**Fix shape.**
+1. An unknown minted under a hypothesis must read as solved after it is solved under that hypothesis. Red tests
+   first: rows 3 and 4 of the table as a unit test, and the two `mint-if-union` files as file-level tests.
+2. A decision: what a solve from outside the minting hypothesis means (row 3).
+
+**When**: before any design mints unknowns under a form-level assumption (PPN 4C addendum Phase 4D, Q-4B5.17 and
+Q-4B5.18). The fix itself does not wait for that.
+
+**Related**: DEFERRED 215 (the same tag substrate), DEFERRED 225.
+
+**Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-11-12_PPN_4C_4D_GROUNDING_AUDIT.md` §12 (on branch
+`ppn4c-elaboration-on-network`).
+
+### 225. ⬜ A TYPE ERROR UNDER N NESTED UNION CHECKS COSTS 5·2^(N−1) − N − 3 SPECULATIONS — 12 levels take 28 s, 14 give no result in 60 s; the same nesting checked against `Nat` makes none
+
+**Found by** the same probes as DEFERRED 224, 2026-11-12. Compiler code = main `7c1d126f`.
+
+**Measured.** N nested `if`, every arm `[the <Nat | Bool> 1N]`, the innermost arm `[the <Nat | Bool> "s"]`
+(`docs/tracking/tracks/PPN/PPN_4C/research/4D/branch-defects/`, on branch `ppn4c-elaboration-on-network` @ `d943376f`;
+`tools/scratch-run.sh -t 60`; wall time includes about 2.4 s of start-up):
+
+| file | speculations (`PROVENANCE-STATS`) | wall | result |
+|---|---|---|---|
+| `nest-union-bad-08.prologos` | 629 | 2.6 s | `ERROR: Could not infer type`; the next form is checked |
+| `nest-union-bad-12.prologos` | 10 225 | 28.3 s | the same |
+| `nest-union-bad-14.prologos` | not reported | over 60 s | no output (exit 124) |
+| `nest-union-bad-35.prologos` | not reported | over 60 s | no output |
+| `nest-plain-bad-16.prologos` (control: every arm `[the Nat …]`) | 0 | 2.5 s | `ERROR: Could not infer type` |
+
+On the measurement branch (`ppn4c-spike-elabnet-lifetime` @ `dd401e79`, `…/q18/q18.out`) the counts for N = 1…8 are 1, 5,
+14, 33, 72, 151, 310, 629. All nine points fit **5·2^(N−1) − N − 3**. The same nesting with a well-typed innermost arm
+makes N speculations up to N = 2 and raises DEFERRED 224's error from N = 3.
+
+**Mechanism (read, not run step by step).** A failed check is run again rather than reused: `check` tries the left
+branch under a speculation and then the right (`typing-core.rkt:5516`), `checkQ` does the same (`qtt.rkt:3230`), and
+on failure `check/err` re-checks every branch under a new speculation and calls `infer` once more
+(`typing-errors.rkt:1538-1560`). Each level of nesting doubles the work below it. Each speculation also allocates a
+hypothesis, so one command reaches thousands (10 225 at N = 12); the run killed at N = 35 was inside
+`recompute-bitmask` (`decision-cell.rkt:748`).
+
+**Also seen, not this entry's subject.** The message never names the ill-typed arm: `Could not infer type` from a
+file, `Error at <unknown>` from a string.
+
+**Fix shape (not decided).** Share the work between the attempts: record a sub-check's outcome under the assumptions
+it was made with, and reuse it. An interim step is for `check/err` to read the failures the first attempt already
+recorded instead of speculating again. Red tests first: the speculation count at N = 4, 6 and 8 with a linear bound.
+
+**When**: with the retirement of `with-speculative-rollback` (PPN 4C parent Phase 4 and PM Track 12, per the bridge's
+own comment, `elab-speculation-bridge.rkt:243-249`), or earlier as the interim step.
+
+**Related**: DEFERRED 215, DEFERRED 224.
+
+**Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-11-12_PPN_4C_4D_GROUNDING_AUDIT.md` §12 (on branch
+`ppn4c-elaboration-on-network`).
