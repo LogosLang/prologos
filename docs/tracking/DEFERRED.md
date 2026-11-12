@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 215**
+> ### **NEXT FREE: 217**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -9865,3 +9865,93 @@ worker sets `current-pnet-write-enabled?` to `#f` (BSP-LE 3's census and its Sta
 the branch), and `racket tools/pnet-compile.rkt --clean` followed by a suite run repairs a checkout.
 
 **Owner** (proposed, by analogy with 203's `.pnet` half): PM Track 12.
+
+---
+
+### 215. ⬜ THE S(-1) RETRACTION OF INFRASTRUCTURE-CELL ENTRIES NEVER MATCHES — `process-retraction` compares the entries' integer bitmask with a set of `assumption-id` structs, so a failed speculation is undone by the network snapshot restore alone
+
+**Found by** PPN 4C Phase 4D grounding, 2026-11-12, re-deriving at main `e6129a8d` a note of the LHC substrate audit
+(`lhc` repository, `docs/tracking/tracks/LHC/LHC_0/2026-08-15_LHC_0_SUBSTRATE_AUDIT.md`, its table of provenance
+mechanisms, row (2): "looks structurally inert"). Measured with
+`docs/tracking/tracks/PPN/PPN_4C/research/4D/retraction-filter.rkt` (on branch `ppn4c-elaboration-on-network` @
+`213f1096`; its compiler code is main's), which calls the filter on a two-entry cell value:
+
+```
+entries before: 2
+after retracting (assumption-id 3), as with-speculative-rollback records it: 2
+control, after retracting the integer bitmask 8: 1
+```
+
+**Mechanism (read in code).**
+- Entries of the 11 scoped cells are tagged with `(current-speculation-assumption)`, which returns the worldview
+  bitmask, an integer (`metavar-store.rkt:1484-1486`).
+- The only production caller of `record-assumption-retraction` is `with-speculative-rollback`, and it passes `hyp-id`,
+  an `assumption-id` struct (`elab-speculation-bridge.rkt:333-335`; `:263-265` derives the bit from
+  `(assumption-id-n hyp-id)`).
+- The filter is `(set-member? retracted-set (tagged-entry-assumption-id v))` (`metavar-store.rkt:1550-1552`). An
+  integer is never a member of a set of structs.
+- The tag is also cumulative: the thunk runs under the earlier committed bits plus the new one
+  (`elab-speculation-bridge.rkt:296-301`), so it would not equal one hypothesis's bit either.
+
+**Why nothing shows today (read, not measured).** The retract branch first restores the whole elaboration network to
+its snapshot from before the speculation (`elab-speculation-bridge.rkt:317-318`), which removes the failed branch's
+entries. The S(-1) pass then runs on a network that no longer holds them.
+
+**Why filed.** The bridge's own comment says the snapshot restore is to retire (`:315-316`: "retract becomes just
+`record-nogood + clear-bit`"). This filter is what remains then, and it removes nothing: a failed branch's
+constraints, wake-ups and error descriptors would stay. PPN 4C addendum Phase 4D's pattern-level lock ("per-form aid;
+failed forms retract via S(-1)") names this mechanism.
+
+**Also read at main `e6129a8d`, not run** (the same substrate; both are in the LHC audit's table):
+1. The two tag schemes disagree on visibility. A `tagged-entry` is visible when its tag EQUALS the current bitmask
+   (`cell-ops.rkt:84-85`). A `tagged-cell-value` entry is visible when its bitmask is a SUBSET of the worldview
+   (`decision-cell.rkt:467`).
+2. The explanation decoder reads bits 0 to 29 only (`error-explanation.rkt:126`), and the ATMS that numbers hypotheses
+   is created once per file, not per command (`driver.rkt:697-698`). A file with more than 30 speculations would hold
+   hypotheses the decoder never reads. No program was run to show it.
+
+**Fix shape.** Choose one representation of an assumption on infrastructure entries (bit position, bitmask or struct)
+and make the writer, the recorder and the filter agree. State the visibility rule once for both tag schemes. Red test
+first: the probe's second line must read 1. Whether this is fixed on its own or with the snapshot's retirement is a
+decision.
+
+**When**: before the snapshot restore in `with-speculative-rollback` retires (main-track PPN 4C Phase 4 and PM Track
+12, per the bridge's comments), and before any design relies on S(-1) retraction of these cells (PPN 4C addendum
+Phase 4D).
+
+**Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-11-12_PPN_4C_4D_GROUNDING_AUDIT.md` §10 (on branch
+`ppn4c-elaboration-on-network`).
+
+---
+
+### 216. ⬜ A `:method` REQUIREMENT FOR A METHOD THE TRAIT DOES NOT HAVE IS ACCEPTED — the call prints `[?meta 1N] : Bool`, 0 errors
+
+**Found by** the PPN 4C Phase 4D controls, 2026-11-12. Probe
+`docs/tracking/tracks/PPN/PPN_4C/research/4D/hasmethod-missing-method.rkt` (on branch `ppn4c-elaboration-on-network`
+@ `213f1096`; compiler code = main `e6129a8d`), through `process-string` in sexp form:
+
+```
+0: apply-eq2 : [Pi [x :0 <[Type 0] -> [Type 0]>] [Pi [y :0 <[Type 0]>] [y y -> Bool] [x y] y y -> Bool]] defined.
+1: false : Bool
+2: apply-foo : [Pi [x :0 <[Type 0] -> [Type 0]>] [Pi [y :0 <[Type 0]>] [y -> Bool] [x y] y -> Bool]] defined.
+3: [?meta 1N] : Bool
+```
+
+- Lines 0 and 1 are the control: `(spec apply-eq2 {A : Type} (P A) A A -> Bool ($brace-params :over P :method P eq? : A A -> Bool))`,
+  `(defn apply-eq2 [dict x y] [eq? x y])`, `(eval (apply-eq2 Nat--Eq--dict 1N 2N))`.
+- Lines 2 and 3 ask for `:method P nosuch? : A -> Bool` and call `(apply-foo Nat--Eq--dict 1N)`. `Eq` has one
+  method, `eq?` (`lib/prologos/core/eq.prologos:17-18`).
+
+**What is shown.** The definition is accepted, and the call's result is an application of an unsolved metavariable,
+printed as a value of type `Bool`. There is no error at the spec, at the definition or at the call.
+
+**Not shown.** A WS-mode spelling (none was tried). Which of the three commands should refuse. Whether the hasmethod
+constraint stays unresolved or is dropped: the mechanism was not traced.
+
+**Related**: DEFERRED 173, another unsolved metavariable that reaches a committed result.
+
+**Fix shape.** A hasmethod constraint still unresolved when its command closes is an error naming the method and the
+trait, as an unresolved trait constraint is (`check-unresolved-trait-constraints`, `trait-resolution.rkt:405`). Red
+test first, from the probe's line 3.
+
+**When**: with the close judgments that PPN 4C addendum Phase 4D re-homes per scope, or earlier as a fix of its own.
