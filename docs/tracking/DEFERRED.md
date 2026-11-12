@@ -8665,6 +8665,17 @@ renders its suggestion on the user's branch and runs it, as the battery's remedy
 > with the lean to include in Phase 4e-2"; branch `776bd3c7`). The findings are in
 > `docs/tracking/tracks/CIU/CIU_6/audits/2026-11-03_CIU_6_P4e-2_GROUNDING_AUDIT.md` (moved there from D4 the same day).
 
+> **Update (2026-11-12, CIU 6 P4e-2-E1; branch `ciu6-path-selection` @ `8cc9ee84` + `b20c3c8b`, not yet on main).** The
+> reader seats' REFUSAL half is built, and without a reader change. Every star-after-an-ordinal-step spelling already
+> arrives at a parser seat: `vhm.0*` and `y.a.0*` as an application carrying a bare `.` item (the scan P4e-2-D built), and
+> `y{a.0*}` at the block segmenter's "stray `.`" arm. Each now gives Q_U46's refusal with the remedy `x.N:*`, and
+> `x.N**` names one `:*` per level. One wording at four seats (`select-ordinal-star-message`). Evidence:
+> `tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-E_GROUNDING_AUDIT.md` (EO-1, § E1), on the branch.
+> - **Still OPEN here**: `xs:0*`'s MEANING (P4e-2-E2, the mint; this entry's 2026-11-03 correction), and the class-level
+>   cure above.
+> - **Not covered, and filed elsewhere**: a map-literal value, `{:a vhm.0*}`, keeps "Map literal requires an even number
+>   of elements" (DEFERRED 210's position).
+
 ### 186. ⬜ ⭐ A MODULE ALREADY IN THE REGISTRY BRINGS NONE OF ITS REGISTRY STATE TO A LATER IMPORTER — the second `process-file` of a file in one process loses imported instances and constructors (`e1 : Bool defined.` → `No instance of Eq for Int`); `core::csv` elaborated after its closure was imported directly fails E2001
 
 **Found by** PAR 4B SP-2, 2026-10-19 (branch `par4b-parallelism-portfolio` @ `c6b6dc19`; compiler code = main `a01f3fc7`
@@ -9609,6 +9620,12 @@ diagnose a bare `.` in key position in general ("a path was split into separate 
 **When**: the owner's call. A candidate for CIU 6 P4e-2-F's verify round.
 
 **Owner**: CIU 6.
+
+> **Addendum (2026-11-12, CIU 6 P4e-2-E1; branch `ciu6-path-selection` @ `b20c3c8b`).** The same position misses E1's
+> shape too: `{:a t3.0*}` (a star after an ordinal step, which E1 refuses with Q_U46's reason everywhere the scan runs)
+> reads as `($brace-params :a t3 |.| 0 *)` and says "Map literal requires an even number of elements (key-value pairs)".
+> Pinned on the branch as the control `K-ord-map`. The fix shape above (the dot half of the scan in map literals) covers
+> it: `ravel-near-miss` already answers for `. N σ`.
 
 ### 211. ⬜ THE PROPAGATOR PERF COUNTERS UNDERCOUNT — `prop_allocs` is never incremented and `prop_firings` counts one of six fire paths, so PERF-COUNTERS reads 0 where hundreds of propagators fire
 
