@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 212**
+> ### **NEXT FREE: 213**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -9123,6 +9123,27 @@ parameters. Tests: the probe fixtures beside their Int controls.
 
 **Owner**: Rel Track 2 (the decision and row ingest). The elaborator arm is shared; its change is requested by note.
 
+**Addendum 2026-11-12 — more goal-side shapes, a census, and the decision posed (REL 2 FS-8).** Probe
+`docs/tracking/tracks/REL/REL_2/research/fs6/fs6-names.{prologos,out}` and census `fs6-name-census.{py,out}` (branch
+`rel2-fact-store`, `cfc460e0`; measured on main's code `899d9da9`, where `relations.rkt`, `elaborator.rkt` and
+`driver.rkt` are unchanged since `07424c3b`). `dept-of` there holds real constructor values (built with `is`), so a
+spelling that reached the constructor would answer two of its three rows.
+- **Every bare or ascribed spelling is a variable**, three rows each with an extra column: Capitalized `Eng` (`21:`), the
+  qualified `probes::fs6names::Eng` (`23:`, the column is named by the whole qualified name), a `def`'d constant `hq`
+  (`24:`), `[the Dept Eng]` (`25:`), and a misspelling `Egn` (`48:`).
+- **The bracket escape matches nothing as a goal argument**: `[Eng]` → `@[]` (`22:`), `[red]` → `@[]` (`65:`), though
+  `[red]` as an expression is the constructor (`62:`). The comment's *"use `[...]` … or `is`"* (`elaborator.rkt:808-809`)
+  holds for `is` only: `(is e Eng) (dept-of name e)` answers ann and cy (`28:`; `hq` `29:`; `red` `33:`; `[some 10]`
+  `57:`).
+- **Bracketed terms unify with each other and never with a value**: `(= [some 3] [some ?v])` binds 3 (`42:`), while
+  `(opt-of ?name [some ?v])` and `(opt-of ?name [some 10])` against a stored `some 10` return `@[]` (`37:`, `38:`).
+- **Census** (113 files, hand-written): `||` rows hold 586 terms, 581 literals and 5 parser atoms, with **0** bare names
+  and **0** constructor terms; **0** bare Capitalized names stand in any relational position; goals write 204 bracketed
+  term heads in 4 files. So giving constructors their meaning in rows, and Capitalized names theirs in goals, changes
+  no existing program. The library's 59 `data` constructors are all lowercase, 27 of them nullary.
+- **The decision this entry's fix shape waits on** is posed as REL 2 **FS-8** (what a bare name means in a relational
+  position; ledger § *FS-8*, on the branch). A second defect found on the way: **212**.
+
 ### 196. ⬜ THE DIRECT-FACT FAST PATH TAKES A SYMBOL LITERAL FOR A QUERY VARIABLE OF THE SAME NAME — `solve (sy (symbol-lit n) ?n)` returns both rows of `defr sy [?k ?n] || (symbol-lit alice) 1 / (symbol-lit carol) 2`, under every strategy
 
 **Found by** REL 2's Stage-1 re-grounding (charge R, finding RG-57,
@@ -9611,3 +9632,39 @@ under threaded executors is a decision.
 that reports `prop_firings`.
 
 **Owner**: unassigned (found by PPN 4C).
+
+### 212. ⬜ TWO `none`S DO NOT UNIFY IN A GOAL — a nullary polymorphic constructor carries its own unsolved type argument into the solver: `(is a none) (is b none) (= a b)` fails, a relation that stores `none` cannot be asked for it, and writing the type on one side does not help
+
+**Found by** REL 2 while probing decision FS-8, 2026-11-12: `docs/tracking/tracks/REL/REL_2/research/fs6/fs6-names.{prologos,out}`
+(branch `rel2-fact-store`, `cfc460e0`; measured on main's code `899d9da9`). Indices are printed result numbers.
+
+**Observations** (measured; each with its control):
+- `defr none-eq [?r]` / `&> (is a none) (is b none) (= a b) (= r "equal")` → `@[]` (`58:`).
+  - Control, the type written on both: `(is a [the [Option Int] none]) (is b [the [Option Int] none])` → `{:r "equal"}` (`59:`).
+  - Control, a monomorphic nullary constructor: the same body with `red` (`data Color`) → `{:r "equal"}` (`60:`).
+- `opt-of` stores `some 10` for ann and `none` for bob (`36:` prints bob's as `[prologos::data::option::none ?meta1778]`,
+  column type `[Option Int] | [Option ?meta1778]`). `(is z none) (opt-of name z)` → `@[]` (`41:`).
+  - Control, a polymorphic constructor with an argument: `(is z [some 10]) (opt-of name z)` → ann (`57:`).
+  - The type written on the asking side only: `(is z [the [Option Int] none]) (opt-of name z)` → `@[]` (`67:`).
+- As an expression, `[none]` prints `[prologos::data::option::none ?meta1934] : [prologos::data::option::Option ?meta1934]` (`61:`).
+
+**Mechanism**: CONJECTURE, not read in code. Each `none` elaborates with a fresh meta for its implicit type argument,
+and nothing in a goal solves it; `is` stores the value with the unsolved meta inside, and the solver's structural
+comparison (`unify-terms`, `racket/prologos/relations.rkt:1147-1166`) sees two different terms. `some 10` works because
+its argument solves the meta to `Int`. The same printed shape, an unsolved meta inside a value, appears in a `validate`
+result (`…/research/census/validation/vg-controls2.out` `24:`); whether that is the same cause is not established.
+
+**Why it matters**: `none` is the value an absent cell of an imported table becomes (REL 2 G-6: CSV, JSON, SQLite), and
+"which rows have no value here" is the first question asked of such a column. Equality of stored values must not depend
+on an artifact of inference. It is the value-side twin of 195: there the name does not reach the constructor, here the
+constructor reached does not equal itself.
+
+**Fix shape** (candidates, a decision for REL 2's FS-6, "what is a stored value"): a stored value is closed at ingest,
+its implicit type arguments solved from the column type or erased before comparison (they are `m0`, so erasure is the
+QTT-faithful reading); the same normal form on the asking side. Tests: the five lines above as pins, `60:` and `57:` as
+controls.
+
+**When**: with REL 2's ingest normal form; before any import that can produce `none`.
+
+**Owner**: Rel Track 2 (the store's value domain). The elaboration half, if the fix is to solve the meta there, is
+PPN 4C's: by note.
