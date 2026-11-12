@@ -9972,9 +9972,13 @@ failed forms retract via S(-1)") names this mechanism.
 1. The two tag schemes disagree on visibility. A `tagged-entry` is visible when its tag EQUALS the current bitmask
    (`cell-ops.rkt:84-85`). A `tagged-cell-value` entry is visible when its bitmask is a SUBSET of the worldview
    (`decision-cell.rkt:467`).
-2. The explanation decoder reads bits 0 to 29 only (`error-explanation.rkt:126`), and the ATMS that numbers hypotheses
+2. The explanation decoder reads bits 0 to 29 only (`error-explanation.rkt:126`)~~, and the ATMS that numbers hypotheses
    is created once per file, not per command (`driver.rkt:697-698`). A file with more than 30 speculations would hold
-   hypotheses the decoder never reads. No program was run to show it.
+   hypotheses the decoder never reads~~. No program was run to show it.
+   **Corrected 2026-11-12, the day of filing**: numbering restarts at every command. `init-speculation-tracking!`
+   replaces the ATMS state (`elab-speculation-bridge.rkt:118-125`, called at `driver.rkt:699`), and the counter is a
+   cell of that state (`atms.rkt:255`). I had read the two lines that create the box and not the next one. The limit
+   is per command: a command with more than 30 hypotheses would hold some the decoder never reads.
 
 **Fix shape.** Choose one representation of an assumption on infrastructure entries (bit position, bitmask or struct)
 and make the writer, the recorder and the filter agree. State the visibility rule once for both tag schemes. Red test
