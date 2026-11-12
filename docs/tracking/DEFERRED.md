@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 209**
+> ### **NEXT FREE: 211**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -9525,3 +9525,49 @@ and here, without `:=`, it is silent.
 **When**: whichever track owns the WS layout reader (the owner's call). Not CIU 6.
 
 **Owner**: unassigned.
+
+### 209. ⬜ A RETIRED-BROADCAST TOKEN INSIDE A SELECT BLOCK PRINTS ITS INTERNAL SENTINEL — `x{a.*name}` says "`($broadcast-access name)` is not a valid selection branch"
+
+**Found by** CIU 6 P4e-2-D, finding DM-13 (`tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-D_GROUNDING_AUDIT.md`,
+2026-11-12), probing where the retired `.*` spellings arrive.
+
+**Measured** on main (`899d9da9`), and unchanged on the branch
+(`tracks/CIU/CIU_6/research/P4e-2/D/probe-d.out` results 87 and 88, at `a358b9bf`), with `wr := {:a {:k 1}}`:
+- `wr{a.*name}` → "`($broadcast-access name)` is not a valid selection branch — block branches are field names (e.g.
+  `x{name server.{host}}`)";
+- `wr{a.**}` → the same, with `($broadcast-access *)`.
+
+**The gap.** Outside a block the fold turns `.*NAME` into a retired-selection marker, and the parser answers with a
+guided message ("broadcast `.*name` was retired — its replacement is `:name`"). Inside a select block the token is a
+block item the fold does not reach, so the block segmenter's unknown-item arm prints the datum: an internal name the
+user never wrote.
+
+**Fix shape (not decided).** An arm for the token in the block segmenter that names what the user wrote (`.*name`)
+and the block spelling that runs. Its star family (`.**`, `.*_`, …) should get the ravel's near-miss text, as
+P4e-2-D gives it outside a block.
+
+**When**: the owner's call. A candidate for CIU 6 P4e-2-F's verify round (the same message family), or X.close.
+
+**Owner**: CIU 6.
+
+### 210. ⬜ A RAVEL NEAR-MISS INSIDE A MAP LITERAL GETS A MISLEADING MESSAGE — `{:a values.*}` says "Bare symbol '.' not allowed as map key; use :. for keyword"
+
+**Found by** CIU 6 P4e-2-D, finding DM-10 (`tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-D_GROUNDING_AUDIT.md`,
+2026-11-12).
+
+**Measured** on main (`899d9da9`), and unchanged on the branch (`tracks/CIU/CIU_6/research/P4e-2/D/probe-d.out`
+result 44, at `a358b9bf`; pinned there as the control row `DM-pos-map`): `{:a values.*}` → "Bare symbol '.' not allowed
+as map key; use :. for keyword". The `.` is not a key the user wrote. `values.*` reads as three items (`values`, `.`,
+`*`), the key/value pairs shift by one, and the `.` lands in key position. The remedy it offers, `:.`, is nothing to
+write.
+
+**Why P4e-2-D left it.** Its near-miss scan runs at applications and at sequence literals. In a map literal a spaced
+`: *` is also what a keyword KEY `:*` reads as (`{:* 1}` is `{: * 1}`), so the colon half of the scan would tell
+`{:a 1 :* 2}` to write `1:*`. The DOT half has no such ambiguity.
+
+**Fix shape (not decided).** Run the dot half of the scan in map literals (a bare `.` followed by a star lexeme), or
+diagnose a bare `.` in key position in general ("a path was split into separate items").
+
+**When**: the owner's call. A candidate for CIU 6 P4e-2-F's verify round.
+
+**Owner**: CIU 6.
