@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 223**
+> ### **NEXT FREE: 224**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -10407,3 +10407,46 @@ and are now the same kind of wrong value (`adjudicate.out` cases 35–41, branch
 **When**: the owner's call. A candidate for CIU 6 P4e-2-F2.
 
 **Owner**: unassigned.
+
+### 223. ⬜ THE ORDER OF A `solve`'S ANSWERS FOLLOWS THE S0 SCHEDULE — `(candidate ?x) (not (has-value ?x)) (= ?label "passed")` answers `6 4 2 8` under BSP and `8 2 4 6` under five shuffled schedules; the answer set is the same, and production's single schedule hides it
+
+**Found by** PAR 4's schedule differential for owner decision O-13 (2026-11-12): `benchmarks/comparative/` under seven
+S0 schedules other than BSP. One result line of 580 differed, `atms-adversarial` result 122
+(`racket/prologos/benchmarks/comparative/atms-adversarial.prologos:362-365`), under each of five seeded shuffles and
+under neither of the two fixed orders.
+
+**Measured** on the tree of `6891a680` with a measurement patch that is not merged
+(`racket/prologos/benchmarks/par4/o13/o13-census.patch`, variable `PAR4_O13_SCHEDULE`; on branch `par4-arena-executors`
+@ `e3d7360f`). Inside BSP's unchanged stratum loop, each round's propagators fire one at a time against the live
+network: in worklist order (`gs`), reversed (`gs-rev`), or in a seeded pseudo-random order (`shuffle-N`). The repro is
+`o13-answer-order.{prologos,out}` in the same directory, with `candidate = {2 4 6 8}` and `has-value = {1 3 5 7}`.
+The table gives the order of `?x` in the answers.
+
+| # | query | BSP, `gs`, `gs-rev` | `shuffle-1` … `shuffle-5` |
+|---|---|---|---|
+| 1 | control: `(candidate ?x)` | `2 4 6 8` | `2 4 6 8` |
+| 2 | control: `(candidate ?x) (not (has-value ?x))` | `6 4 2 8` | `6 4 2 8` |
+| 3 | `(candidate ?x) (not (has-value ?x)) (= ?label "passed")` | `6 4 2 8` | `8 2 4 6` |
+| 4 | control: `(candidate ?x) (has-value ?y) (= ?y 1)` | `2 4 6 8` | `2 4 6 8` |
+
+**What this shows.** The answer set is the same under all eight schedules. The order of query 3's answers is not.
+Production has one S0 schedule, so no program shows a difference today. Row 2 also shows that, once a goal is negated,
+the order is not the order of the facts, under every schedule.
+
+**Not traced** (read in code, not tested). `dissolve-solver-pu` enumerates the answers from `merged-by-bm`, a mutable
+hash keyed by worldview bitmask, with `in-hash` (`racket/prologos/relations.rkt:2902-2910`). The bitmasks come from
+assumption ids, which are allocated as branches are created. CONJECTURE: a schedule that creates the branches in
+another order gives other bitmasks, and so another enumeration order.
+
+**Why filed.** Any change of S0's schedule makes it visible: PAR 4's P2 (DIRECT at K = 1), every PAR 4B variant, and
+the replay that judges them against BSP, which would report a difference on a correct answer set. The result is a
+`PVec`, so a program can observe the order.
+
+**Fix shape (not decided).** Fix the order at the boundary by a key that is a function of the program, for example the
+clause and fact-row indices along each answer's derivation. PAR 4's D.3 §6.3 row 5 does this for the other set-valued
+outputs. Until then, a replay compares `solve` results as sets.
+
+**When**: before PAR 4's P2 replay gate compares `solve` results. Related: DEFERRED 177 (the ATMS label semantics,
+BSP-LE 3 Stage A) and DEFERRED 190 (the sequential drain has no stratum layer).
+
+**Owner**: unassigned. The solver files are BSP-LE 3's (PAR 4 owner decision O-17 (a)).
