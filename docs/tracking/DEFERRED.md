@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 220**
+> ### **NEXT FREE: 221**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -3830,6 +3830,22 @@ paths), not a mint defect. Zero corpus sites. Silent-wrong-answer shaped, so it
 must not sit past the 51/52 chip (`task_4c00d3f0`); whoever lands that fix should
 take this reproducer with them.
 
+> **Addendum (2026-11-12, CIU 6 P4e-2-F1's verify; branch `ciu6-path-selection` @ `80eb4027`, not yet on main).** Two
+> more spellings reach this class on the branch, and the class is wider than the positions CIU 6 had recorded.
+> - `(= v values:*)` and `(= v values:0*)` were refused before the slice ("= expects 2 arguments, got 4" and "got 5",
+>   because the star read as separate items). Since the `x:σ` and `x:Nσ` mints each is one item, and the query answers
+>   `@[{:v unknown}]` with 0 errors. A `defr` rule body does the same: `&> = v values:*` was refused and is now
+>   defined, answering `unknown`. Loud → silent, as `:{` was at P4d-0.
+> - With main's compiler the class holds for the other selection spellings tried: `(= v values.0)` and
+>   `(= v recs:k*)` both answer `@[{:v unknown}]`. The control `(= v 5)` answers `5`.
+> - DEFERRED 192's fact row (`|| "x" recs:k*`) is this class at another position. CIU 6's record had called the fact
+>   row the one silent position of its count change. That came from a position list written by hand, and it is
+>   corrected in `tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-F1_VERIFY.md` (finding ZF-3, on the branch).
+>
+> Measured: `tracks/CIU/CIU_6/research/P4e-2/F/verify/adjudicate.out` cases 55–60, each on main's compiler and on the
+> branch. Whether CIU 6's fix round refuses a selection in goal position, or leaves the class to the relational work,
+> is with the owner.
+
 ### 55-original. In-block `:{` is newly ADMITTED but refused with a MISLEADING diagnostic
 
 `rows{a:{p q}}` (narrowing a map FIELD inside a select block) now parses — the
@@ -5573,7 +5589,7 @@ include in Phase 4e-2"); CIU 6 D4 § P4e-2, *Decided at the checkpoint* (branch 
 >   the one item;
 > - a corpus A/B over one snapshot of 260 files: the 187 production files do not change; 6 research probes do, the set
 >   predicted from the text;
-> - loud → silent in two positions, each a class already filed: a `||` fact row (DEFERRED 192) and a `bundle` body (207);
+> - loud → silent in ~~two positions, each a class already filed: a `||` fact row (DEFERRED 192) and a `bundle` body (207)~~ **more positions than those two** (⚠ corrected 2026-11-12 by CIU 6 P4e-2-F1's verify, branch @ `80eb4027`: also every relational goal position, which is DEFERRED 54's class; a `let` bracket's value slot, a `cond` test and a `when` guard; `~[…]` and a tailed list literal. The two named here came from a position list written by hand);
 > - one spelling accepted → refused: `defn d [x:0* Int]`, which defined a function over the non-type `0 * Int` (219);
 > - three whole-file raises gone: a `match` scrutinee (108's pinned set, 19 → 18) and two `match` arm patterns.
 >
@@ -10240,5 +10256,68 @@ P4e-2-E2's reader change made that spelling a refusal (the spaced `[x : 0 * Int]
 and refuse at the definition with a message that names the parameter.
 
 **When**: the owner's call. Not CIU 6: path selection touches no signature checking.
+
+**Owner**: unassigned.
+
+> **Addendum (2026-11-12, CIU 6 P4e-2-F1's verify).** A third seat, in a `def` annotation: a member of a union type is
+> not checked when it is a selection. Measured with main's compiler (`c47c2fce`), the "before" line of each case in
+> `tracks/CIU/CIU_6/research/P4e-2/F/verify/adjudicate.out` (branch `ciu6-path-selection` @ `80eb4027`):
+>
+> | case | program | result |
+> |---|---|---|
+> | 144 | `def u5 : <Int \| String:k> := 1` | `u5 : Int \| String.:k defined.` |
+> | 147 | control: `def u8 : <Int \| String> := 1` | `u8 : Int \| String defined.` |
+> | 145 | `def u6 : <Int \| 5> := 1` | refused: "Expression is not a valid type" |
+> | 149 | `def u10 : <Int \| zork> := 1` | refused: "Unbound variable" |
+> | 146 | `def u7 : <String:k> := 1` | refused: "Type mismatch" |
+> | 148 | `def u9 : <Int \| String:k> := "s"` | refused, and the whole message is the type: "Int \| String.:k" |
+>
+> The union's check refuses a number and an unbound name (145, 149) and lets a selection through (144); the value is
+> then checked against the other member. Not traced. On the branch the ravel joins: `def u4 : <Int | String:*> := 1`
+> was refused ("Empty type segment in arrow type") and is `u4 : Int | String.:* defined.` (case 112). DEFERRED 109 is
+> the neighbouring defect in a `spec` / `defn` type region.
+
+### 220. ⬜ A `match` WITH CONSTRUCTOR ARMS HAS NO SOUND TYPE WHERE NONE IS EXPECTED — at top level `match [some 5] | some y -> y` prints `5 : [Type 0]`, the two-arm program is refused with "Could not infer type", and `match 5 | true -> 1 | false -> 0` prints the stuck `[reduce 5 | true -> 1 | false -> 0] : Int` with no error
+
+**Found by** CIU 6 P4e-2-F1's adversarial verify (the silent-wrong-answers lens, finding ZS-4; adjudicated as ZF-14 in
+`tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-F1_VERIFY.md`, on branch `ciu6-path-selection`; 2026-11-12), as the
+control for a finding about `match` arm patterns. It is not path selection's: no selection appears in any program below.
+
+**Measured** with main's compiler (`c47c2fce`). Probes on branch `ciu6-path-selection`, in
+`tracks/CIU/CIU_6/research/P4e-2/F/verify/`: `adjudicate.out` (@ `80eb4027`; "adj N" is the "before" line of case N) and
+`ctl-match.{prologos,out}` (@ `baf4a635`; "ctl N" is result index N).
+
+| # | program | result |
+|---|---|---|
+| adj 138 | `match [some 5]` with the one arm `\| some y -> y` | `5 : [Type 0]` |
+| adj 137 | `match 5` with `\| some y -> y` | `[reduce 5 \| some x -> x] : [Type 0]`, no error |
+| adj 141 | `match 5` with `\| true -> 1` and `\| false -> 0` | `[reduce 5 \| true -> 1 \| false -> 0] : Int`, no error |
+| adj 140 | `match [some 5]` with `\| some y -> y` and `\| none -> 0` | refused: "Could not infer type" |
+| adj 139 | `match 5` with the same two arms | refused: "Could not infer type" |
+| adj 143 | `match 5` with `\| zork y -> y` | refused: "Could not infer type" |
+| adj 142 | `def m5 : Int := match 5` with `\| some y -> y` | refused: "Type mismatch" |
+| ctl 1 | control: the two-arm `match` inside `defn om [o]` under `spec om [Option Int] -> Int`, then `[om [some 5]]` | `5 : Int` |
+| ctl 2, 3 | control: `def r1 : Int := match [some 5]` with the two arms, then `r1` | `r1 : Int defined.`, then `5 : Int` |
+| ctl 4 | control: Bool arms against an `Int` parameter, under a `spec` | refused: "Type mismatch" |
+| ctl 6 | control: a `some` arm against an `Int` parameter, under a `spec` | refused: "Type mismatch" |
+
+**What this shows.** Where a type is expected (a `spec`, a `def` annotation) the `match` is checked: the well-formed
+program runs, and an arm of another data type is refused (ctl 1–6). Where no type is expected:
+- the well-formed two-arm program is refused (adj 140);
+- a one-arm `match` is given the type `[Type 0]`, with the right value under it (adj 138);
+- arms of a data type the scrutinee does not have are accepted, and the stuck `reduce` prints as a value (adj 137, 141).
+  With Bool arms the printed type is `Int`, so the line reads as an ordinary result.
+
+**Not traced**: which step types a `match` that has no expected type. This entry is measurement only; no code was read.
+Neighbours: the 2026-07-31 section *Two soundness holes on the STRICT path* (near the top of this file) records the two
+arm defects as fixed where a `spec` is present; DEFERRED 103 is a bare `*` read as an irrefutable pattern.
+
+**Impact.** A `match` written as a top-level expression: the correct program is refused, and two incorrect ones print a
+result with no error.
+
+**Fix shape (not decided).** Infer the result type from the arms when none is expected, and apply to that route the arm
+checks the checked route already has.
+
+**When**: the owner's call. Not CIU 6: path selection touches no `match` typing.
 
 **Owner**: unassigned.
