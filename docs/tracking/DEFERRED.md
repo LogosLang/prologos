@@ -9934,8 +9934,6 @@ the branch), and `racket tools/pnet-compile.rkt --clean` followed by a suite run
 
 **Owner** (proposed, by analogy with 203's `.pnet` half): PM Track 12.
 
----
-
 ### 215. ⬜ THE S(-1) RETRACTION OF INFRASTRUCTURE-CELL ENTRIES NEVER MATCHES — `process-retraction` compares the entries' integer bitmask with a set of `assumption-id` structs, so a failed speculation is undone by the network snapshot restore alone
 
 **Found by** PPN 4C Phase 4D grounding, 2026-11-12, re-deriving at main `e6129a8d` a note of the LHC substrate audit
@@ -9989,8 +9987,6 @@ Phase 4D).
 
 **Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-11-12_PPN_4C_4D_GROUNDING_AUDIT.md` §10 (on branch
 `ppn4c-elaboration-on-network`).
-
----
 
 ### 216. ⬜ A `:method` REQUIREMENT FOR A METHOD THE TRAIT DOES NOT HAVE IS ACCEPTED — the call prints `[?meta 1N] : Bool`, 0 errors
 
