@@ -9433,7 +9433,7 @@ owner's call, since the file is his work in progress on main. Then lower `max_mi
 
 **Owner**: CIU 6.
 
-### 206. ⬜ A GENUINE-`Map` LAYER OF VECTORS REFUSES TO JOIN, FOR A REASON THAT HOLDS ONLY FOR KEYWISE JOINS — `wg{g*}` over `{:g [Map Keyword [PVec Int]]}` says "a key collision there can be neither proven nor ruled out", and from P4e-2-C `gmv:*` says the same
+### 206. ✅ **DISCHARGED `faee3c34`** (branch `ciu6-path-selection`; not yet on main) — A GENUINE-`Map` LAYER OF VECTORS REFUSES TO JOIN, FOR A REASON THAT HOLDS ONLY FOR KEYWISE JOINS — `wg{g*}` over `{:g [Map Keyword [PVec Int]]}` says "a key collision there can be neither proven nor ruled out", and from P4e-2-C `gmv:*` says the same
 
 **Found by** CIU 6 P4e-2-B, finding EB-10 ([the B audit](tracks/CIU/CIU_6/audits/2026-11-06_CIU_6_P4e-2-B_GROUNDING_AUDIT.md),
 2026-11-06). Measured: `docs/tracking/tracks/CIU/CIU_6/research/P4e-2/probe-p4e2-eps.out`, result 23, at `537e4605`.
@@ -9453,6 +9453,18 @@ keeps today's refusal (vector contents have no fields to prefix, as over a close
 weighed: B, keep refusing with a true reason; C, defer with today's message.
 
 **When**: CIU 6 P4e-2, after C (its own commit). `B-rv-gmap` flips there.
+
+**Discharged** (2026-11-11, `faee3c34`, branch `ciu6-path-selection`): one arm in `star-join-type`. A
+`[Map Keyword [PVec T]]` layer joins to `[PVec T]` in canonical key order, for `*` and `*-` (`gmv:*` → `@[1 2 3]`;
+keys inserted out of order give the sorted order, the same as the closed-row twin). Reduction needed nothing.
+`*_` / `*-_` keep refusing, now for their true reason (vector contents have no fields to prefix). Map values,
+scalar values and non-keyword keys keep `star-map-opaque`. Evidence:
+`docs/tracking/tracks/CIU/CIU_6/research/P4e-2/D206/probe-d206.out` (`.base.out` is the branch before, `cee43ac8`).
+
+⚠ **Correction (2026-11-11, CIU 6 finding MV-1)**: this entry's headline example is NOT this defect. `wg{g*}` (and
+`wg.g*`) splat the Map's entries KEYWISE into the enclosing level; the closed-row twin `wh{g*}` returns the inner
+record's fields, not a concatenation. So their refusal is true, and it stays. The defect, and what decision A
+covers, is the ravel `gmv:*` (EB-10's own `gmv:ε*`). The headline is kept as filed, as the record of the question.
 
 **Owner**: CIU 6.
 
