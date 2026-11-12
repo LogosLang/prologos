@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 219**
+> ### **NEXT FREE: 220**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5557,6 +5557,23 @@ This was checked against the record and the reader code, not by building. Planne
 seat its own mint with its own corpus A/B. **Decided 2026-11-03 (owner): `xs:0*` rides P4e-2** ("Fine with the lean to
 include in Phase 4e-2"); CIU 6 D4 § P4e-2, *Decided at the checkpoint* (branch `776bd3c7`).
 
+> **Update (2026-11-12, CIU 6 P4e-2-E2; branch `ciu6-path-selection` @ `897618c1`, not yet on main).** `xs:0*` is built. A glued `x:Nσ` fuses to ONE item, the keyword `:Nσ`
+> in a `$bcast-step`, at the grouper's `:` gate and not in the tokenizer (`{:k* 1}` is a one-entry Map, so a `:0*`
+> token would make `{:0* 1}` one). That is this entry's count change, four items to one, argued by position:
+> - this entry's own witness, the argument position: `[take1 t3:0*]` is `3N`, the join's length. The star rides inside
+>   the one item;
+> - a corpus A/B over one snapshot of 260 files: the 187 production files do not change; 6 research probes do, the set
+>   predicted from the text;
+> - loud → silent in two positions, each a class already filed: a `||` fact row (DEFERRED 192) and a `bundle` body (207);
+> - one spelling accepted → refused: `defn d [x:0* Int]`, which defined a function over the non-type `0 * Int` (219);
+> - three whole-file raises gone: a `match` scrutinee (108's pinned set, 19 → 18) and two `match` arm patterns.
+>
+> The 2026-11-03 conjecture above ("its star can ride the broadcast's KEYWORD payload as `:k*`'s does") was half right.
+> The carrier works. But the parser read that payload's prefix as a field NAME (`($bcast-step :0*)` → `(@bcast |0|)`),
+> so on records with a `:0` field it ran where `:0` alone is refused. That arm was fixed first, pinned at the datum
+> level, before any spelling could reach it. The other seat, `x.0*`, changes no count: it is refused at the parser
+> (P4e-2-E1). Evidence: `tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-E_GROUNDING_AUDIT.md` § E2 and `tracks/CIU/CIU_6/research/P4e-2/E/` (`reader-corpus-ab.out`, `binder-positions.out`), on the branch.
+
 ---
 
 ### 106. ⬜ The `let` NESTED-SHORTHAND binding value leaks a RAW SENTINEL to the user — pre-existing, and it BOUNDS Q_U35's blast-radius argument
@@ -5698,6 +5715,18 @@ the gate — the one failure mode a coverage instrument cannot self-report.
 **Not fixed at P4e-1a**: pre-existing, differential-proven, and it is a
 `compile-match-tree` / match-scrutinee defect rather than star-surface work.
 
+> **Addendum (2026-11-12, CIU 6 P4e-2-E2).**
+> - **One pinned cell stops aborting on the branch** (`ciu6-path-selection` @ `897618c1`, not yet on main):
+>   `match-scrut × ord-bcast!` (`match xs:0*` + `| w -> 1`). The scrutinee was four items; since the `x:Nσ` mint it is
+>   one, and the `match` runs. The snapshot in `tests/test-path-selection.rkt` is 19 → 18 there. The cause of the
+>   other cells is untouched.
+> - **A context the matrix does not have: a `match` ARM pattern.** Its `pattern-pos` is a `defn` clause. Measured with
+>   main's compiler (`1808db2a`): `match 5` + `| x.0* -> 1` + `| z -> 2` raises `list-ref: contract violation`, and so
+>   does `| c{a}* -> 1`; the control with the starred arm removed runs (`2 : Int`). Probes: `tracks/CIU/CIU_6/research/P4e-2/E/`
+>   `probe-e-arm1`, `-arm2`, `-arm3` (branch `ciu6-path-selection` @ `e94905a5`). Whether more carriers raise there
+>   was not swept: adding a `match-arm` row to `star-contexts` (`racket/prologos/tools/star-arrival-matrix.rkt`) would
+>   measure it.
+
 ### 109. ⬜ A SELECTION SENTINEL in a `spec`/`defn` TYPE REGION mis-fuses with `$angle-type` AS ITS SUBJECT, and the seam prints raw SYNTAX OBJECTS — pre-existing, star-free
 
 Found at D4.P4e-1a attempt 2 by the message-leak gate (the E2E pin that compares
@@ -5734,6 +5763,13 @@ same seam.
 **Pinned**: `tests/test-path-selection.rkt`'s message-leak set carries
 `spec-type` as a member; fixing either half moves the set and turns the battery
 red, which is how the fix claims its win.
+
+> **Addendum (2026-11-12, CIU 6 P4e-2-E2; branch `ciu6-path-selection` @ `897618c1`, not yet on main).** `spec sp1 x:0* -> Int` joins this class. Before the `x:Nσ` mint it
+> said "Empty type segment in arrow type"; since it, the following `defn` prints the raw-syntax message
+> ("defn: expected <ReturnType> or : ReturnType, got (#<syntax… ($select-path $angle-type ($bcast-step :0*))> …"), as
+> `x:k*`, `x:0` and `x:*` in that position did before and still do. Measured: `tracks/CIU/CIU_6/research/P4e-2/E/` `binder-positions.out`, cases 25–28.
+> It is not a row of the branch's stage table: the message embeds the source path, so it differs between a WS string
+> and a WS file.
 
 ### 110. ⬜ `expand-pipe-block`'s single-element unwrap cannot tell "ONE fused item that is a list" from "a list of parts" — a TERMINAL fused star in `|>` gets a factually FALSE refusal
 
@@ -8712,6 +8748,11 @@ renders its suggestion on the user's branch and runs it, as the battery's remedy
 > - **Not covered, and filed elsewhere**: a map-literal value, `{:a vhm.0*}`, keeps "Map literal requires an even number
 >   of elements" (DEFERRED 210's position).
 
+> **Update (2026-11-12, CIU 6 P4e-2-E2; branch `ciu6-path-selection` @ `897618c1`, not yet on main).** The last reader seat is built: `xs:0*` has its meaning (element 0 of
+> every item, joined; `t3:0*` = `t3:0{0 1}*` = `t3:0:*`), and written apart (`xs: 0*`) or doubled (`xs:0**`) it is
+> refused with the spelling that runs. When the branch reaches main, what stays OPEN here is the class-level cure only.
+> Evidence: `tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-E_GROUNDING_AUDIT.md` § E2, on the branch.
+
 ### 186. ⬜ ⭐ A MODULE ALREADY IN THE REGISTRY BRINGS NONE OF ITS REGISTRY STATE TO A LATER IMPORTER — the second `process-file` of a file in one process loses imported instances and constructors (`e1 : Bool defined.` → `No instance of Eq for Int`); `core::csv` elaborated after its closure was imported directly fails E2001
 
 **Found by** PAR 4B SP-2, 2026-10-19 (branch `par4b-parallelism-portfolio` @ `c6b6dc19`; compiler code = main `a01f3fc7`
@@ -9123,6 +9164,13 @@ like this entry's non-ground term, on the fast path and through the dispatch ali
 The `?` suggests `some` is read as a variable, which would make the row non-ground. If so, this entry's fix (refuse a
 non-ground term at registration) would refuse a row the user meant as a constructor application. The cause was not
 traced.
+
+> **Addendum (2026-11-12, CIU 6 P4e-2-E2; branch `ciu6-path-selection` @ `897618c1`, not yet on main).** One more spelling reaches this defect. `|| "x" t3:0*` used to be
+> refused by arity ("defr facts: 5 terms do not fill rows of arity 2", because `t3:0*` read as four items). Since the
+> `x:Nσ` mint it is one item, so the row is accepted and the query answers `{:a "x", :b unknown}`, exactly as the keyed
+> twin `|| "x" recs:k*` already did. Loud → silent, in this entry's class; the fix shape above (refuse a non-ground term
+> at registration) covers both. Measured: `tracks/CIU/CIU_6/research/P4e-2/E/` `probe-e-pos.out` 9 (before) and `probe-e-pos.e2.out` 8, 11 (after),
+> beside the twin's 9, 12; pinned on the branch as the row `E-bc-fact`.
 
 ### 193. ⬜ THE WS READER IS STILL QUADRATIC IN FILE LENGTH — `pos->line-col` (`parse-reader.rkt:2500-2506`) rescans the source from position 0 for every token: a 10 000-row fact block spends 85 % of its load there, and a 100 000-row block takes 468 s to load while its `defr` command takes 0.9 s
 
@@ -9671,6 +9719,12 @@ names the body: a constraint is a trait applied to type arguments, and a path st
 
 **Owner**: unassigned.
 
+> **Addendum (2026-11-12, CIU 6 P4e-2-E2; branch `ciu6-path-selection` @ `897618c1`, not yet on main).** `bundle B := (Eq:0*)` joins `(Eq:k)` and `(Eq:*)`. Before the `x:Nσ`
+> mint the bundle line itself was refused ("bundle Bn1: invalid constraint 0"); since it, the bundle is accepted with
+> the invented parameter `(A :0*)` and every use is refused with "expects 2 type params". Measured: `tracks/CIU/CIU_6/research/P4e-2/E/`
+> `probe-e-pos.out` 6 (before), `probe-e-pos.e2.out` 6 (after), beside the keyed twin's 7; pinned on the branch as the
+> control `K-bc-bundle`. The fix shape above covers it.
+
 ### 208. ⬜ A LAYOUT LIST SILENTLY DROPS ITEMS — a multi-line `@[…]` inside a non-last `- ` item drops every later item, and as an item's first key it collapses the list into one record; the program typechecks over the truncated data
 
 **Found by** CIU 6 P4e-2-C, finding EC-14 (`tracks/CIU/CIU_6/audits/2026-11-10_CIU_6_P4e-2-C_GROUNDING_AUDIT.md`,
@@ -9757,6 +9811,11 @@ diagnose a bare `.` in key position in general ("a path was split into separate 
 > reads as `($brace-params :a t3 |.| 0 *)` and says "Map literal requires an even number of elements (key-value pairs)".
 > Pinned on the branch as the control `K-ord-map`. The fix shape above (the dot half of the scan in map literals) covers
 > it: `ravel-near-miss` already answers for `. N σ`.
+
+> **Addendum (2026-11-12, CIU 6 P4e-2-E2; branch `ciu6-path-selection` @ `897618c1`, not yet on main).** A `:Nσ` in KEY position is deliberately not minted: `{:0* 1}` has
+> no base before the colon, so it still reads `($brace-params : 0 * 1)` and says "Bare symbol ':' not allowed as map
+> key; use :: for keyword". (A tokenizer-level mint would have made it a one-entry Map, as `{:k* 1}` is.) Pinned on
+> the branch as the control `K-bc-key`.
 
 ### 211. ⬜ THE PROPAGATOR PERF COUNTERS UNDERCOUNT — `prop_allocs` is never incremented and `prop_firings` counts one of six fire paths, so PERF-COUNTERS reads 0 where hundreds of propagators fire
 
@@ -10128,3 +10187,42 @@ Layer 2 before the comparative corpus is used as a correctness reference for `im
 `constraints-adversarial`.
 
 **Owner**: layer 1, PAR 4. Layer 2, unassigned. Proposed: PPN 4C (elaboration on the network). The owner decides.
+
+### 219. ⬜ `defn` AND `spec` TAKE ANY EXPRESSION AS A PARAMETER TYPE — `defn a2 [x : 5] : Int` prints `a2 : 5 -> Int defined.`, where `def b1 : 5 := 1` says "Expression is not a valid type"
+
+**Found by** CIU 6 P4e-2-E2 (audit finding EO-15, `tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-E_GROUNDING_AUDIT.md` § E2, on branch `ciu6-path-selection`; 2026-11-12), while
+explaining why `defn d [x:0* Int] : Int` used to be accepted as `d : [Sigma 0 Int] -> Int`.
+
+**Measured** with main's compiler (`1808db2a`). Probe: `tracks/CIU/CIU_6/research/P4e-2/E/probe-e-nontype.prologos`
+(branch `ciu6-path-selection` @ `e94905a5`); the numbers are its `.out`'s result indices.
+
+| # | program | result |
+|---|---|---|
+| 0 | `defn a2 [x : 5] : Int` | `a2 : 5 -> Int defined.` |
+| 1 | `defn a4 [x <5>] : Int` | `a4 : 5 -> Int defined.` |
+| 2 | `spec a5 5 -> Int` + `defn a5 [x]` | `a5 : 5 -> Int defined.` |
+| 3 | `defn a7 [x : "s"] : Int` | `a7 : "s" -> Int defined.` |
+| 4 | `defn a8 [x : Int] : 5` (the RETURN type) | refused: "Type mismatch" |
+| 5 | control: `defn a9 [x : Int] : Int` | `a9 : Int -> Int defined.` |
+| 6 | control: `def b1 : 5 := 1` | refused: "Expression is not a valid type" |
+| 7 | `[a2 7]` | refused: "Could not infer type" |
+| 8 | control: `[a9 7]` | `1 : Int` |
+| 9 | `(the 5 1)` | refused: "Could not infer type" |
+| 10 | control: `def b3 : <5 -> Int> := (fn [x] 1)` | refused: "Expression is not a valid type" |
+
+**What this shows.** A definition whose parameter type is not a type is accepted and printed with it (0–3). Such a
+function cannot be called (7), and the call's error does not point at the signature. `def` refuses the same arrow type
+(10), so a check exists and is not applied to a `defn`'s or a `spec`'s parameters. A non-type RETURN type is refused,
+though as a mismatch of the body (4). **Not traced**: which step skips the check. This entry is measurement only; no
+code was read.
+
+**Impact.** A typo in a parameter type surfaces at the first call, as "Could not infer type", away from its cause. It
+also let a mis-glued annotation through: `defn d [x:0* Int]` read as `x : 0 * Int` and was accepted, until CIU 6
+P4e-2-E2's reader change made that spelling a refusal (the spaced `[x : 0 * Int]` and `[x <0* Int>]` are still accepted).
+
+**Fix shape (not decided).** Check each parameter type of a `defn` / `spec` signature as `def` checks its annotation,
+and refuse at the definition with a message that names the parameter.
+
+**When**: the owner's call. Not CIU 6: path selection touches no signature checking.
+
+**Owner**: unassigned.
