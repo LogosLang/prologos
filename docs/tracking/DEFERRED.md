@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 221**
+> ### **NEXT FREE: 223**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -5276,6 +5276,20 @@ where base echoed the user's own datum. Cosmetic, and only reachable on the
 already-broken spelling above — but it should be stripped when that error is
 formatted.
 
+> **Addendum (2026-11-12, CIU 6 P4e-2-F1's verify).** Two more facts about the bracket spelling, and what the branch
+> changes. Measured with main's compiler (`c47c2fce`); in `tracks/CIU/CIU_6/research/P4e-2/F/verify/` on branch
+> `ciu6-path-selection`: `ctl-keyed.{prologos,out}` (@ `b73b6c88`; "ctl N" is result index N) and `adjudicate.out`
+> (@ `80eb4027`; "adj N" is case N, before and after).
+> - **The refusal has a silent twin.** `let [a recs:k 5] a` is accepted and answers `recs` itself (ctl 3). The verify
+>   lens's reading, not re-checked: the step pairs with the next item as a second binding, so an odd count of written
+>   items passes the bracket's count check. The one-binding `let [a recs:k] a` is refused as above (ctl 4), and so is an
+>   application subject, `let [a [id recs]:k] a` (ctl 18). With `:=`, a bare name fails and an application subject
+>   runs (ctl 5, 6). The line form `let q := recs:k` runs (ctl 15).
+> - **On the branch the ravel joins.** `let [a values:* 5] a` was refused and now answers `values`, unraveled (adj 18);
+>   the even count went the other way (adj 21). The near-miss text for `[let [q := values: *] q]` names `values:*`
+>   (adj 23), which is "Could not infer type" in that position (adj 24).
+> - DEFERRED 221 is the same defect in a `cond` test and a `when` guard.
+
 ### 98. ⬜ An EMPTY group at command position raises a contract violation — a whole-file abort (pre-existing)  *(was 85 → now 98)*
 
 > ⚠ **Renumbered 85 → 98** at merge prep, 2026-08-08. This branch
@@ -10319,5 +10333,77 @@ result with no error.
 checks the checked route already has.
 
 **When**: the owner's call. Not CIU 6: path selection touches no `match` typing.
+
+**Owner**: unassigned.
+
+### 221. ⬜ IN A `cond` TEST AND A `when` GUARD A BROADCAST STEP COMES LOOSE FROM ITS SUBJECT — `cond | rb:t.0 -> 1` says "Could not infer type" where `rb:t.0` alone is `true`, and `cond | kw?:k -> 1` answers `1` where `kw?:k` alone is refused
+
+**Found by** CIU 6 P4e-2-F1's adversarial verify (the silent-wrong-answers lens, finding ZS-3; adjudicated as ZF-2 in
+`tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-F1_VERIFY.md`, on branch `ciu6-path-selection`; 2026-11-12). The keyed
+step `x:k` shows it on main; the branch's ravel `x:*` joins it.
+
+**Measured** with main's compiler (`c47c2fce`): `tracks/CIU/CIU_6/research/P4e-2/F/verify/ctl-keyed.{prologos,out}`
+(branch `ciu6-path-selection` @ `b73b6c88`; result indices), with `def rb := @[{:t true}]` and a function
+`kw? : Keyword -> Bool`.
+
+| # | program | result |
+|---|---|---|
+| 21 | control: `rb:t.0` | `true : Bool` |
+| 22 | `cond` with `\| rb:t.0 -> 1` and `\| true -> 2` | refused: "Could not infer type" |
+| 23 | `match 5` with `\| v when rb:t.0 -> 1` and `\| _ -> 0` | refused: "Could not infer type" |
+| 7 | control: `kw?:k` (a broadcast over a function) | refused: "broadcast `:k` needs a PVec, Map, tuple, or closed keyword-row subject — this one is `Keyword -> Bool`" |
+| 8 | `cond` with `\| kw?:k -> 1` and `\| true -> 2` | `1 : Int` |
+| 9 | `match 5` with `\| v when kw?:k -> 1` and `\| _ -> 0` | `1 : Int` |
+
+**What this shows.** In both positions the step is not applied to its subject. A well-formed test is refused (22, 23),
+and an ill-formed one runs (8, 9).
+**Not traced.** The verify lens's reading, not re-checked: the reader gives a `cond` arm's test and a `when` guard the
+unwrap it gives a `match` arm's PATTERN, where a fused `name:T` is an annotation; `kw?:k` then reads as `kw?` applied
+to the keyword `:k`. Both positions are expressions.
+
+**On the branch** the ravel reaches the same seat: `cond | kw?:* -> 1` was refused and answers `1`, and
+`cond | bs:*.0 -> 1` is "Could not infer type" where `bs:*.0` alone is `true` (`adjudicate.out` cases 27–31, branch @
+`80eb4027`).
+
+**Fix shape (not decided).** Treat a `cond` test and a `when` guard as value positions in the reader's binder pass.
+DEFERRED 97 is the same defect in the `let` spellings.
+
+**When**: the owner's call. A candidate for CIU 6 P4e-2-F2 (the fix round): its blocking finding ZF-1 sits at the same
+reader pass.
+
+**Owner**: unassigned.
+
+### 222. ⬜ A BROADCAST STEP INSIDE `~[…]` OR A TAILED LIST LITERAL IS NOT APPLIED TO ITS SUBJECT — `~[recs:k]` is a lazy sequence holding `recs` itself, with a stray `lseq-cell.:k` in its tail and no error; `'[recs:k | '[]]` is refused with `cons`'s type named as the subject
+
+**Found by** CIU 6 P4e-2-F1's adversarial verify (the instrument lens, finding ZI-2, and the message lens, ZM-18;
+adjudicated as ZF-4 in `tracks/CIU/CIU_6/audits/2026-11-12_CIU_6_P4e-2-F1_VERIFY.md`, on branch `ciu6-path-selection`;
+2026-11-12).
+
+**Measured** with main's compiler (`c47c2fce`): `tracks/CIU/CIU_6/research/P4e-2/F/verify/ctl-keyed.{prologos,out}`
+(branch `ciu6-path-selection` @ `b73b6c88`; result indices), with `def recs := @[{:k @[1 2]} {:k @[3]}]`. Module
+prefixes are dropped from the long results below.
+
+| # | program | result |
+|---|---|---|
+| 2 | control: `recs:k` | `@[@[1 2] @[3]] : [PVec [PVec Int]]` |
+| 10 | control: `'[recs:k]` | `'[@[@[1 2] @[3]]] : [List [PVec [PVec Int]]]` |
+| 11 | control: `@[recs:k]` | `@[@[@[1 2] @[3]]] : [PVec [PVec [PVec Int]]]` |
+| 12 | `~[recs:k]` | `[lseq-cell [PVec {:k [PVec Int]}] @[{:k @[1 2]} {:k @[3]}] [fn [x <Unit>] [lseq-cell.:k …]]] : [LSeq [PVec {:k [PVec Int]}]]`, 0 errors |
+| 13 | `'[recs:k \| '[]]` | refused: "broadcast `:k` needs a PVec, Map, tuple, or closed keyword-row subject — this one is `[Pi [x :0 <[Type 0]>] x [List x] -> [List x]]`" |
+| 14 | control: `'[recs \| '[]]` | `'[@[{:k @[1 2]} {:k @[3]}]] : [List [PVec {:k [PVec Int]}]]` |
+
+**What this shows.** The vector and list literals apply the step to its subject (10, 11). The lazy-sequence literal
+holds the subject un-stepped, with the subject's type as its element type, and the step survives as a field access on
+the constructor (12): a wrong value with no error. In the tailed list the step is applied to `cons` (13).
+**Not traced.** The verify lens's reading, not re-checked: `$lseq-literal` and the tailed `$list-literal` are expanded
+by macros (`expand-lseq-literal` and the list-literal expansion, in `macros.rkt`) before the step is attached to the
+item before it, while the other literals reach the parser whole.
+
+**On the branch** the ravel and the ordinal broadcast-star join: `~[values:*]` and `~[t3:0*]` were "Unbound variable"
+and are now the same kind of wrong value (`adjudicate.out` cases 35–41, branch @ `80eb4027`).
+
+**Fix shape (not decided).** Attach a step to its subject before these two literals expand, as for the other three.
+
+**When**: the owner's call. A candidate for CIU 6 P4e-2-F2.
 
 **Owner**: unassigned.
