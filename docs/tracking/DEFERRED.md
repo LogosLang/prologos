@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 217**
+> ### **NEXT FREE: 218**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -7188,6 +7188,17 @@ errors because `the` forces it). So 156 resolves inside PPN 4C only if the on-ne
 retiring the fallback without one would make it worse (zero cases caught instead of some). The regression pins above
 should be in place before A3 retires anything.
 
+**Addendum 2026-11-12 — the same symptom through a trait method across the numeric tower (found by REL 2's FS-6
+probes; not established as the same mechanism).**
+`docs/tracking/tracks/REL/REL_2/research/fs6/fs6-widening.{prologos,out}` (branch `rel2-fact-store`, `1577609f`; code
+= main `899d9da9`). As bare expressions, `[eq? 1N 1]` prints a stuck `reduce` term typed `Bool` (`15:`) and `[eq? 2
+2/1]` prints `[int= 2 2] : Bool` (`17:`), with zero errors. Controls: the mirror orders are `true` (`14:`, `24:`);
+typed operands in place of literals are stuck the same way (`[eq? n1 i1]`, `27:`; mirror `true`, `28:`), so it is not
+the literal's flexible typing; and under a declared type both are refused, `def e1 : Bool := [eq? 1N 1]` → `Type
+mismatch` (`29:`, `31:`). So inference accepts an operand that is not a subtype of the instance's type, and checking
+refuses it: this entry's shape, reached through `Eq`'s method instead of a primitive. This is the control for the note
+in DEFERRED 200, *"Seen once and not controlled"*.
+
 ### 157. ⬜ ⭐ BSP LOSES UPDATES TODAY: UNDECLARED WRITES BYPASS THE MERGE, AND THE RELATIONAL GUARD RETRACTS THROUGH A LAST-WRITER-WINS CELL — two failing guards in one round clear only ONE worldview bit, whether or not the output is declared
 
 Two defects, measured together (`benchmarks/par4/q1-mechanisms.rkt`, branch `par4-p0`; found
@@ -9186,6 +9197,16 @@ form at ingest), not a printer fix.
 **Owner**: Rel Track 2. The site is next to 191's in `reduction.rkt`'s answer builder, so BSP-LE 3 (which lands 191's
 fix under decision BL-2) is asked by note to leave a seam or take these kinds too.
 
+**Addendum 2026-11-12 — the grid over two ingest routes (REL 2 FS-6 probes).**
+`docs/tracking/tracks/REL/REL_2/research/fs6/fs6-values-table.out` (branch `rel2-fact-store`, `1577609f`; result
+indices of `fs6-values.out`): of 16 value kinds, a projected `||` row prints as the language prints the value for 4
+(Int, String, Keyword, Nat), and the same rows built with `is` for 12. Still `unknown` on the `is` route, where the
+stored value is a real one: Rat, Posit32, Char and PVec (`134:`, `154:`, `174:`, `234:`). A stored type prints
+`unknown` too (`fs6-values-extra.out` `55:`). The two Bool cells are 191 (fixed on branch `bsple3-tabling`,
+`7c4ad9d9`, not yet on main). REL 2's decision FS-6 (posed; ledger § *FS-6*, on the branch) reads this entry's fix
+shape as a property of the value domain: a stored value is a value of the language and is returned as itself, so there
+is no marshal to keep total.
+
 ### 195. ⬜ A CONSTRUCTOR NAME IN A `||` ROW OR A RELATIONAL GOAL IS A LOGIC VARIABLE — enum, `Option` and `none` values can be neither stored nor selected: `|| "a" Eng` prints `unknown`, `solve (emp ?n Eng)` binds a fresh variable `:Eng`, `[some 1]` is stored as `[?some 1]` and never matches an equal query, and `solve (k10d ?n none)` returns every row
 
 **Found by** three REL 2 Stage-1 charges independently (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical):
@@ -9247,6 +9268,22 @@ spelling that reached the constructor would answer two of its three rows.
   no existing program. The library's 59 `data` constructors are all lowercase, 27 of them nullary.
 - **The decision this entry's fix shape waits on** is posed as REL 2 **FS-8** (what a bare name means in a relational
   position; ledger § *FS-8*, on the branch). A second defect found on the way: **212**.
+
+**Addendum 2026-11-12 (01:57) — the decision is made (REL 2 FS-8, owner).** *"Good as it stands, as far as I can tell.
+Let's proceed."* The readings and the lean of the ledger's § *FS-8* stand (branch `rel2-fact-store`; § *FS-8
+decided*):
+- a bare Capitalized name and a qualified name are constants that must resolve; in `[f a b]` the head is a reference
+  and the arguments are terms; a `||` row has no variables, so every name in it refers to a closed value;
+- a bare lowercase name the clause does not bind stays a logic variable, and one that resolves to a constructor is
+  refused with an error naming both spellings: `[c]` for the constant, `?c` for a variable.
+So this entry's fix shape is decided: rows evaluate their terms to values (with 192's refusal for a name that resolves
+to nothing), goal constants reach the store as values, and the corpus's four bare `none`s become errors. Still open
+until the fix lands; the elaborator arm (`elaborator.rkt:804-826`) is changed by note to its owner. One more goal-side
+shape, from the FS-6 grid (`docs/tracking/tracks/REL/REL_2/research/fs6/fs6-values.{prologos,out}`, `1577609f`): a
+quoted list written in a goal, `(i-lst ?k '[1 2])`, misses a list that `is` built (`215:`; all-ground `217:`; through
+a rule `218:`), while the same list computed first matches (`219:`). A `||` row cell written as a functional
+expression is stored unevaluated: `|| "a" [int+ 1 2]` prints `unknown` and does not answer to `3`
+(`fs6-values-extra.out` `58:`, `59:`).
 
 ### 196. ⬜ THE DIRECT-FACT FAST PATH TAKES A SYMBOL LITERAL FOR A QUERY VARIABLE OF THE SAME NAME — `solve (sy (symbol-lit n) ?n)` returns both rows of `defr sy [?k ?n] || (symbol-lit alice) 1 / (symbol-lit carol) 2`, under every strategy
 
@@ -9384,6 +9421,24 @@ the store's equality and index numeric-aware. Test: the probe rows.
 **When**: before REL 2's bulk import, which admits numbers from text sources.
 
 **Owner**: Rel Track 2.
+
+**Addendum 2026-11-12 — both directions, the Rat step, goals and joins; and what the functional side does (REL 2 FS-6
+probes).** `docs/tracking/tracks/REL/REL_2/research/fs6/fs6-values-table.out` § *numbers across types* (branch
+`rel2-fact-store`, `1577609f`; result indices of `fs6-values.out`):
+- an `Int` constant misses a `Nat` column (`327:`), a `Nat` constant misses an `Int` column (`328:`), and an `Int`
+  constant misses a `Rat` column holding `2/1` (`329:`);
+- under a schema `Int` column, the row written `1N` answers to `1N` and not to `1` (`332:`, `331:`);
+- a column with no schema holds `1`, `1N` and `"one"` at type `Int | Nat | String` (`333:`), and the constant `1`
+  selects one of the two ones (`334:`);
+- a `Nat` column joined with an `Int` column on the value joins nothing (`335:`);
+- with no store involved, `solve (= 1N 1)` and `solve (= 2/1 2)` fail (`fs6-values-extra.out` `16:`, `18:`; same-type
+  controls `15:`, `17:`).
+The functional side (`fs6-widening.{prologos,out}`): `def a : Int := 1N` keeps `1N` (`1:`), `[int+ a 1]` is `2`
+(`5:`), `eq?` at `Int` says `1` and `1N` are equal (`7:`, `8:`, `14:`), and `[eq? 2/1 2]` is `true` (`24:`). So the
+two halves of the language disagree on whether `1N` equals `1`. The stuck `[= 1995N 1995]` noted above is controlled
+in the addendum to DEFERRED 156. REL 2's decision FS-6 (posed; ledger § *FS-6*, on the branch) reads the contract as:
+where a column or a join variable has a type, exact numbers meet at that type. The mechanism stays this entry's
+decision, FS-2.
 
 ### 201. ⬜ A RECORD TYPE IN A `spec` IS ACCEPTED AND THEN SATISFIED BY NOTHING — `spec t3f {:title String} -> String` prints `t3f : {:title String} -> String defined.`, and applying it to a record with exactly that field fails: *"argument of type {:title String} does not match the expected parameter type {:title String}"*
 
@@ -9779,6 +9834,19 @@ controls.
 **Owner**: Rel Track 2 (the store's value domain). The elaboration half, if the fix is to solve the meta there, is
 PPN 4C's: by note.
 
+**Addendum 2026-11-12 — it is not only `none`, and the implicit argument can disagree with the type (REL 2 FS-6
+probes).** `docs/tracking/tracks/REL/REL_2/research/fs6/fs6-values-extra.{prologos,out}` (branch `rel2-fact-store`,
+`1577609f`; code = main `899d9da9`):
+- two empty lists do not unify: `(is a nil) (is b nil) (= a b)` → `@[]` (`39:`); control, `[some 1]` twice → `{:r
+  "equal"}` (`40:`);
+- `[the [Option Rat] [some 1]]` prints `[prologos::data::option::some Int 1] : [prologos::data::option::Option Rat]`
+  (`44:`): the implicit argument says `Int` under a type that says `Rat`, so it is a residue of inference and cannot
+  be what equality reads;
+- `some`'s type argument is erased, `[Pi [x :0 <[Type 0]>] x -> …]` (`13:`);
+- the functional-side twin is filed as **217**.
+The decision is posed as REL 2 FS-6 (ledger § *FS-6*, on the branch). Its reading DV-3: an erased argument is not part
+of a stored value.
+
 ### 213. ⬜ A BARE `:` INSIDE A SELECT BLOCK IS REPORTED AS A KEYWORD KEY WITH NO NAME — `y{a : b}` says "block keys are written bare — `x{}`, not `x{:}`"
 
 **Found by** CIU 6 P4e-2-E's mini-audit, finding EO-10 (2026-11-12; the audit is on branch `ciu6-path-selection`,
@@ -9955,3 +10023,39 @@ trait, as an unresolved trait constraint is (`check-unresolved-trait-constraints
 test first, from the probe's line 3.
 
 **When**: with the close judgments that PPN 4C addendum Phase 4D re-homes per scope, or earlier as a fix of its own.
+
+---
+
+### 217. ⬜ A DEFINITION WHOSE TRAIT CONSTRAINT CANNOT RESOLVE IS ACCEPTED WHEN THE CONSTRAINT'S TYPE IS NOT GROUND — `def e3 : Bool := [eq? none none]` prints `e3 : Bool defined.`, and `e3` is an application headed by an unsolved metavariable, typed `Bool`, with zero errors
+
+**Found by** REL 2 while probing decision FS-6, 2026-11-12:
+`docs/tracking/tracks/REL/REL_2/research/fs6/fs6-values-extra.{prologos,out}` (branch `rel2-fact-store`, `1577609f`;
+code = main `899d9da9`).
+
+**Observations** (measured; printed result indices):
+- `[eq? none none]` as an expression prints `[?meta1670 [prologos::data::option::none ?meta1675]
+  [prologos::data::option::none ?meta1675]] : Bool` (`5:`). As a definition at `Bool` it is accepted (`11:`), and its
+  value is the same kind of term (`12:`). The file's error count (5) includes neither.
+- Control, the type written: `[eq? [the [Option Int] none] [the [Option Int] none]]` → `No instance of Eq for
+  Option-Int` (`10:`).
+- Control, an argument that solves the type: `[eq? [some 1] [some 1]]` → the same error (`6:`). `Eq` has no instance
+  for `Option`, nor for `List`, a record or a user enum (`7:`–`9:`); the library's `impl Eq` list is 13 scalar types
+  (`racket/prologos/lib/prologos/core/eq.prologos`).
+
+**Mechanism** (read in code, not traced at run time): `check-unresolved-trait-constraints`
+(`racket/prologos/trait-resolution.rkt:405-423`) reports an unsolved constraint only when every type argument is
+ground (`:417-419`), and its comment says the resolution callback *"never fires for non-ground args"* (`:411-412`).
+`Eq [Option ?a]` is not ground, so neither path reports it, and the dictionary metavariable stays in the term.
+
+**Related**: 216 (a `:method` requirement the trait does not have) and 173, two more unsolved metavariables that reach
+a committed result; 212, the relational-side twin (two `none`s do not unify in a goal). In 212 and here, a nullary
+polymorphic constructor's unsolved type argument defeats an equality.
+
+**Fix shape**: a trait constraint still unsolved when its command closes is an error whether or not its type arguments
+are ground, naming the constraint and the unsolved argument; or the argument is defaulted first and the constraint
+then resolved or refused. Tests: `5:`, `11:` and `12:` as pins; `10:` and `6:` as controls.
+
+**When**: with 216, whose fix shape names the same function; before `none` values from REL 2's imports reach
+functional code that compares them.
+
+**Owner**: not Rel Track 2; unassigned. Proposed: PPN 4C, which filed 216 and owns 156. The owner decides.
