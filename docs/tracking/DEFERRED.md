@@ -1780,6 +1780,15 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 - [Issue #40](https://github.com/LogosLang/prologos/issues/40) — sister anti-pattern (with-handlers defensive scaffolding); both are off-network state injection
 - `tools/lint-parameters.rkt` + `tools/parameter-lint-baseline.txt` — tactical interim
 
+**Addendum 2026-11-12 — PAR 4 O-12 (b), OC-5** (PAR 4 D.3 §15,
+`docs/tracking/tracks/PAR/PAR_4/2026-10-19_PAR_4_D3_DESIGN.md`, on branch `par4-arena-executors` @ `6891a680`). This
+callback is the ambient read that keeps the type merges from being a function of their two arguments (PAR 4's PC-1).
+Coordinates on main today: defined at `type-lattice.rkt:66`; read at `:86`, `:180`, `:421`, `:425` and `:443`;
+installed at `driver.rkt:3865`. PAR 4's P1a replaces the merges' fallback with a carrier that keeps every written
+term. One design variant derives the contradiction and the reader's view outside the merge, with the meta cells as
+declared inputs, which would remove the callback's reads inside the merge. That is an open design question in PAR 4
+(OC-5, PENDING), to be settled with PM 12 and PPN 4C. It does not take this retirement from PM 12.
+
 
 
 ---
@@ -10175,7 +10184,7 @@ the instantiation. Whether `10:`'s `Type mismatch` comes from the same merge or 
 
 **Fix shape**, in two layers:
 1. *The silence.* The type merge must not swallow a definite clash. PAR 4 P1a's three-valued pure unifier (owner
-   decision O-12, pending; `docs/tracking/tracks/PAR/PAR_4/2026-10-19_PAR_4_D3_DESIGN.md` §15, on the branch) returns
+   decision O-12, decided (b) 2026-11-12; `docs/tracking/tracks/PAR/PAR_4/2026-10-19_PAR_4_D3_DESIGN.md` §15, on the branch) returns
    ⊤ here, which turns `6:` and `7:` into `Could not infer type`. An error can later become a meaning without
    breaking a program; a wrong answer cannot.
 2. *The cause.* Instantiate a polymorphic name's implicit binders when it stands in argument position, before its
@@ -10187,6 +10196,13 @@ Layer 2 before the comparative corpus is used as a correctness reference for `im
 `constraints-adversarial`.
 
 **Owner**: layer 1, PAR 4. Layer 2, unassigned. Proposed: PPN 4C (elaboration on the network). The owner decides.
+
+**Addendum 2026-11-12 — PAR 4 O-12 DECIDED (b)** (owner: *"Yes to (b)"*; PAR 4 D.3 §15, on branch
+`par4-arena-executors` @ `6891a680`). Layer 1 is decided. PAR 4's P1a makes `try-unify-pure` three-valued, so a
+definite clash returns ⊤, and it replaces the fallback's stuck case with a carrier that keeps every written term.
+`6:` and `7:` then print `Could not infer type`. Open until P1a lands. Layer 2 is unchanged: unassigned, and proposed
+to PPN 4C in PAR 4's note of the same day (`docs/tracking/tracks/PAR/PAR_4/handoffs/2026-11-12_PAR_4_NOTE_TO_PPN_4C.md`,
+on the branch).
 
 ### 219. ⬜ `defn` AND `spec` TAKE ANY EXPRESSION AS A PARAMETER TYPE — `defn a2 [x : 5] : Int` prints `a2 : 5 -> Int defined.`, where `def b1 : 5 := 1` says "Expression is not a valid type"
 
