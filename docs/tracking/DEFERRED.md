@@ -9936,6 +9936,10 @@ the branch), and `racket tools/pnet-compile.rkt --clean` followed by a suite run
 
 ### 215. ⬜ THE S(-1) RETRACTION OF INFRASTRUCTURE-CELL ENTRIES NEVER MATCHES — `process-retraction` compares the entries' integer bitmask with a set of `assumption-id` structs, so a failed speculation is undone by the network snapshot restore alone
 
+> ⚠ **CORRECTION (2026-11-12, the day of filing; by reading `driver.rkt:699`)** — one side note of this entry was
+> wrong: ~~hypotheses are numbered per file~~. Numbering restarts at every command (item 2 under *Also read*, corrected
+> in place). The entry's defect, the filter that never matches, is unaffected.
+
 **Found by** PPN 4C Phase 4D grounding, 2026-11-12, re-deriving at main `e6129a8d` a note of the LHC substrate audit
 (`lhc` repository, `docs/tracking/tracks/LHC/LHC_0/2026-08-15_LHC_0_SUBSTRATE_AUDIT.md`, its table of provenance
 mechanisms, row (2): "looks structurally inert"). Measured with
@@ -10023,6 +10027,10 @@ trait, as an unresolved trait constraint is (`check-unresolved-trait-constraints
 test first, from the probe's line 3.
 
 **When**: with the close judgments that PPN 4C addendum Phase 4D re-homes per scope, or earlier as a fix of its own.
+
+**Record**: `docs/tracking/tracks/PPN/PPN_4C/audits/2026-11-12_PPN_4C_4D_GROUNDING_AUDIT.md` §10, LD-6 (on branch
+`ppn4c-elaboration-on-network`). Not yet run with the elaboration network kept across commands, where an unsolved
+metavariable that outlives its command stays live.
 
 ---
 
