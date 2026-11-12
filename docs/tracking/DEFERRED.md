@@ -19,7 +19,7 @@ Deferral".
 
 ## ⭐ NUMBERING — MONOTONIC, PERMANENT, NEVER REUSED  [owner ruling, 2026-08-08]
 
-> ### **NEXT FREE: 218**
+> ### **NEXT FREE: 219**
 > Allocate from THIS REGISTER and bump it in the same commit. **It is the only
 > allocation source.**
 
@@ -10067,3 +10067,64 @@ then resolved or refused. Tests: `5:`, `11:` and `12:` as pins; `10:` and `6:` a
 functional code that compares them.
 
 **Owner**: not Rel Track 2; unassigned. Proposed: PPN 4C, which filed 216 and owns 156. The owner decides.
+
+### 218. ⬜ A POLYMORPHIC FUNCTION PASSED AS AN ARGUMENT IS NOT INSTANTIATED — `flip const false 2` prints `[fn [x <2>] [fn [y <false>] x]] : ?bvar1 ?bvar1 -> ?bvar3` with 0 errors; under an annotated `def` the same well-typed expression is refused with `Type mismatch`
+
+**Found by** PAR 4's arm census of the type merges, made for owner decision O-12, 2026-11-12
+(`racket/prologos/benchmarks/par4/o12/README.md` §4 and §5, on branch `par4-arena-executors` @ `1747b569`). In the
+comparative corpus, all 16 calls that reach the fallback arm of `type-unify-or-top` merge a polymorphic type with an
+arrow shape, `Π(m0, Type, Π(mw, bvar0, bvar1)) ⊔ Π(mw, ?a, ?b)`. They sit in two of the 19 files:
+`constraints-adversarial` 13, `implicit-args` 3.
+
+**Measured.** Probe `racket/prologos/benchmarks/par4/o12/o12-polyarg.prologos` with its `.out` (same branch and
+commit; WS mode, `:no-prelude`; `racket tools/run-file.rkt <probe>`; compiler code = main `5198f54c`). `id`, `const`,
+`flip` and `apply1` are declared with `spec` and defined with `defn`; all four definitions are accepted.
+
+| result | expression | printed | expected |
+|---|---|---|---|
+| `4:` | `const 2 false` (control: the polymorphic function applied directly) | `2 : Int` | the same |
+| `5:` | `flip [fn [a : Int] [fn [b : Bool] a]] false 2` (control: the argument written out) | `2 : Int` | the same |
+| `6:` | `flip const false 2` | `[fn [x <2>] [fn [y <false>] x]] : ?bvar1 ?bvar1 -> ?bvar3` | `2 : Int` |
+| `7:` | `apply1 id 7` | `[fn [x <7>] x] : ?bvar0 -> ?bvar1` | `7 : Int` |
+| `8:` | `apply1 [fn [a : Int] a] 7` (control for `7:`) | `7 : Int` | the same |
+| `9:` | `def d9 := flip const false 2` | `ERROR: Could not infer type` | `d9 : Int defined.` |
+| `10:` | `def d10 : Int := flip const false 2` | `ERROR: Type mismatch` | `d10 : Int defined.` |
+
+**What is shown.** Three faces of one defect, each with a control that differs only in how the argument is written:
+- a bare expression prints a wrong value and a type with open de Bruijn indices, with 0 errors (`6:`, `7:`). In the
+  printed value the explicit arguments sit in the binder annotations (`[x <2>]`, `[y <false>]`): they were taken by
+  `const`'s implicit binders;
+- an un-annotated `def` refuses the expression (`9:`). The refusal is DEFERRED 74's ground-type gate, which
+  `racket/prologos/tests/test-rel-t1-pol.rkt:1601-1615` pins with this very expression (the gate is named in that
+  test's comment); the failure to infer was not filed then;
+- an annotated `def` refuses a well-typed program (`10:`).
+
+**Mechanism.** Measured, the part that makes it silent: `type-unify-or-top` (`type-lattice.rkt:203`) receives the
+polymorphic type and the expected arrow shape, whose roots are `Π m0` and `Π mw`. `try-unify-pure` (`:401`) returns
+`#f`. One side holds unsolved metavariables, so the fallback at `:217-218` keeps the other side, the polymorphic
+type, and reports no contradiction. With that arm returning ⊤ on a definite root clash (the census patch's switch,
+`PAR4_O12_ROOT_NO=1`), the six result lines of this shape in the corpus all become `ERROR: Could not infer type`, and
+the suite stays at 10 434 tests in 502 files, all passing (`o12-switch-diff.out`, same directory).
+CONJECTURE, not read in code: the cause is upstream, in elaboration. Implicit binders are instantiated for a
+polymorphic name at the head of an application and not for a name in argument position, so its type reaches the cell
+with its `Π m0` binders in place.
+
+**Not shown.** Sexp mode and a program with the prelude loaded (neither was run). Where elaboration should insert
+the instantiation. Whether `10:`'s `Type mismatch` comes from the same merge or from the checker.
+
+**Related**: 216 and 217, other non-ground results accepted with 0 errors.
+
+**Fix shape**, in two layers:
+1. *The silence.* The type merge must not swallow a definite clash. PAR 4 P1a's three-valued pure unifier (owner
+   decision O-12, pending; `docs/tracking/tracks/PAR/PAR_4/2026-10-19_PAR_4_D3_DESIGN.md` §15, on the branch) returns
+   ⊤ here, which turns `6:` and `7:` into `Could not infer type`. An error can later become a meaning without
+   breaking a program; a wrong answer cannot.
+2. *The cause.* Instantiate a polymorphic name's implicit binders when it stands in argument position, before its
+   type is written against an expected arrow. Design owed. Pins: `6:`, `7:`, `9:` and `10:`, with `4:`, `5:` and `8:`
+   as controls.
+
+**When**: layer 1 with PAR 4 P1a; the recorded outputs of the two benchmark files change then, by six result lines.
+Layer 2 before the comparative corpus is used as a correctness reference for `implicit-args` or
+`constraints-adversarial`.
+
+**Owner**: layer 1, PAR 4. Layer 2, unassigned. Proposed: PPN 4C (elaboration on the network). The owner decides.
