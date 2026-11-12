@@ -10108,7 +10108,7 @@ measurement branch @ `dd401e79` (`…/q18/q18.out`).
   defect of the same substrate.
 - With the elaboration network kept across commands (three spike configurations), a later command's failed
   speculation clears the cache bits an earlier command committed (6 → 0), and that command's solved unknown reads as
-  unsolved. Nothing reads it today.
+  unsolved. No program run here reads it afterwards.
 
 ### 216. ⬜ A `:method` REQUIREMENT FOR A METHOD THE TRAIT DOES NOT HAVE IS ACCEPTED — the call prints `[?meta 1N] : Bool`, 0 errors
 
@@ -10497,8 +10497,9 @@ bound to 2 (what a command's first speculation binds) or 0:
 | 2 | 0 | ok | `#f` | `#f` | ok |
 | 2 | 2 | ok | `#f` | `#f` | raises "already solved" |
 
-So the solver's own reader never sees the solution of an unknown that was minted under a hypothesis, and the next
-attempt to solve it raises.
+So the solver's own reader does not see the solution of an unknown that was minted under a hypothesis, and the next
+attempt to solve it raises. The same at bitmasks 4, 6 and 1024, read under the same worldview or a larger one (rows
+added to the probe's output after `d943376f`). Only type unknowns were run.
 
 **How the program reaches it.** Measured with an event log on the measurement branch
 (`ppn4c-spike-elabnet-lifetime` @ `dd401e79`, `…/spike-elabnet-lifetime/q18/q18.out`): the command's events are
