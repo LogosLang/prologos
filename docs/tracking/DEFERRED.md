@@ -8736,6 +8736,16 @@ one; that consequence is from reading, not measured.
 has written that cache (`docs/tracking/tracks/REL/REL_2/research/census/forms/fm08-cache-sequence.{sh,out}`, steps 0–5; `fm08-csv.cold1.out` `0:` against
 `fm08-csv.warm.out` `0:`; (on branch `rel2-fact-store`, `1fb0da44`; main's code `07424c3b`; re-run by the main session at that code, identical)). The script deletes the cache before and after, so it replays from the cold state.
 
+**Addendum (2026-11-12, PPN 4C Phase 4D grounding audit)**: re-measured with a three-line file on
+`ppn4c-elaboration-on-network` @ `a0846965` (its compiler code is main's). `ns fi0` / `[eq? 1N 1N]` / `[eq? 3 3]`,
+run twice in one process with a fresh module network each time: the first run gives `true : Bool` twice, the second
+gives `no instance found for (Eq Nat)` and `(Eq Int)`. Nothing failed in the first run. **Test-writing hazard**: the
+fixture of `tests/test-general-body-01.rkt` (fresh module network, `current-ns-context` `#f`) is safe only for
+programs that resolve no trait instance. A test that runs several files in one process must use the shared-prelude
+fixture (`tests/test-def-seam.rkt`), as `tests/test-form-isolation-01.rkt` does. Record: the audit's §5,
+`docs/tracking/tracks/PPN/PPN_4C/audits/2026-11-12_PPN_4C_4D_GROUNDING_AUDIT.md` (on the branch).
+
+
 ### 187. ⬜ THE DIRECT-FACT FAST PATH IGNORES A REPEATED QUERY VARIABLE, UNDER EVERY STRATEGY — `solve (e2 ?a ?a)` over the single fact `(2, 3)` answers `@[{:a 3, :a 3}]` instead of `@[]`; `(e3 ?a ?b ?a)` returns both `(1 2 1)` and `(1 2 3)`
 
 **Found by** BSP-LE 3's Stage-1 differential: the generated workload, program census-f2 `p27`, in all four of its
